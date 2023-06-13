@@ -21,7 +21,7 @@ from peft import LoraConfig
 import transformers
 # from transformers.models import AutoModelForCausalLM
 from transformers import (
-  AutoModelForCausalLM,
+    AutoModelForCausalLM,
     AutoTokenizer,
     BitsAndBytesConfig,
     HfArgumentParser,
@@ -117,7 +117,7 @@ class ScriptArguments:
         default="constant",
         metadata={"help": "Learning rate schedule. Constant a bit better than cosine, and has advantage for analysis"},
     )
-    max_steps: int = field(default=10000, metadata={"help": "How many optimizer update steps to take"})
+    max_steps: int = field(default=100, metadata={"help": "How many optimizer update steps to take"})
     warmup_ratio: float = field(default=0.03, metadata={"help": "Fraction of steps to do a warmup for"})
     group_by_length: bool = field(
         default=True,
