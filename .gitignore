@@ -50,3 +50,8 @@ eval*.json
 ml_runs/*
 mlruns/*
 results/*
+
+
+data/*
+data_gen/*
+
