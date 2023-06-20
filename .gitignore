@@ -55,3 +55,4 @@ results/*
 data/*
 data_gen/*
 
+!data_gen/prompts/*
