@@ -110,72 +110,6 @@ def handle_prev_message_history(agent_name, msg, prev_msgs):
     return messages + [{"role": agent_name, "content": msg}]
 
 
-class FLAMLWrapper():
-
-    def __init__(self, api_config_list=None):
-        self.api_config_list = api_config_list  # list of dict
-
-        print("OpenAI Key:", openai.api_key)
-
-    @cache_llm_infer_result
-    def reply(self,
-              agent_name,
-              msg,
-              num_response=1,
-              stop=None,
-              model="gpt-4",
-              prev_msgs=None,
-              temperature=0,
-              top_p=1):
-        if num_response > 1:
-            assert temperature > 0 or top_p < 1
-        messages = handle_prev_message_history(agent_name, msg, prev_msgs)
-
-        for i in range(len(self.api_config_list)):
-            if model in ["gpt-35-turbo", "gpt-3.5-turbo"]:
-                if self.api_config_list[i]["api_type"] == "azure":
-                    model_norm = "gpt-35-turbo"
-                else:
-                    model_norm = "gpt-3.5-turbo"
-            else:
-                model_norm = model
-            self.api_config_list[i]["model"] = model_norm
-
-        try:
-            response = foai.Completion.create(
-                config_list=self.api_config_list,  # the FLAML argument
-                messages=messages,
-                temperature=temperature,
-                n=num_response,
-                top_p=top_p,
-                frequency_penalty=0,
-                presence_penalty=0,
-                stop=None,
-            )
-        except openai.error.RateLimitError as e:
-            print(e)
-            time_to_sleep = re.findall(r"retry after (\d+) second", str(e))[0]
-            print(
-                colored(
-                    f"Rate limit exceeded. Waiting for {time_to_sleep} seconds...",
-                    "yellow"))
-            time.sleep(int(time_to_sleep))
-            return self.reply(msg,
-                              num_response,
-                              stop,
-                              model=model,
-                              prev_msgs=prev_msgs)
-        except Exception as e:
-            raise e
-
-        print(response)
-
-        return [
-            response["choices"][i]["message"]["content"]
-            for i in range(len(response["choices"]))
-        ]
-
-
 class AzureGPTClient():
 
     def __init__(self):
@@ -251,8 +185,8 @@ class AzureGPTClient():
                 for i in range(len(response["choices"]))
             ]
 
-        print(colored("response:", "green"), response)
-        print(colored("ans:", "green"), answers)
+        #print(colored("response:", "green"), response)
+        #print(colored("ans:", "green"), answers)
 
         # pdb.set_trace()
         return answers
@@ -326,15 +260,74 @@ def get_llm() -> object:
 
     return api
 
-
-if __name__ == "__main__":
-    api = get_llm()
-
-    print(
-        api.reply("user",
-                  "Give me something? For instance: ",
-                  num_response=10,
+def answer_refinement(msgs):
+    qlist = ""
+    for msg in msgs:
+        if msg[0] == "assistant":
+            st = msg[1]
+            q = 0
+            while True:
+                p = st.find("QUESTION:", q)
+                if p == -1:
+                    break
+                q = p
+                while True:
+                    q += 1
+                    if q == len(st) or st[q] == "\n":
+                        break
+                qlist += st[p:q] + "\n"
+    
+    nmsgs = [
+        msgs[0],
+        ("user", msgs[1][1] + "Now you do not need to generate Q&A, but please answer all the following questions instead. Please copy the problem before its answer to make the reply clear. Here are the questions:\n" + qlist)
+    ]
+    print(nmsgs)
+    print(api.reply("user", resp,
+                  num_response=1,
                   temperature=0.1,
                   top_p=0.3,
-                  prev_msgs=[("system", "You are a bot to cook Chinese food.")],
-                  model="gpt-4"))
+                  prev_msgs=nmsgs,
+                  model="gpt-4")[0])
+
+def summarize_and_compare():
+    pass
+
+if __name__ == "__main__":
+    num_response = 3
+
+    api = get_llm()
+
+    file_list = os.listdir("data/")
+    for file in file_list:
+        with open("data/" + file, "r") as handle:
+            prompts = handle.read()
+
+        msgs = [
+            ("system", "You are a bot to do document and code analyses."),
+            ("user", prompts)
+                ]
+        msgs.append(("assistant", api.reply("user", prompts,
+                    num_response=1,
+                    temperature=0.1,
+                    top_p=0.3,
+                    prev_msgs=msgs,
+                    model="gpt-4")[0]))
+        
+        for i in range(1, num_response):
+            resp = "Good job! Can you generate a different reply to my prompts?"
+            msgs.append(("user", resp))
+            msgs.append(("assistant", api.reply("user", resp,
+                    num_response=1,
+                    temperature=0.1,
+                    top_p=0.3,
+                    prev_msgs=msgs,
+                    model="gpt-4")[0]))
+        for msg in msgs:
+            if msg[0] == "assistant":
+                print(msg[1])
+
+        #answer_refinement(msgs)
+
+        with open("data/" + file[:-4] + "_chatlog.pickle", "wb") as handle:
+            pickle.dump(msgs, handle)
+    
