@@ -1,19 +1,19 @@
 import sys, json, pickle, re, pdb
 
-sys.path.append("/home/beibinli/IFS-Utils/copilot/src/")
+from query_gpt import get_llm
 
-from gpt_adapter import get_llm
-
-api = get_llm("azure")
+api = get_llm()
 
 
 class CuriousAgent:
 
-    def __init__(self, system_msg: str, formatter: callable = None):
+    def __init__(self, system_msg: str, formatter: callable = None, temperature = 0.1, top_p = 0.3):
         self.system_msg = system_msg
         self.msgs = [("system", system_msg)]
         self.details = []
         self.formatter = formatter
+        self.temperature = temperature
+        self.top_p = top_p
 
     def reply(self):
         if len(self.msgs) <= 2:
@@ -23,8 +23,8 @@ class CuriousAgent:
         response = api.reply("user",
                              prompt,
                              num_response=1,
-                             temperature=0.1,
-                             top_p=0.3,
+                             temperature=self.temperature,
+                             top_p=self.top_p,
                              prev_msgs=self.msgs,
                              model="gpt-4")
 
@@ -69,8 +69,8 @@ full parameter fine-tuning of a 65B model on a single machine with 8×RTX 3090,
 each with 24GB memory.1
 """
 
-    formatter = lambda x: re.findall(r"QUESTION (.*)ANSWER: (.*)", x, re.DOTALL)
-    agent = CuriousAgent(system_msg, lambda x: x.split("\n")[0].split(":")[1])
+    formatter = lambda x: re.findall(r"QUESTION: (.*)ANSWER: (.*)", x, re.DOTALL)
+    agent = CuriousAgent(system_msg, formatter)
 
     for i in range(5):
         agent.reply()

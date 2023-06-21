@@ -1,5 +1,6 @@
-A user tries to search the URI: {uri}
-She/he asks: {question}
+You are a helper bot to index a database.
+A user asks: {question}
+She/he is directed to the URI: {uri}
 We know she/he is looking for attributes: {attribute}.
 Can you extract out important keywords?
 

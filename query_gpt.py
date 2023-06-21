@@ -113,7 +113,7 @@ def handle_prev_message_history(agent_name, msg, prev_msgs):
 class AzureGPTClient():
 
     def __init__(self):
-
+        print("OpenAI Endpoint:", openai.api_base)
         print("OpenAI Key:", openai.api_key)
 
     @cache_llm_infer_result
@@ -216,9 +216,10 @@ def cache_func_call(func):
 @cache_func_call
 def get_embedding(text, model="text-embedding-ada-002"):
     openai.api_type = "azure"
-    openai.api_base = "https://msrcore.openai.azure.com/"
+    #openai.api_base = "https://msrcore.openai.azure.com/"
+    openai.api_base = "https://gcrgpt4aoai4.openai.azure.com/"
     openai.api_version = "2023-03-15-preview"
-    openai.api_key = os.getenv("CORE_AZURE_KEY").strip().rstrip()
+    openai.api_key = os.getenv("CORE_AZURE_KEY_GPT_4").strip().rstrip()
 
     text = text.replace("\n", " ")
     try:
@@ -253,9 +254,10 @@ def is_question_inbound(question, known_questions, threshold=0.8):
 # %%
 def get_llm() -> object:
     openai.api_type = "azure"
-    openai.api_base = "https://msrcore.openai.azure.com/"
+    #openai.api_base = "https://msrcore.openai.azure.com/"
+    openai.api_base = "https://gcrgpt4aoai4.openai.azure.com/"
     openai.api_version = "2023-03-15-preview"
-    openai.api_key = os.getenv("CORE_AZURE_KEY").strip().rstrip()
+    openai.api_key = os.getenv("CORE_AZURE_KEY_GPT_4").strip().rstrip()
     api = AzureGPTClient()
 
     return api
@@ -291,6 +293,19 @@ def answer_refinement(msgs):
 
 def summarize_and_compare():
     pass
+
+def single_query(query):
+    api = get_llm()
+
+    msgs = [
+        ("system", "You are a helpful assistant")
+    ]
+    return api.reply("user", query,
+                    num_response=1,
+                    temperature=0.1,
+                    top_p=0.3,
+                    prev_msgs=msgs,
+                    model="gpt-4")[0]
 
 if __name__ == "__main__":
     num_response = 3
@@ -330,4 +345,3 @@ if __name__ == "__main__":
 
         with open("data/" + file[:-4] + "_chatlog.pickle", "wb") as handle:
             pickle.dump(msgs, handle)
-    
