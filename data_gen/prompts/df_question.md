@@ -21,7 +21,9 @@ Here are some information about this data frame.
 {df.keys()}
 
 --- Here are some more detailed descriptions ---
-df.describe(include='all')
+{df.describe(include='all')}
 
+--- Shape: df.shape ---
+{df.shape}
 
 --- Now, Go ---

@@ -17,6 +17,6 @@ Here are some known information about this data frame.
 df.describe(include='all')
 
 --- Shape: df.shape ---
-df.shape
+{df.shape}
 
 --- Now, Go ---
