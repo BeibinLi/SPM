@@ -1,8 +1,14 @@
 import sys, json, pickle, re, pdb
+import dill  # needed to pickle lambda functions
 
 class CuriousAgent:
 
-    def __init__(self, api, system_msg: str, formatter: callable = None, temperature = 0.1, top_p = 0.3):
+    def __init__(self,
+                 api,
+                 system_msg: str,
+                 formatter: callable = None,
+                 temperature=0.1,
+                 top_p=0.3):
         self.api = api
         self.system_msg = system_msg
         self.msgs = [("system", system_msg)]
@@ -28,21 +34,25 @@ class CuriousAgent:
 
         self.msgs.append(("user", prompt))
 
-        rst = self.formatter(response[0])
-        rst = str(rst)
+        if formatter is not None:
+            rst = self.formatter(response[0])
+            rst = str(rst)
+        else:
+            rst = response[0]
         self.msgs.append(("assistant", rst))
 
     def dump(self, out_loc):
         with open(out_loc, "wb") as f:
-            pickle.dump(
-                [self.system_msg, self.msgs, self.details,
-                 str(self.formatter)], f)
+            pickle.dump([
+                self.system_msg, self.msgs, self.details,
+                dill.dumps(self.formatter)
+            ], f)
 
     def load(self, in_loc):
         with open(in_loc, "rb") as f:
             self.system_msg, self.msgs, self.details, self.formatter = pickle.load(
                 f)
-        self.formatter = eval(self.formatter)
+        self.formatter = dill.loads(self.formatter)
 
 
 if __name__ == "__main__":
@@ -50,6 +60,11 @@ if __name__ == "__main__":
 
 QUESTION: a question goes here
 ANSWER: the answer to the question goes here
+
+QUESTION: another question goes here
+ANSWER: the answer to this question
+
+Please generate as many questions as you can. Thanks!
 
 --- Here are the content ---
 
@@ -65,10 +80,17 @@ full parameter fine-tuning of a 65B model on a single machine with 8×RTX 3090,
 each with 24GB memory.1
 """
 
-    formatter = lambda x: re.findall(r"QUESTION: (.*)ANSWER: (.*)", x, re.DOTALL)
+    formatter = lambda x: re.findall(r"QUESTION.*: (.*)ANSWER.*: (.*)", x, re.
+                                     DOTALL)
     agent = CuriousAgent(system_msg, formatter)
 
     for i in range(5):
         agent.reply()
-        pdb.set_trace()
         agent.dump("test.pickle")
+
+    del agent, formatter, system_msg
+
+    agent2 = CuriousAgent("None", None)
+    agent2.load("test.pickle")
+
+    agent2.reply()
