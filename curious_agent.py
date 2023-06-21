@@ -1,13 +1,9 @@
 import sys, json, pickle, re, pdb
 
-from query_gpt import get_llm
-
-api = get_llm()
-
-
 class CuriousAgent:
 
-    def __init__(self, system_msg: str, formatter: callable = None, temperature = 0.1, top_p = 0.3):
+    def __init__(self, api, system_msg: str, formatter: callable = None, temperature = 0.1, top_p = 0.3):
+        self.api = api
         self.system_msg = system_msg
         self.msgs = [("system", system_msg)]
         self.details = []
@@ -20,7 +16,7 @@ class CuriousAgent:
             prompt = "Go!"
         else:
             prompt = "Thanks! I like your response. Can you try again with a different solution?"
-        response = api.reply("user",
+        response = self.api.reply("user",
                              prompt,
                              num_response=1,
                              temperature=self.temperature,

@@ -28,6 +28,10 @@ from nltk.stem import PorterStemmer
 from nltk.tokenize import word_tokenize
 from termcolor import colored
 
+from curious_agent import CuriousAgent
+
+from tqdm import tqdm
+
 try:
     import flaml
     from flaml import oai as foai
@@ -37,7 +41,6 @@ except Exception as e:
     USE_FLAML = False
 
 ps = PorterStemmer()
-
 
 def persistent_hash(obj):
     # Convert the input object to a string representation
@@ -113,8 +116,9 @@ def handle_prev_message_history(agent_name, msg, prev_msgs):
 class AzureGPTClient():
 
     def __init__(self):
-        print("OpenAI Endpoint:", openai.api_base)
-        print("OpenAI Key:", openai.api_key)
+        #print("OpenAI Endpoint:", openai.api_base)
+        #print("OpenAI Key:", openai.api_key)
+        pass
 
     @cache_llm_infer_result
     def reply(self,
@@ -291,15 +295,9 @@ def answer_refinement(msgs):
                   prev_msgs=nmsgs,
                   model="gpt-4")[0])
 
-def summarize_and_compare():
-    pass
-
 def single_query(query):
     api = get_llm()
 
-    msgs = [
-        ("system", "You are a helpful assistant")
-    ]
     return api.reply("user", query,
                     num_response=1,
                     temperature=0.1,
@@ -310,38 +308,25 @@ def single_query(query):
 if __name__ == "__main__":
     num_response = 3
 
-    api = get_llm()
+    formatter = lambda x: re.findall(r"QUESTION: (.*)ANSWER: (.*)", x, re.DOTALL)
 
     file_list = os.listdir("data/")
-    for file in file_list:
+    file_list = [file for file in file_list if file.endswith(".txt")]
+    file_list.sort()
+
+    os.makedirs("data/chatlogs/", exist_ok=True)
+
+    for file in tqdm(file_list):
+        store_path = "data/chatlogs/" + file[:-4] + "_chatlog.pickle"
+        if os.path.exists(store_path):
+            continue
+
         with open("data/" + file, "r") as handle:
             prompts = handle.read()
+        agent = CuriousAgent(get_llm(), prompts, formatter)
 
-        msgs = [
-            ("system", "You are a bot to do document and code analyses."),
-            ("user", prompts)
-                ]
-        msgs.append(("assistant", api.reply("user", prompts,
-                    num_response=1,
-                    temperature=0.1,
-                    top_p=0.3,
-                    prev_msgs=msgs,
-                    model="gpt-4")[0]))
-        
-        for i in range(1, num_response):
-            resp = "Good job! Can you generate a different reply to my prompts?"
-            msgs.append(("user", resp))
-            msgs.append(("assistant", api.reply("user", resp,
-                    num_response=1,
-                    temperature=0.1,
-                    top_p=0.3,
-                    prev_msgs=msgs,
-                    model="gpt-4")[0]))
-        for msg in msgs:
-            if msg[0] == "assistant":
-                print(msg[1])
+        for i in range(num_response):
+            agent.reply()
 
-        #answer_refinement(msgs)
-
-        with open("data/" + file[:-4] + "_chatlog.pickle", "wb") as handle:
-            pickle.dump(msgs, handle)
+        with open(store_path, "wb") as handle:
+            pickle.dump(agent.msgs, handle)
