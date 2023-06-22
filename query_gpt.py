@@ -131,6 +131,7 @@ class AzureGPTClient():
               temperature=0,
               top_p=1):
         while True:  # Run until succeed
+            time_to_sleep = 5  # seconds between tries
             try:
                 return self._try_reply(agent_name=agent_name,
                                        msg=msg,
@@ -142,13 +143,21 @@ class AzureGPTClient():
                                        top_p=top_p)
             except openai.error.RateLimitError as e:
                 print(e)
-                time_to_sleep = re.findall(r"retry after (\d+) second",
-                                           str(e))[0]
-                print(
-                    colored(
-                        f"(Azure) Rate limit exceeded. Waiting for {time_to_sleep} seconds...",
-                        "yellow"))
-                time.sleep(int(time_to_sleep))
+                time_to_sleep = int(
+                    re.findall(r"retry after (\d+) second", str(e))[0])
+                print(colored("(Azure) Rate limit exceeded.", "yellow"))
+            except openai.error.APIConnectionError as e:
+                print(e)
+                print(colored("(Azure) API connection error.", "yellow"))
+            except openai.error.Timeout as e:
+                print(e)
+                print(colored("(Azure) API Timed Out.", "yellow"))
+            except openai.error.APIError as e:
+                print(e)
+                print(colored("(Azure) API Error.", "yellow"))
+
+            print(colored(f"Sleeping {time_to_sleep} seconds...", "yellow"))
+            time.sleep(time_to_sleep)
 
     def _try_reply(self,
                    agent_name,
@@ -295,20 +304,8 @@ def answer_refinement(msgs):
                   prev_msgs=nmsgs,
                   model="gpt-4")[0])
 
-def single_query(query):
-    api = get_llm()
-
-    return api.reply("user", query,
-                    num_response=1,
-                    temperature=0.1,
-                    top_p=0.3,
-                    prev_msgs=msgs,
-                    model="gpt-4")[0]
-
 if __name__ == "__main__":
-    num_response = 3
-
-    formatter = lambda x: re.findall(r"QUESTION: (.*)ANSWER: (.*)", x, re.DOTALL)
+    num_interaction = 5
 
     file_list = os.listdir("data/")
     file_list = [file for file in file_list if file.endswith(".txt")]
@@ -318,15 +315,12 @@ if __name__ == "__main__":
 
     for file in tqdm(file_list):
         store_path = "data/chatlogs/" + file[:-4] + "_chatlog.pickle"
-        if os.path.exists(store_path):
-            continue
+        if not os.path.exists(store_path):
+            with open("data/" + file, "r") as handle:
+                prompts = handle.read()
+            agent = CuriousAgent(get_llm(), prompts, None, temperature=1, top_p=0.6, num_response=3)
 
-        with open("data/" + file, "r") as handle:
-            prompts = handle.read()
-        agent = CuriousAgent(get_llm(), prompts, formatter)
+            for i in range(num_interaction):
+                agent.reply()
 
-        for i in range(num_response):
-            agent.reply()
-
-        with open(store_path, "wb") as handle:
-            pickle.dump(agent.msgs, handle)
+            agent.dump(store_path)

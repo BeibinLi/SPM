@@ -1,4 +1,4 @@
-import sys, json, pickle, re, pdb
+import sys, json, pickle, re, pdb, os, time, shutil
 import dill  # needed to pickle lambda functions
 
 class CuriousAgent:
@@ -8,7 +8,8 @@ class CuriousAgent:
                  system_msg: str,
                  formatter: callable = None,
                  temperature=0.1,
-                 top_p=0.3):
+                 top_p=0.3,
+                 num_response=1):
         self.api = api
         self.system_msg = system_msg
         self.msgs = [("system", system_msg)]
@@ -16,41 +17,58 @@ class CuriousAgent:
         self.formatter = formatter
         self.temperature = temperature
         self.top_p = top_p
+        self.num_response = num_response
 
     def reply(self):
         if len(self.msgs) <= 2:
             prompt = "Go!"
         else:
-            prompt = "Thanks! I like your response. Can you try again with a different solution?"
-        response = self.api.reply("user",
+            prompt = "Thanks! I like your response. Can you try again and come up with a different response?"
+        responses = self.api.reply("user",
                              prompt,
-                             num_response=1,
+                             num_response=self.num_response,
                              temperature=self.temperature,
                              top_p=self.top_p,
                              prev_msgs=self.msgs,
-                             model="gpt-4")
+                             model="gpt-4-32k")
 
-        self.details.append(response)
+        self.details.append(responses)
 
         self.msgs.append(("user", prompt))
 
-        if formatter is not None:
-            rst = self.formatter(response[0])
-            rst = str(rst)
-        else:
-            rst = response[0]
-        self.msgs.append(("assistant", rst))
+        if self.formatter is not None:
+            responses = [self.formatter(r) for r in responses]
+        
+        for rst in responses:
+            self.msgs.append(("assistant", rst))
 
     def dump(self, out_loc):
         with open(out_loc, "wb") as f:
             pickle.dump([
-                self.system_msg, self.msgs, self.details,
+                self.system_msg,
+                self.msgs,
+                [],
+                self.temperature,
+                self.top_p,
+                self.num_response,
                 dill.dumps(self.formatter)
             ], f)
+        with open(out_loc.replace(".pickle", ".json"), "w") as f:
+            json.dump([
+                self.system_msg,
+                self.msgs,
+                self.details,
+                self.temperature,
+                self.top_p,
+                self.num_response
+            ], f, indent=4)
+        os.makedirs("../cache/", exist_ok=True)
+        cache_loc = os.path.join("../cache/", f"{os.path.basename(out_loc)}-{time.time()}.json")
+        shutil.copy2(out_loc.replace(".pickle", ".json"), cache_loc)
 
     def load(self, in_loc):
         with open(in_loc, "rb") as f:
-            self.system_msg, self.msgs, self.details, self.formatter = pickle.load(
+            self.system_msg, self.msgs, self.details, self.temperature, self.top_p, self.num_response, self.formatter = pickle.load(
                 f)
         self.formatter = dill.loads(self.formatter)
 

@@ -2,8 +2,10 @@ import os
 import ast
 from collections import defaultdict
 
+max_prompt_length = 15000
+
 prompt_path = "data_gen/prompts/"
-raw_data_path = "data_gen/raw_data/"
+raw_data_path = "../raw_data/"
 
 prompts = {}
 files = {}
@@ -30,9 +32,14 @@ def dfs(path):
             dfs(new_path + "/")
         else:
             with open(new_path, mode = "r") as handle:
-                files[new_path[len(raw_data_path):]] = handle.read()
+                content = handle.read()
+                if content.replace(" ", "").replace("\n", "") != "": # remove empty files
+                    files[new_path[len(raw_data_path):]] = content
 
 def enumerate_file_tuples(file_names, content, pos, file_path, prompt):
+    if len(content) > max_prompt_length:
+        return
+        
     if pos == []:
         global total_data_count
         with open(file_path + str(total_data_count[prompt]) + ".txt", 'w') as handle:
@@ -63,27 +70,28 @@ def replace_content(file_names, prompt, template, identifier, suffix):
             filtered_fn.append(file_name)
     enumerate_file_tuples(filtered_fn, template, pos, "data/" + prompt[:-3] + "_", prompt[:-3])
 
-def extract_class_info(code):
+def extract_clip(code, clip_type):
     lines = code.split("\n")
     module = ast.parse(code)
     ret = []
     for node in module.body:
-        if isinstance(node, ast.ClassDef):
+        if (clip_type == "class" and isinstance(node, ast.ClassDef)) \
+            or (clip_type == "function" and isinstance(node, ast.FunctionDef)):
             start = node.lineno - 1
             end = node.end_lineno
             ret.append("\n".join(lines[start:end]))
     return ret
 
-def extract_code_class(file_names, prompt, template):
+def gen_code_prompts(file_names, prompt, template, clip_type):
     # TODO: implement multi {code_class} support
-    pos = find_all_substr(template, "{code_class}")
+    pos = find_all_substr(template, "{code_" + clip_type + "}")
     if len(pos) != 1:
         return
     for file_name in file_names:
         if not file_name.endswith(".py"):
             continue
         code = files[file_name]
-        class_clips = extract_class_info(code)
+        class_clips = extract_clip(code, clip_type)
         for class_clip in class_clips:
             content = template
             pos_ed = pos[0]
@@ -93,6 +101,9 @@ def extract_code_class(file_names, prompt, template):
                     break
             content = content[:pos[0]] + class_clip + content[pos_ed+1:]
 
+            if len(content) > max_prompt_length:
+                continue
+
             global total_data_count
             with open("data/" + prompt[:-3] + "_" + str(total_data_count[prompt]) + ".txt", 'w') as handle:
                 handle.write(content)
@@ -101,6 +112,7 @@ def extract_code_class(file_names, prompt, template):
 def gen_data(data_type):
     dfs(raw_data_path + data_type + "/")
     file_names = list(files.keys())
+
     for (prompt, template) in prompts.items():
         # All {content} {content%x} replacement
         # TODO: {prev_generated_QA} in question.md (all hybrid prompt templates)
@@ -109,8 +121,9 @@ def gen_data(data_type):
         # All {code} replacement
         replace_content(file_names, prompt, template, "{code}", ".py")
 
-        # {code_class}
-        extract_code_class(file_names, prompt, template)
+        # {code_class} or {code_function}
+        for clip_type in ["class", "function"]:
+            gen_code_prompts(file_names, prompt, template, clip_type)
 
 
 if __name__ == "__main__":
