@@ -1,8 +1,10 @@
 import os
 import ast
 from collections import defaultdict
+import tiktoken
 
-max_prompt_length = 15000
+max_token_length = 5000
+encoder = tiktoken.encoding_for_model("gpt-4")
 
 prompt_path = "data_gen/prompts/"
 raw_data_path = "../raw_data/"
@@ -10,6 +12,15 @@ raw_data_path = "../raw_data/"
 prompts = {}
 files = {}
 total_data_count = defaultdict(int)
+
+def save_content(path, content, prompt):
+    if len(encoder.encode(content)) > max_token_length:
+        return
+
+    global total_data_count
+    with open(path, 'w') as handle:
+        handle.write(content)
+    total_data_count[prompt] += 1
 
 def find_all_substr(string, substr):
     start_index = 0
@@ -36,15 +47,9 @@ def dfs(path):
                 if content.replace(" ", "").replace("\n", "") != "": # remove empty files
                     files[new_path[len(raw_data_path):]] = content
 
-def enumerate_file_tuples(file_names, content, pos, file_path, prompt):
-    if len(content) > max_prompt_length:
-        return
-        
+def enumerate_file_tuples(file_names, content, pos, file_path, prompt):        
     if pos == []:
-        global total_data_count
-        with open(file_path + str(total_data_count[prompt]) + ".txt", 'w') as handle:
-            handle.write(content)
-        total_data_count[prompt] += 1
+        save_content(file_path + str(total_data_count[prompt]) + ".txt", content, prompt)
         return
 
     for i in range(len(file_names)):
@@ -101,13 +106,7 @@ def gen_code_prompts(file_names, prompt, template, clip_type):
                     break
             content = content[:pos[0]] + class_clip + content[pos_ed+1:]
 
-            if len(content) > max_prompt_length:
-                continue
-
-            global total_data_count
-            with open("data/" + prompt[:-3] + "_" + str(total_data_count[prompt]) + ".txt", 'w') as handle:
-                handle.write(content)
-            total_data_count[prompt] += 1
+            save_content("data/" + prompt[:-3] + "_" + str(total_data_count[prompt]) + ".txt", content, prompt)
 
 def gen_data(data_type):
     dfs(raw_data_path + data_type + "/")
