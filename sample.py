@@ -238,8 +238,6 @@ trainer = SFTTrainer(
     packing=script_args.packing,
 )
 
-# pdb.set_trace()
-
 for name, module in trainer.model.named_modules():
     if isinstance(module, LoraLayer):
         if script_args.bf16:

@@ -44,10 +44,10 @@ def spawn_chat_for_uri(msgs, n=10):
     random.shuffle(questions)
     random.shuffle(keywords)
 
-    return [
-        f"### Human: {q}### Assistant: {uri}\nKeywords: {k}"
+    return {
+        f"### Human: {q}### Assistant: {uri}\nKeywords: {k}": uri
         for q, k in zip(questions[:n], keywords[:n])
-    ]
+    }
 
 
 def dump_chat(chats: list, filename: str):
@@ -56,17 +56,28 @@ def dump_chat(chats: list, filename: str):
 
 
 if __name__ == "__main__":
-    train_data = []
-    test_data = []
+    data = {}  # key: question; value: uri
 
     for file in FILES:
         agent = CuriousAgent(api=None, system_msg="")
         agent.load(file)
 
-        if random.random() < 0.7:
-            train_data.extend(spawn_chat_for_uri(agent.msgs, 10))
-        else:
-            test_data.extend(spawn_chat_for_uri(agent.msgs, 10))
+        data.update(spawn_chat_for_uri(agent.msgs, 10))
+
+    all_uris = set(list(data.values()))
+
+    # Split train and test: make sure a URI in the training set will never
+    # appear in the testing set
+    random.seed(1)
+    train_set_uri = random.sample(list(all_uris), int(len(all_uris) * 0.7))
+
+    train_data = [
+        question for question, uri in data.items() if uri in train_set_uri
+    ]
+
+    test_data = [
+        question for question, uri in data.items() if uri not in train_set_uri
+    ]
 
     dump_chat(train_data, TRAIN_OUT_FILE)
     dump_chat(test_data, TEST_OUT_FILE)
