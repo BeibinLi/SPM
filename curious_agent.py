@@ -1,5 +1,6 @@
 import sys, json, pickle, re, pdb, os, time, shutil
 import dill  # needed to pickle lambda functions
+import tiktoken
 
 class CuriousAgent:
 
@@ -9,7 +10,8 @@ class CuriousAgent:
                  formatter: callable = None,
                  temperature=0.1,
                  top_p=0.3,
-                 num_response=1):
+                 num_response=1,
+                 max_token_length=3000):
         self.api = api
         self.system_msg = system_msg
         self.msgs = [("system", system_msg)]
@@ -18,8 +20,14 @@ class CuriousAgent:
         self.temperature = temperature
         self.top_p = top_p
         self.num_response = num_response
+        self.max_token_length = max_token_length
+        self.encoder = tiktoken.encoding_for_model("gpt-4")
+        self.token_length = len(self.encoder.encode(self.msgs[0][1]))
 
     def reply(self):
+        if self.token_length > self.max_token_length:
+            return
+        
         if len(self.msgs) <= 2:
             prompt = "Go!"
         else:
@@ -41,6 +49,7 @@ class CuriousAgent:
         
         for rst in responses:
             self.msgs.append(("assistant", rst))
+            self.token_length += len(self.encoder.encode(rst))
 
     def dump(self, out_loc):
         with open(out_loc, "wb") as f:

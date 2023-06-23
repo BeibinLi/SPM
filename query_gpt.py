@@ -1,44 +1,18 @@
-"""GPT-3 Client Adapter using the Substrate API.
-
-We use adapter here instead of connecting to Substrate API directly, because
-it is easier to debug. The modularization also helps to switch to other APIs 
-or even local GPU models in the future.
-"""
-import argparse
-import atexit
 import copy
 import hashlib
-import json
 import os
-import pdb
-import pickle
 import re
-import shutil
-import socket
 import time
-import traceback
-from enum import Enum
 
 import diskcache
 import numpy as np
 import openai
-import requests
-from msal import PublicClientApplication, SerializableTokenCache
 from nltk.stem import PorterStemmer
-from nltk.tokenize import word_tokenize
 from termcolor import colored
 
 from curious_agent import CuriousAgent
 
 from tqdm import tqdm
-
-try:
-    import flaml
-    from flaml import oai as foai
-    USE_FLAML = True
-except Exception as e:
-    print("Unable to import flaml because:", e)
-    USE_FLAML = False
 
 ps = PorterStemmer()
 
@@ -314,13 +288,14 @@ if __name__ == "__main__":
     os.makedirs("data/chatlogs/", exist_ok=True)
 
     for file in tqdm(file_list):
+        print(file)
         store_path = "data/chatlogs/" + file[:-4] + "_chatlog.pickle"
         if not os.path.exists(store_path):
             with open("data/" + file, "r") as handle:
                 prompts = handle.read()
-            agent = CuriousAgent(get_llm(), prompts, None, temperature=1, top_p=0.6, num_response=3)
+            agent = CuriousAgent(get_llm(), prompts, None, temperature=1, top_p=0.6, num_response=3, max_token_length=10000)
 
-            for i in range(num_interaction):
+            for i in tqdm(range(num_interaction)):
                 agent.reply()
 
             agent.dump(store_path)

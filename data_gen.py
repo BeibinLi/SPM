@@ -3,7 +3,7 @@ import ast
 from collections import defaultdict
 import tiktoken
 
-max_token_length = 5000
+max_token_length = 3000
 encoder = tiktoken.encoding_for_model("gpt-4")
 
 prompt_path = "data_gen/prompts/"
