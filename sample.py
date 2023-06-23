@@ -15,7 +15,7 @@
 from dataclasses import dataclass, field
 from typing import Optional
 
-import torch
+import torch, pdb
 from datasets import load_dataset
 from peft import LoraConfig
 import transformers
@@ -30,7 +30,7 @@ from transformers import (
 from peft.tuners.lora import LoraLayer
 
 from trl import SFTTrainer
-
+from trl.trainer import ConstantLengthDataset
 
 ########################################################################
 # This is a fully working simple example to use trl's RewardTrainer.
@@ -41,7 +41,6 @@ from trl import SFTTrainer
 #
 ########################################################################
 
-
 # Define and parse arguments.
 
 
@@ -51,7 +50,8 @@ class ScriptArguments:
     These arguments vary depending on how many GPUs you have, what their capacity and features are, and what size model you want to train.
     """
 
-    local_rank: Optional[int] = field(default=-1, metadata={"help": "Used for multi-gpu"})
+    local_rank: Optional[int] = field(default=-1,
+                                      metadata={"help": "Used for multi-gpu"})
 
     per_device_train_batch_size: Optional[int] = field(default=4)
     per_device_eval_batch_size: Optional[int] = field(default=1)
@@ -66,7 +66,8 @@ class ScriptArguments:
     model_name: Optional[str] = field(
         default="tiiuae/falcon-7b",
         metadata={
-            "help": "The model that you want to train from the Hugging Face hub. E.g. gpt2, gpt2-xl, bert, etc."
+            "help":
+                "The model that you want to train from the Hugging Face hub. E.g. gpt2, gpt2-xl, bert, etc."
         },
     )
     dataset_name: Optional[str] = field(
@@ -91,7 +92,9 @@ class ScriptArguments:
     )
     num_train_epochs: Optional[int] = field(
         default=1,
-        metadata={"help": "The number of training epochs for the reward model."},
+        metadata={
+            "help": "The number of training epochs for the reward model."
+        },
     )
     fp16: Optional[bool] = field(
         default=False,
@@ -102,7 +105,7 @@ class ScriptArguments:
         metadata={"help": "Enables bf16 training."},
     )
     packing: Optional[bool] = field(
-        default=False,
+        default=True,
         metadata={"help": "Use packing dataset creating."},
     )
     gradient_checkpointing: Optional[bool] = field(
@@ -115,18 +118,30 @@ class ScriptArguments:
     )
     lr_scheduler_type: str = field(
         default="constant",
-        metadata={"help": "Learning rate schedule. Constant a bit better than cosine, and has advantage for analysis"},
-    )
-    max_steps: int = field(default=100, metadata={"help": "How many optimizer update steps to take"})
-    warmup_ratio: float = field(default=0.03, metadata={"help": "Fraction of steps to do a warmup for"})
-    group_by_length: bool = field(
-        default=True,
         metadata={
-            "help": "Group sequences into batches with same length. Saves memory and speeds up training considerably."
+            "help":
+                "Learning rate schedule. Constant a bit better than cosine, and has advantage for analysis"
         },
     )
-    save_steps: int = field(default=10, metadata={"help": "Save checkpoint every X updates steps."})
-    logging_steps: int = field(default=10, metadata={"help": "Log every X updates steps."})
+    max_steps: int = field(
+        default=10000,
+        metadata={"help": "How many optimizer update steps to take"})
+    warmup_ratio: float = field(
+        default=0.03, metadata={"help": "Fraction of steps to do a warmup for"})
+    group_by_length: bool = field(
+        default=False,
+        metadata={
+            "help":
+                "Group sequences into batches with same length. Saves memory and speeds up training considerably."
+        },
+    )
+    save_steps: int = field(
+        default=10, metadata={"help": "Save checkpoint every X updates steps."})
+    logging_steps: int = field(default=10,
+                               metadata={"help": "Log every X updates steps."})
+    cache_dir: Optional[str] = field(
+        default="/mnt/data/falcon/",
+        metadata={"help": "Where to store the pretrained models."})
 
 
 parser = HfArgumentParser(ScriptArguments)
@@ -147,14 +162,19 @@ def create_and_prepare_model(args):
         major, _ = torch.cuda.get_device_capability()
         if major >= 8:
             print("=" * 80)
-            print("Your GPU supports bfloat16, you can accelerate training with the argument --bf16")
+            print(
+                "Your GPU supports bfloat16, you can accelerate training with the argument --bf16"
+            )
             print("=" * 80)
 
     device_map = {"": 0}
 
     model = AutoModelForCausalLM.from_pretrained(
-        args.model_name, quantization_config=bnb_config, device_map=device_map, trust_remote_code=True, cache_dir="/mnt/data/falcon/"
-    )
+        args.model_name,
+        quantization_config=bnb_config,
+        device_map=device_map,
+        trust_remote_code=True,
+        cache_dir=script_args.cache_dir)
 
     peft_config = LoraConfig(
         lora_alpha=script_args.lora_alpha,
@@ -170,10 +190,9 @@ def create_and_prepare_model(args):
         ],  # , "word_embeddings", "lm_head"],
     )
 
-    tokenizer = AutoTokenizer.from_pretrained(script_args.model_name, trust_remote_code=True,
-cache_dir="/mnt/data/falcon/"
-
-                                              )
+    tokenizer = AutoTokenizer.from_pretrained(script_args.model_name,
+                                              trust_remote_code=True,
+                                              cache_dir=script_args.cache_dir)
     tokenizer.pad_token = tokenizer.eos_token
 
     return model, peft_config, tokenizer
@@ -198,7 +217,15 @@ training_arguments = TrainingArguments(
 
 model, peft_config, tokenizer = create_and_prepare_model(script_args)
 model.config.use_cache = False
-dataset = load_dataset(script_args.dataset_name, split="train")
+dataset = load_dataset("json",
+                       data_files="../cscp_data/gen/uri_train.jsonl",
+                       split="train")
+# d2 = load_dataset(script_args.dataset_name, split="train")
+# d3 = load_dataset("json",
+#                   data_files={
+#                       "train": "../cscp_data/gen/uri_train.jsonl",
+#                       "test": "../cscp_data/gen/uri_test.jsonl"
+#                   })
 
 trainer = SFTTrainer(
     model=model,
@@ -211,6 +238,7 @@ trainer = SFTTrainer(
     packing=script_args.packing,
 )
 
+# pdb.set_trace()
 
 for name, module in trainer.model.named_modules():
     if isinstance(module, LoraLayer):
@@ -224,6 +252,5 @@ for name, module in trainer.model.named_modules():
                 module = module.to(torch.bfloat16)
 
 trainer.train()
-
 
 print("Done")
