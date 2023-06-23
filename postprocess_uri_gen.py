@@ -24,7 +24,7 @@ def spawn_chat_for_uri(msgs, n=10):
     assert msgs[0][0] == "system"
     system_msg = msgs[0][1]
 
-    uri = re.findall(r"URI to the search is: (\w+)", system_msg)[0]
+    uri = re.findall(r"URI to the search is: (.+)", system_msg)[0]
 
     # Get information from Bot's response
     questions = []
