@@ -8,8 +8,9 @@ import math
 
 num_sample = 20
 uri_data_path = "../raw_data/URI/"
-uri_attr_to_lang_keyw_prompt_path = "data_gen/prompts/intermediate_prompts/uri_attribute_to_language_keyword.md"
-uri_lang_attr_keyw_prompt_path = "data_gen/prompts/intermediate_prompts/uri_language_attribute_to_keyword.md"
+uri_attr_to_lang_keyw_prompt_path = "data_gen/prompt_templates/intermediate/uri_attribute_to_language_keyword.md"
+uri_lang_attr_keyw_prompt_path = "data_gen/prompt_templates/intermediate/uri_language_attribute_to_keyword.md"
+chatlog_output_path = "data/chatlogs/"
 
 def extract_attributes_and_values(data):
     items = data["response"]["resultParts"]
@@ -85,7 +86,7 @@ if __name__ == "__main__":
     file_list = os.listdir(uri_data_path)
     file_list = [file for file in file_list if file.endswith(".json")]
     file_list.sort()
-    os.makedirs("data/chatlogs/", exist_ok=True)
+    os.makedirs(chatlog_output_path, exist_ok=True)
 
     for file in tqdm(file_list):
         if not file.endswith(".json"):
@@ -96,7 +97,7 @@ if __name__ == "__main__":
         prompts, num_samples = uri_attr_to_lang_keyw(data)
         
         for i in range(len(prompts)):
-            store_path = "data/chatlogs/" + file[:-5] + "_chatlog_" + str(i) + ".pickle"
+            store_path = chatlog_output_path + file[:-5] + "_chatlog_" + str(i) + ".pickle"
             if os.path.exists(store_path):
                 continue
 

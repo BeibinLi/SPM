@@ -6,8 +6,9 @@ import tiktoken
 max_token_length = 3000
 encoder = tiktoken.encoding_for_model("gpt-4")
 
-prompt_path = "data_gen/prompts/"
+prompt_path = "data_gen/prompt_templates/"
 raw_data_path = "../raw_data/"
+output_path = "data/"
 
 prompts = {}
 files = {}
@@ -73,7 +74,7 @@ def replace_content(file_names, prompt, template, identifier, suffix):
     for file_name in file_names:
         if file_name.endswith(suffix):
             filtered_fn.append(file_name)
-    enumerate_file_tuples(filtered_fn, template, pos, "data/" + prompt[:-3] + "_", prompt[:-3])
+    enumerate_file_tuples(filtered_fn, template, pos, output_path + prompt[:-3] + "_", prompt[:-3])
 
 def extract_clip(code, clip_type):
     lines = code.split("\n")
@@ -106,7 +107,7 @@ def gen_code_prompts(file_names, prompt, template, clip_type):
                     break
             content = content[:pos[0]] + class_clip + content[pos_ed+1:]
 
-            save_content("data/" + prompt[:-3] + "_" + str(total_data_count[prompt]) + ".txt", content, prompt)
+            save_content(output_path + prompt[:-3] + "_" + str(total_data_count[prompt]) + ".txt", content, prompt)
 
 def gen_data(data_type):
     dfs(raw_data_path + data_type + "/")
@@ -126,7 +127,7 @@ def gen_data(data_type):
 
 
 if __name__ == "__main__":
-    os.makedirs("data/", exist_ok=True)
+    os.makedirs(output_path, exist_ok=True)
 
     file_list = os.listdir(prompt_path)
     for file in file_list:
