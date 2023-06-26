@@ -3,7 +3,7 @@ import ast
 from collections import defaultdict
 import tiktoken
 
-from data_gen.paths import *
+from paths import *
 
 max_token_length = 3000
 encoder = tiktoken.encoding_for_model("gpt-4")

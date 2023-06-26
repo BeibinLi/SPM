@@ -1,22 +1,12 @@
-import copy
-import hashlib
 import os
-import re
-import time
-
-import diskcache
-import numpy as np
-import openai
-from nltk.stem import PorterStemmer
-from termcolor import colored
-
-from gpt_api import *
-
-from curious_agent import CuriousAgent
+import sys
+sys.path.append("..")
+from SPM.curious_agent import CuriousAgent
+from SPM.gpt_api import get_llm
 
 from tqdm import tqdm
 
-from data_gen.paths import *
+from paths import *
 
 # def answer_refinement(msgs):
 #     qlist = ""

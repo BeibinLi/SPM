@@ -1,11 +1,17 @@
-import json, random
+import os
+import sys
+sys.path.append("..")
+from SPM.curious_agent import CuriousAgent
+from SPM.gpt_api import get_llm
+
+from tqdm import tqdm
+
+from paths import *
+
+import json
 from collections import Counter
 import os
-from gpt_api import get_llm
-from tqdm import tqdm
-from curious_agent import CuriousAgent
 import math
-from data_gen.paths import *
 
 num_sample = 20
 
