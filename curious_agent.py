@@ -11,7 +11,7 @@ class CuriousAgent:
                  temperature=0.1,
                  top_p=0.3,
                  num_response=1,
-                 max_token_length=3000):
+                 max_token_length=None):
         self.api = api
         self.system_msg = system_msg
         self.msgs = [("system", system_msg)]
@@ -23,9 +23,16 @@ class CuriousAgent:
         self.max_token_length = max_token_length
         self.encoder = tiktoken.encoding_for_model("gpt-4")
         self.token_length = len(self.encoder.encode(self.msgs[0][1]))
+    
+    def __init__(self, api, in_loc):
+        self.api = api
+        self.load(in_loc)
+        self.max_token_length = None
+        self.encoder = tiktoken.encoding_for_model("gpt-4")
+        self.token_length = sum(len(m[1]) for m in self.msgs if m[0] == "asisstant")
 
     def reply(self):
-        if self.token_length > self.max_token_length:
+        if self.max_token_length and self.token_length > self.max_token_length:
             return
         
         if len(self.msgs) <= 2:

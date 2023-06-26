@@ -13,8 +13,8 @@ Please write as many questions and answers as possible.
 
 Here are some information about this data frame.
 
---- Here are the first few rows: df.head() ---
-{df.head()}
+--- Here are the first few rows: df.sample() ---
+{df.sample()}
 
 
 --- Here are the columns: df.keys() ---

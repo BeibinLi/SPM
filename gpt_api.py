@@ -10,9 +10,7 @@ import openai
 from nltk.stem import PorterStemmer
 from termcolor import colored
 
-from curious_agent import CuriousAgent
 
-from tqdm import tqdm
 
 ps = PorterStemmer()
 
@@ -248,54 +246,3 @@ def get_llm() -> object:
     api = AzureGPTClient()
 
     return api
-
-# def answer_refinement(msgs):
-#     qlist = ""
-#     for msg in msgs:
-#         if msg[0] == "assistant":
-#             st = msg[1]
-#             q = 0
-#             while True:
-#                 p = st.find("QUESTION:", q)
-#                 if p == -1:
-#                     break
-#                 q = p
-#                 while True:
-#                     q += 1
-#                     if q == len(st) or st[q] == "\n":
-#                         break
-#                 qlist += st[p:q] + "\n"
-    
-#     nmsgs = [
-#         msgs[0],
-#         ("user", msgs[1][1] + "Now you do not need to generate Q&A, but please answer all the following questions instead. Please copy the problem before its answer to make the reply clear. Here are the questions:\n" + qlist)
-#     ]
-#     print(nmsgs)
-#     print(api.reply("user", resp,
-#                   num_response=1,
-#                   temperature=0.1,
-#                   top_p=0.3,
-#                   prev_msgs=nmsgs,
-#                   model="gpt-4")[0])
-
-if __name__ == "__main__":
-    num_interaction = 5
-
-    file_list = os.listdir("data/")
-    file_list = [file for file in file_list if file.endswith(".txt")]
-    file_list.sort()
-
-    os.makedirs("data/chatlogs/", exist_ok=True)
-
-    for file in tqdm(file_list):
-        print(file)
-        store_path = "data/chatlogs/" + file[:-4] + "_chatlog.pickle"
-        if not os.path.exists(store_path):
-            with open("data/" + file, "r") as handle:
-                prompts = handle.read()
-            agent = CuriousAgent(get_llm(), prompts, None, temperature=1, top_p=0.6, num_response=3, max_token_length=10000)
-
-            for i in tqdm(range(num_interaction)):
-                agent.reply()
-
-            agent.dump(store_path)

@@ -1,16 +1,13 @@
 import json, random
 from collections import Counter
 import os
-from query_gpt import get_llm
+from gpt_api import get_llm
 from tqdm import tqdm
 from curious_agent import CuriousAgent
 import math
+from data_gen.paths import *
 
 num_sample = 20
-uri_data_path = "../raw_data/URI/"
-uri_attr_to_lang_keyw_prompt_path = "data_gen/prompt_templates/intermediate/uri_attribute_to_language_keyword.md"
-uri_lang_attr_keyw_prompt_path = "data_gen/prompt_templates/intermediate/uri_language_attribute_to_keyword.md"
-chatlog_output_path = "data/chatlogs/"
 
 def extract_attributes_and_values(data):
     items = data["response"]["resultParts"]
@@ -97,7 +94,7 @@ if __name__ == "__main__":
         prompts, num_samples = uri_attr_to_lang_keyw(data)
         
         for i in range(len(prompts)):
-            store_path = chatlog_output_path + file[:-5] + "_chatlog_" + str(i) + ".pickle"
+            store_path = chatlog_output_path + file[:-len(".json")] + "_chatlog_" + str(i) + ".pickle"
             if os.path.exists(store_path):
                 continue
 

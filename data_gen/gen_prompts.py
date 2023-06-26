@@ -3,12 +3,10 @@ import ast
 from collections import defaultdict
 import tiktoken
 
+from data_gen.paths import *
+
 max_token_length = 3000
 encoder = tiktoken.encoding_for_model("gpt-4")
-
-prompt_path = "data_gen/prompt_templates/"
-raw_data_path = "../raw_data/"
-output_path = "data/"
 
 prompts = {}
 files = {}
