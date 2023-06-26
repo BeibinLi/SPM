@@ -55,3 +55,5 @@ results/*
 data/*
 data_gen/raw_data/*
 *.pickle
+
+.vscode/*
