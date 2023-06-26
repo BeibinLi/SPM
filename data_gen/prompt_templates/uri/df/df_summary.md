@@ -6,9 +6,8 @@ Please write a 800-word essay about it. Thanks!
 
 Here are some known information about this data frame.
 
---- Here are the first few rows: df.head() ---
-{df.head()}
-
+--- Here are some rows: df.sample() ---
+{df.sample()}
 
 --- Here are the columns: df.keys() ---
 {df.keys()}
