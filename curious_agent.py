@@ -23,13 +23,6 @@ class CuriousAgent:
         self.max_token_length = max_token_length
         self.encoder = tiktoken.encoding_for_model("gpt-4")
         self.token_length = len(self.encoder.encode(self.msgs[0][1]))
-    
-    def __init__(self, api, in_loc):
-        self.api = api
-        self.load(in_loc)
-        self.max_token_length = None
-        self.encoder = tiktoken.encoding_for_model("gpt-4")
-        self.token_length = sum(len(m[1]) for m in self.msgs if m[0] == "asisstant")
 
     def reply(self):
         if self.max_token_length and self.token_length > self.max_token_length:
@@ -57,6 +50,8 @@ class CuriousAgent:
         for rst in responses:
             self.msgs.append(("assistant", rst))
             self.token_length += len(self.encoder.encode(rst))
+        
+        return responses
 
     def dump(self, out_loc):
         with open(out_loc, "wb") as f:
@@ -87,6 +82,7 @@ class CuriousAgent:
             self.system_msg, self.msgs, self.details, self.temperature, self.top_p, self.num_response, self.formatter = pickle.load(
                 f)
         self.formatter = dill.loads(self.formatter)
+        self.token_length = sum(len(m[1]) for m in self.msgs if m[0] == "asisstant")
 
 
 if __name__ == "__main__":

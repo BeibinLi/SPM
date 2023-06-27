@@ -5,6 +5,8 @@ uri_lang_attr_keyw_prompt_path = "data_gen/prompt_templates/uri/uri_language_att
 
 uri_df_path = "data_gen/prompt_templates/uri/df/"
 
+reading_comp_q_path = "data_gen/prompt_templates/intermediate/reading_comprehension_with_question.md"
+
 chatlog_output_path = "data/chatlogs/"
 
 prompt_path = "data_gen/prompt_templates/"

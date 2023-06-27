@@ -86,26 +86,28 @@ def uri_lang_attr_to_keyw(data):
 '''
 
 if __name__ == "__main__":
-    file_list = os.listdir(uri_data_path)
-    file_list = [file for file in file_list if file.endswith(".json")]
-    file_list.sort()
     os.makedirs(chatlog_output_path, exist_ok=True)
+    cnt = 0
 
-    for file in tqdm(file_list):
-        if not file.endswith(".json"):
-            continue
-
-        data = json.load(open(uri_data_path + file, "r"))
+    for subdir in ["search1", "searchString"]:
+        file_list = os.listdir(uri_data_path + subdir + "/")
+        file_list = [file for file in file_list if file.endswith(".json")]
+        file_list.sort()
         
-        prompts, num_samples = uri_attr_to_lang_keyw(data)
-        
-        for i in range(len(prompts)):
-            store_path = chatlog_output_path + file[:-len(".json")] + "_chatlog_" + str(i) + ".pickle"
-            if os.path.exists(store_path):
+        for file in tqdm(file_list):
+            if not file.endswith(".json"):
                 continue
 
-            agent = CuriousAgent(get_llm(), prompts[i], temperature=1, top_p=0.6)
-            for j in range(num_samples[i]):
-                agent.reply()
+            data = json.load(open(uri_data_path + subdir + "/" + file, "r"))
+            
+            prompts, num_samples = uri_attr_to_lang_keyw(data)
+            
+            for i in range(len(prompts)):
+                store_path = chatlog_output_path + "uri" + "_chatlog_" + str(cnt) + ".pickle"
+                cnt += 1
 
-            agent.dump(store_path)
+                agent = CuriousAgent(get_llm(), prompts[i], temperature=1, top_p=0.6)
+                for j in range(num_samples[i]):
+                    agent.reply()
+
+                agent.dump(store_path)
