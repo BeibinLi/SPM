@@ -1,25 +1,21 @@
+import glob
+import os
+import pdb
 from dataclasses import dataclass, field
 from typing import Optional
 
-import torch, pdb, os, glob
-from datasets import load_dataset
-from peft import LoraConfig
-from peft import PeftModel, PeftConfig
-
+import torch
 import transformers
-# from transformers.models import AutoModelForCausalLM
-from transformers import (
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    BitsAndBytesConfig,
-    HfArgumentParser,
-    TrainingArguments,
-)
+from datasets import load_dataset
+from peft import LoraConfig, PeftConfig, PeftModel
 from peft.tuners.lora import LoraLayer
-
+from termcolor import colored
+# from transformers.models import AutoModelForCausalLM
+from transformers import (AutoModelForCausalLM, AutoTokenizer,
+                          BitsAndBytesConfig, HfArgumentParser,
+                          TrainingArguments)
 from trl import SFTTrainer
 from trl.trainer import ConstantLengthDataset
-from termcolor import colored
 
 ################ Constants/Variables ################
 list_all_checkpoints = lambda: glob.glob("results/checkpoint-*")
@@ -39,6 +35,7 @@ def load_latest_model():
     global config, model
     checkpoints = list_all_checkpoints()
     latest_checkpoint = max(checkpoints, key=os.path.getctime)
+    print(colored(f"Loading model from {latest_checkpoint}", "yellow"))
     config = PeftConfig.from_pretrained(latest_checkpoint)
     model = PeftModel.from_pretrained(llm_model, latest_checkpoint)
 
@@ -96,26 +93,28 @@ def answer(question):
     return ans
 
 
-################
-print(default_question)
-answer(default_question)
-################
+if __name__ == "__main__":
 
-while True:
-    print("-" * 30)
-    question = input("Human: ")
+    ################
+    print(default_question)
+    answer(default_question)
+    ################
 
-    question = question.strip().rstrip()
+    while True:
+        print("-" * 30)
+        question = input("Human: ")
 
-    if question == "":
-        continue
+        question = question.strip().rstrip()
 
-    if question == "quit":
-        break
-    elif question == "pdb":
-        pdb.set_trace()
-    elif question == "load":
-        load_latest_model()
-    else:
-        ans = answer(question)
-        print("Bot:", colored(ans, "green"))
+        if question == "":
+            continue
+
+        if question == "quit":
+            break
+        elif question == "pdb":
+            pdb.set_trace()
+        elif question == "load":
+            load_latest_model()
+        else:
+            ans = answer(question)
+            print("Bot:", colored(ans, "green"))
