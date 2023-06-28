@@ -4,19 +4,21 @@ Human-Question: question
 Keywords: x, y, z
 URI: uri
 """
-import os, glob, re, pdb, random, json
+import os, sys, glob, re, random, json
 import hashlib
-import pickle
-from curious_agent import CuriousAgent
+from paths import *
+sys.path.append("..")
+from SPM.curious_agent import CuriousAgent
 
-FILES = glob.glob("../cscp_data/gen/uri/*.pickle")
+FILES = glob.glob(chatlog_output_path + "uri*.pickle")
 
-TRAIN_OUT_FILE = "../cscp_data/gen/uri_train.jsonl"
-TEST_OUT_FILE = "../cscp_data/gen/uri_test.jsonl"
+TRAIN_OUT_FILE = data_path + "uri_train.jsonl"
+TEST_OUT_FILE = data_path + "uri_test.jsonl"
 
 hash_to_int = lambda s: int(hashlib.sha1(s.encode("utf-8")).hexdigest(), 16) % (
     10**8)
 
+os.makedirs(data_path, exist_ok=True)
 
 def spawn_chat_for_uri(msgs, n=10):
 
@@ -37,7 +39,7 @@ def spawn_chat_for_uri(msgs, n=10):
         keywords.extend(re.findall(r"KEYWORDS.*: (.+)", msg))
 
     n = min(n, len(questions))
-    print("n:", n)
+    #print("n:", n)
 
     # Using hash for seed so that we have the same randomness for the same URI
     random.seed(hash_to_int(uri))

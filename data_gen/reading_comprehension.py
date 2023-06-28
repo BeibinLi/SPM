@@ -13,6 +13,12 @@ from paths import *
 max_token_length = None
 encoder = tiktoken.encoding_for_model("gpt-4")
 
+char_set = set("0123456789:([{ ")
+num_set = set("0123456789")
+
+num_interaction = 5
+
+num_questions = 0
 files = {}
 
 def dfs(path):
@@ -28,24 +34,27 @@ def dfs(path):
                     files[new_path[len(raw_data_path):]] = content
 
 def strip_questions(response):
+    global num_questions
+    response = "THINKING" + response
     while True:
-        p = response.find("ANSWER")
+        p = response.find("THINKING") # order: QUESTION, THINKING, ANSWER
         if p == -1:
             break
 
         q = response[p:].find("QUESTION")
         if q == -1:
-            q = len(response[p:])
+            return response[:p]
         q += p
 
-        response = response[:p] + response[q:]
-    
-    return response
+        r = q + len("QUESTION")
+        while r != len(response) and response[r] in num_set:
+            r += 1
+
+        num_questions += 1
+        response = response[:p] + "QUESTION" + str(num_questions) + response[r:]
 
 def strip_answer_choices(response):
     answer_choices = []
-    char_set = set("0123456789:([{ ")
-    tmp = response
     while True:
         p = response.find("ANSWER")
         if p == -1:
@@ -91,10 +100,13 @@ if __name__ == "__main__":
             prompt = template.replace("{content}", content)
             agent = CuriousAgent(api=get_llm(), system_msg=prompt, formatter=None, temperature=1, top_p=0.6, num_response=1, max_token_length=max_token_length)
 
-            response = agent.reply()[0]
+            response, questions = "", ""
+            num_questions = 0
+            for i in range(num_interaction):
+                t = agent.reply()[0]
+                response = response + t
+                questions = questions + strip_questions(t)
             agent.dump(chatlog_output_path + "multichoice" + "_" + str(cnt) + "_chatlog.pickle")
-
-            questions = strip_questions(response)
             
             prompt_q = template_q.replace("{content}", content)
             prompt_q = prompt_q.replace("{questions}", questions)

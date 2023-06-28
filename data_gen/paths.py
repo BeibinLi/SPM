@@ -11,4 +11,6 @@ chatlog_output_path = "data/chatlogs/"
 
 prompt_path = "data_gen/prompt_templates/"
 raw_data_path = "../raw_data/"
-prompt_output_path = "data/"
+prompt_output_path = "data/prompts/"
+
+data_path = "data/structutred/"
