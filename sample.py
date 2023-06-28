@@ -32,6 +32,11 @@ from peft.tuners.lora import LoraLayer
 from trl import SFTTrainer
 from trl.trainer import ConstantLengthDataset
 
+from data_gen.paths import *
+from config import *
+
+from accelerate import Accelerator, DistributedDataParallelKwargs
+
 ########################################################################
 # This is a fully working simple example to use trl's RewardTrainer.
 #
@@ -140,7 +145,7 @@ class ScriptArguments:
     logging_steps: int = field(default=10,
                                metadata={"help": "Log every X updates steps."})
     cache_dir: Optional[str] = field(
-        default="/mnt/data/falcon/",
+        default=model_path,
         metadata={"help": "Where to store the pretrained models."})
 
 
@@ -167,7 +172,8 @@ def create_and_prepare_model(args):
             )
             print("=" * 80)
 
-    device_map = {"": 0}
+    accelerator = Accelerator()
+    device_map = {"": accelerator.process_index}
 
     model = AutoModelForCausalLM.from_pretrained(
         args.model_name,
@@ -213,18 +219,19 @@ training_arguments = TrainingArguments(
     warmup_ratio=script_args.warmup_ratio,
     group_by_length=script_args.group_by_length,
     lr_scheduler_type=script_args.lr_scheduler_type,
+    ddp_find_unused_parameters=False
 )
 
 model, peft_config, tokenizer = create_and_prepare_model(script_args)
 model.config.use_cache = False
 dataset = load_dataset("json",
-                       data_files="../cscp_data/gen/uri_train.jsonl",
+                       data_files=data_path + "uri_train.jsonl",
                        split="train")
 # d2 = load_dataset(script_args.dataset_name, split="train")
-# d3 = load_dataset("json",
+# dataset = load_dataset("json",
 #                   data_files={
-#                       "train": "../cscp_data/gen/uri_train.jsonl",
-#                       "test": "../cscp_data/gen/uri_test.jsonl"
+#                       "train": data_path + "uri_train.jsonl",
+#                       "test": data_path + "uri_test.jsonl"
 #                   })
 
 trainer = SFTTrainer(
@@ -235,8 +242,10 @@ trainer = SFTTrainer(
     max_seq_length=script_args.max_seq_length,
     tokenizer=tokenizer,
     args=training_arguments,
-    packing=script_args.packing,
+    packing=script_args.packing
 )
+
+
 
 for name, module in trainer.model.named_modules():
     if isinstance(module, LoraLayer):

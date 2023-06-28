@@ -57,3 +57,6 @@ data_gen/raw_data/*
 *.pickle
 
 .vscode/*
+wandb/*
+results/*
+model/*

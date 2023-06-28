@@ -63,13 +63,22 @@ if __name__ == "__main__":
     random.seed(1)
     train_set = random.sample(prompts, int(len(prompts) * 0.7))
 
-    train_data = [
-        (prompt, response) for prompt, response in data.items() if prompt in train_set
-    ]
-
-    test_data = [
-        (prompt, response) for prompt, response in data.items() if prompt not in train_set
-    ]
+    train_data, test_data = [], []
+    for prompt, responses in data.items():
+        if prompt in train_set:
+            for response in responses:
+                chat = "### Human: " + prompt + "\n\n### Assistant: " + response + "\n"
+                train_data.append(chat)
+        else:
+            for response in responses:
+                chat = "### Human:\n" + prompt + "\n\n### Assistant:\n" + response + "\n"
+                test_data.append(chat)
 
     dump_chat(train_data, TRAIN_OUT_FILE)
     dump_chat(test_data, TEST_OUT_FILE)
+
+
+
+    TRAIN_OUT_FILE_preview = data_path + "general_train_preview.jsonl"
+    dump_chat(train_data[:3], TRAIN_OUT_FILE_preview)
+    
