@@ -60,3 +60,6 @@ data_gen/raw_data/*
 wandb/*
 results/*
 model/*
+.github/*
+test.txt
+Pipfile

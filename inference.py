@@ -16,16 +16,19 @@ from transformers import (AutoModelForCausalLM, AutoTokenizer,
                           TrainingArguments)
 from trl import SFTTrainer
 from trl.trainer import ConstantLengthDataset
+from config import *
+from accelerate import Accelerator
 
 ################ Constants/Variables ################
-list_all_checkpoints = lambda: glob.glob("results/checkpoint-*")
+list_all_checkpoints = lambda: glob.glob(ckpt_path + "checkpoint-*")
 # peft_model_id = "dfurman/falcon-40b-chat-oasst1"
-cache_dir = "/mnt/data/falcon/"
+cache_dir = model_path
 
 model_name = "tiiuae/falcon-7b"  # public model name
-device_id = 1
 
-device_map = {"": device_id}
+accelerator = Accelerator()
+device_map = {"": accelerator.process_index}
+
 default_question = "What is the  PDU Amperage for A100 in Gen 7.1?"
 
 #############
@@ -70,7 +73,7 @@ def answer(question):
                       padding=True,
                       truncation=True,
                       return_tensors='pt')
-    batch = batch.to(f'cuda:{device_id}')
+    batch = batch.to(f'cuda:{accelerator.process_index}')
 
     with torch.cuda.amp.autocast():
         output_tokens = model.generate(

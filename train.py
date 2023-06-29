@@ -15,10 +15,9 @@
 from dataclasses import dataclass, field
 from typing import Optional
 
-import torch, pdb
+import torch
 from datasets import load_dataset
 from peft import LoraConfig
-import transformers
 # from transformers.models import AutoModelForCausalLM
 from transformers import (
     AutoModelForCausalLM,
@@ -30,12 +29,11 @@ from transformers import (
 from peft.tuners.lora import LoraLayer
 
 from trl import SFTTrainer
-from trl.trainer import ConstantLengthDataset
 
 from data_gen.paths import *
 from config import *
 
-from accelerate import Accelerator, DistributedDataParallelKwargs
+from accelerate import Accelerator
 
 ########################################################################
 # This is a fully working simple example to use trl's RewardTrainer.
@@ -147,6 +145,10 @@ class ScriptArguments:
     cache_dir: Optional[str] = field(
         default=model_path,
         metadata={"help": "Where to store the pretrained models."})
+    
+    load_dir: Optional[str] = field(
+        default=ckpt_path + "checkpoint-330/",
+        metadata={"help": "Where to load the pretrained models. None for no loading."})
 
 
 parser = HfArgumentParser(ScriptArguments)
@@ -180,7 +182,8 @@ def create_and_prepare_model(args):
         quantization_config=bnb_config,
         device_map=device_map,
         trust_remote_code=True,
-        cache_dir=script_args.cache_dir)
+        cache_dir=script_args.cache_dir
+    )
 
     peft_config = LoraConfig(
         lora_alpha=script_args.lora_alpha,
@@ -205,7 +208,7 @@ def create_and_prepare_model(args):
 
 
 training_arguments = TrainingArguments(
-    output_dir="./results",
+    output_dir=ckpt_path,
     per_device_train_batch_size=script_args.per_device_train_batch_size,
     gradient_accumulation_steps=script_args.gradient_accumulation_steps,
     optim=script_args.optim,
@@ -222,11 +225,17 @@ training_arguments = TrainingArguments(
     ddp_find_unused_parameters=False
 )
 
-model, peft_config, tokenizer = create_and_prepare_model(script_args)
-model.config.use_cache = False
-dataset = load_dataset("json",
-                       data_files=data_path + "uri_train.jsonl",
-                       split="train")
+#uri_dataset = load_dataset("json",
+                    #    data_files=data_path + "uri_train.jsonl",
+                    #    split="train")
+# general_dataset = load_dataset("json",
+                        #   data_files=data_path + "general_train.jsonl",
+                        #   split="train")
+# dataset = ConcatDataset([uri_dataset, general_dataset])
+dataset = load_dataset(
+    "json",
+    data_files=[data_path + "uri_train.jsonl", data_path + "general_train.jsonl"],
+    split="train")
 # d2 = load_dataset(script_args.dataset_name, split="train")
 # dataset = load_dataset("json",
 #                   data_files={
@@ -234,7 +243,8 @@ dataset = load_dataset("json",
 #                       "test": data_path + "uri_test.jsonl"
 #                   })
 
-print(len(dataset))
+model, peft_config, tokenizer = create_and_prepare_model(script_args)
+model.config.use_cache = False
 
 trainer = SFTTrainer(
     model=model,
