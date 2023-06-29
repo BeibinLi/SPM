@@ -15,9 +15,11 @@
 from dataclasses import dataclass, field
 from typing import Optional
 
+import os, glob
+
 import torch
 from datasets import load_dataset
-from peft import LoraConfig
+from peft import LoraConfig, PeftModel
 # from transformers.models import AutoModelForCausalLM
 from transformers import (
     AutoModelForCausalLM,
@@ -34,6 +36,17 @@ from data_gen.paths import *
 from config import *
 
 from accelerate import Accelerator
+accelerator = Accelerator()
+local_rank = accelerator.process_index
+
+from termcolor import colored
+
+exp_dirs = os.listdir(ckpt_path)
+exp_id = 0
+while str(exp_id)  in os.listdir(ckpt_path):
+    exp_id += 1
+exp_id = str(exp_id)
+
 
 ########################################################################
 # This is a fully working simple example to use trl's RewardTrainer.
@@ -67,7 +80,7 @@ class ScriptArguments:
     lora_r: Optional[int] = field(default=64)
     max_seq_length: Optional[int] = field(default=512)
     model_name: Optional[str] = field(
-        default="tiiuae/falcon-7b",
+        default=model_name,
         metadata={
             "help":
                 "The model that you want to train from the Hugging Face hub. E.g. gpt2, gpt2-xl, bert, etc."
@@ -147,8 +160,9 @@ class ScriptArguments:
         metadata={"help": "Where to store the pretrained models."})
     
     load_dir: Optional[str] = field(
-        default=ckpt_path + "checkpoint-330/",
-        metadata={"help": "Where to load the pretrained models. None for no loading."})
+        default=ckpt_path + "latest/",
+        #default="latest",
+        metadata={"help": "Where to load the pretrained models. None for no loading. latest for latest checkpoint. directory for loading from a directory."})
 
 
 parser = HfArgumentParser(ScriptArguments)
@@ -174,16 +188,29 @@ def create_and_prepare_model(args):
             )
             print("=" * 80)
 
-    accelerator = Accelerator()
-    device_map = {"": accelerator.process_index}
+    device_map = {"": local_rank}
 
-    model = AutoModelForCausalLM.from_pretrained(
+    base_model = AutoModelForCausalLM.from_pretrained(
         args.model_name,
         quantization_config=bnb_config,
         device_map=device_map,
         trust_remote_code=True,
         cache_dir=script_args.cache_dir
     )
+    
+    if args.load_dir:
+        if args.load_dir == "latest":
+            args.load_dir = max(glob.glob(ckpt_path + "checkpoint-*"), key=os.path.getctime)
+        print(colored("Loading from " + args.load_dir, "green"))
+        model = PeftModel.from_pretrained(base_model, args.load_dir)
+        del base_model
+    else:
+        model = base_model
+
+    #model.train()
+    for name, param in model.named_parameters():
+        if 'lora' in name.lower():
+            param.requires_grad = True
 
     peft_config = LoraConfig(
         lora_alpha=script_args.lora_alpha,
@@ -208,7 +235,7 @@ def create_and_prepare_model(args):
 
 
 training_arguments = TrainingArguments(
-    output_dir=ckpt_path,
+    output_dir=ckpt_path + exp_id + "/",
     per_device_train_batch_size=script_args.per_device_train_batch_size,
     gradient_accumulation_steps=script_args.gradient_accumulation_steps,
     optim=script_args.optim,
@@ -234,7 +261,8 @@ training_arguments = TrainingArguments(
 # dataset = ConcatDataset([uri_dataset, general_dataset])
 dataset = load_dataset(
     "json",
-    data_files=[data_path + "uri_train.jsonl", data_path + "general_train.jsonl"],
+    #data_files=[data_path + "uri_train.jsonl", data_path + "general_train.jsonl"],
+    data_files=[finetune_data_path + "uri_train.jsonl"],
     split="train")
 # d2 = load_dataset(script_args.dataset_name, split="train")
 # dataset = load_dataset("json",

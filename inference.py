@@ -22,9 +22,6 @@ from accelerate import Accelerator
 ################ Constants/Variables ################
 list_all_checkpoints = lambda: glob.glob(ckpt_path + "checkpoint-*")
 # peft_model_id = "dfurman/falcon-40b-chat-oasst1"
-cache_dir = model_path
-
-model_name = "tiiuae/falcon-7b"  # public model name
 
 accelerator = Accelerator()
 device_map = {"": accelerator.process_index}
@@ -56,14 +53,14 @@ llm_model = AutoModelForCausalLM.from_pretrained(model_name,
                                                  quantization_config=bnb_config,
                                                  device_map=device_map,
                                                  trust_remote_code=True,
-                                                 cache_dir=cache_dir)
+                                                 cache_dir=model_path)
 
 # Load the Lora model
 load_latest_model()
 
 tokenizer = AutoTokenizer.from_pretrained(model_name,
                                           trust_remote_code=True,
-                                          cache_dir=cache_dir)
+                                          cache_dir=model_path)
 tokenizer.pad_token = tokenizer.eos_token
 
 
@@ -99,8 +96,8 @@ def answer(question):
 if __name__ == "__main__":
 
     ################
-    print(default_question)
-    answer(default_question)
+    print("Example: ", default_question)
+    print("Bot:", colored(answer(default_question), "green"))
     ################
 
     while True:

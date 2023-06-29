@@ -5,9 +5,9 @@ Desired reply:
 """
 import os, sys, glob, re, random, json
 import hashlib
-from paths import *
-sys.path.append("..")
-from SPM.curious_agent import CuriousAgent
+sys.path.append(".")
+from data_gen.paths import *
+from curious_agent import CuriousAgent
 
 FILES = glob.glob(chatlog_output_path + "*rewrite*.pickle") + \
         glob.glob(chatlog_output_path + "*explain*.pickle") + \

@@ -13,4 +13,5 @@ prompt_path = "data_gen/prompt_templates/"
 raw_data_path = "../raw_data/"
 prompt_output_path = "data/prompts/"
 
-data_path = "data/structutred/"
+pretrain_data_path = "data/pretrain/"
+finetune_data_path = "data/finetune/"
