@@ -262,7 +262,7 @@ training_arguments = TrainingArguments(
 dataset = load_dataset(
     "json",
     #data_files=[data_path + "uri_train.jsonl", data_path + "general_train.jsonl"],
-    data_files=[finetune_data_path + "uri_train.jsonl"],
+    data_files=[finetune_data_path + "ifs_doc_train.jsonl"],
     split="train")
 # d2 = load_dataset(script_args.dataset_name, split="train")
 # dataset = load_dataset("json",

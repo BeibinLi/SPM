@@ -20,11 +20,12 @@ from config import *
 from accelerate import Accelerator
 
 ################ Constants/Variables ################
-list_all_checkpoints = lambda: glob.glob(ckpt_path + "checkpoint-*")
+list_all_checkpoints = lambda x: glob.glob(x + "checkpoint-*")
 # peft_model_id = "dfurman/falcon-40b-chat-oasst1"
 
-accelerator = Accelerator()
-device_map = {"": accelerator.process_index}
+#accelerator = Accelerator()
+#device_map = {"": accelerator.process_index}
+device_map = {"": 0}
 
 default_question = "What is the  PDU Amperage for A100 in Gen 7.1?"
 
@@ -33,7 +34,7 @@ default_question = "What is the  PDU Amperage for A100 in Gen 7.1?"
 
 def load_latest_model():
     global config, model
-    checkpoints = list_all_checkpoints()
+    checkpoints = list_all_checkpoints(ckpt_path + "4/")
     latest_checkpoint = max(checkpoints, key=os.path.getctime)
     print(colored(f"Loading model from {latest_checkpoint}", "yellow"))
     config = PeftConfig.from_pretrained(latest_checkpoint)
@@ -70,7 +71,8 @@ def answer(question):
                       padding=True,
                       truncation=True,
                       return_tensors='pt')
-    batch = batch.to(f'cuda:{accelerator.process_index}')
+    #batch = batch.to(f'cuda:{accelerator.process_index}')
+    batch = batch.to(f'cuda:{0}')
 
     with torch.cuda.amp.autocast():
         output_tokens = model.generate(

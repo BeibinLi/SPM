@@ -38,11 +38,11 @@ def gen_data(msgs):
 
 def dump_data(data: list, filename: str):
     with open(filename, "w") as f:
-        f.write("\n".join([json.dumps(d) for d in data]))
+        f.write("\n".join([json.dumps({"text": d}) for d in data]))
 
 
 if __name__ == "__main__":
-    data = {}  # key: uri, value: (questions, keywords)
+    data = {}  # key: uri, value: questions
 
     for file in FILES:
         agent = CuriousAgent(api=None, system_msg="")
@@ -59,11 +59,7 @@ if __name__ == "__main__":
 
     train_data, test_data = [], []
     for uri, (questions, keywords) in data.items():
-        inputs = ["### Human: " + question for question in questions]
-        labels = ["### Bot: keywords are: {" + keyword + "}\nuri is: " + uri for keyword in keywords]
-        _data = []
-        for i in range(len(inputs)):
-            _data.append({"text": inputs[i], "label": labels[i]})
+        _data = ["### Human: [URI] " + question + "\n### Assistant: " + uri for question in questions]
 
         if uri in train_set_uri:
             train_data = train_data + _data
