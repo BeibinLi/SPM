@@ -149,7 +149,7 @@ class ScriptArguments:
         },
     )
     max_steps: int = field(
-        default=1000000,
+        default=100000,
         metadata={"help": "How many optimizer update steps to take"})
     warmup_ratio: float = field(
         default=0.03, metadata={"help": "Fraction of steps to do a warmup for"})
@@ -161,9 +161,9 @@ class ScriptArguments:
         },
     )
     save_steps: int = field(
-        default=10, metadata={"help": "Save checkpoint every X updates steps."})
+        default=1, metadata={"help": "Save checkpoint every X updates steps."})
     save_total_limit: int = field(
-        default=2, metadata={"help": "Limit the total amount of checkpoints. Deletes the older checkpoints."})
+        default=100, metadata={"help": "Limit the total amount of checkpoints. Deletes the older checkpoints."})
     logging_steps: int = field(default=10,
                                metadata={"help": "Log every X updates steps."})
     cache_dir: Optional[str] = field(
@@ -171,8 +171,7 @@ class ScriptArguments:
         metadata={"help": "Where to store the pretrained models."})
     
     load_dir: Optional[str] = field(
-        #default=ckpt_path + "001/checkpoint-330",
-        #default="latest",
+        #default=ckpt_path + "001/checkpoint-4700",
         default=None,
         metadata={"help": "Where to load the pretrained models. None for no loading. latest for latest checkpoint. directory for loading from a directory."})
 
@@ -211,8 +210,6 @@ def create_and_prepare_model(args):
     )
     
     if args.load_dir:
-        if args.load_dir == "latest":
-            args.load_dir = max(glob.glob(ckpt_path + "checkpoint-*"), key=os.path.getctime)
         print(colored("Loading from " + args.load_dir, "green"))
         model = PeftModel.from_pretrained(model=base_model, model_id=args.load_dir, is_trainable=True)
         del base_model
@@ -269,15 +266,15 @@ training_arguments = TrainingArguments(
 # dataset = ConcatDataset([uri_dataset, general_dataset])
 train_dataset = load_dataset(
     "json",
-    data_files=[
-        pretrain_data_path + "uri_train.jsonl",
-        pretrain_data_path + "general_train.jsonl"
-    ],
     # data_files=[
-    #     finetune_data_path + "ifs_doc_train.jsonl",
-    #     finetune_data_path + "uri_train.jsonl",
-    #     finetune_data_path + "ifs_train.jsonl"
+    #     pretrain_data_path + "uri_train.jsonl",
+    #     pretrain_data_path + "general_train.jsonl"
     # ],
+    data_files=[
+        finetune_data_path + "ifs_doc_train.jsonl",
+        finetune_data_path + "uri_train.jsonl",
+        finetune_data_path + "ifs_train.jsonl"
+    ],
     split="train"
 ).shuffle(seed=42)
 
@@ -333,6 +330,6 @@ for name, module in trainer.model.named_modules():
             if script_args.bf16 and module.weight.dtype == torch.float32:
                 module = module.to(torch.bfloat16)
 
-trainer.train()
+trainer.train(resume_from_checkpoint=script_args.load_dir)
 
 print("Done")

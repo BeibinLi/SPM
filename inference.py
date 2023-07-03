@@ -34,7 +34,7 @@ default_question = "What is the  PDU Amperage for A100 in Gen 7.1?"
 
 def load_latest_model():
     global config, model
-    checkpoints = list_all_checkpoints(ckpt_path + "4/")
+    checkpoints = list_all_checkpoints(ckpt_path + "002/")
     latest_checkpoint = max(checkpoints, key=os.path.getctime)
     print(colored(f"Loading model from {latest_checkpoint}", "yellow"))
     config = PeftConfig.from_pretrained(latest_checkpoint)
@@ -90,7 +90,8 @@ def answer(question):
     # print(colored(generated_text, "green"))
 
     # Inspect message response in the outputs
-    ans = generated_text.split("### Human: ")[1].split("### Assistant: ")[-1]
+    #ans = generated_text.split("### Human: ")[1].split("### Assistant: ")[-1]
+    ans = generated_text.split("### Assistant:")[-1].strip()
 
     return ans
 

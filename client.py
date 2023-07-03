@@ -2,10 +2,19 @@ import json
 
 import requests
 
-url = 'http://gcrsandbox321:5000/question'
-data = {'question': 'Can you tell me the ModelNumber of the C-2030 server'}
-headers = {'Content-Type': 'application/json'}
+from termcolor import colored
 
-response = requests.post(url, headers=headers, data=json.dumps(data))
+url = 'http://gcrsandbox395:5000/question'
 
-print(response.json())
+while True:
+    print("-" * 30)
+    question = input("Human: ")
+    question = question.strip()
+
+    data = {"question": "### Human: " + question}
+    headers = {"Content-Type": "application/json"}
+
+    response = requests.post(url, headers=headers, data=json.dumps(data))
+
+    ans = response.json()["answer"]
+    print("Bot:", colored(ans, "green"))
