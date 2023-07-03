@@ -6,6 +6,7 @@ from typing import Optional
 
 import torch
 import transformers
+from accelerate import Accelerator
 from datasets import load_dataset
 from peft import LoraConfig, PeftConfig, PeftModel
 from peft.tuners.lora import LoraLayer
@@ -16,8 +17,8 @@ from transformers import (AutoModelForCausalLM, AutoTokenizer,
                           TrainingArguments)
 from trl import SFTTrainer
 from trl.trainer import ConstantLengthDataset
+
 from config import *
-from accelerate import Accelerator
 
 ################ Constants/Variables ################
 list_all_checkpoints = lambda x: glob.glob(x + "checkpoint-*")
@@ -66,6 +67,9 @@ tokenizer.pad_token = tokenizer.eos_token
 
 
 def answer(question):
+    if question == "!load":
+        load_latest_model()
+        return "Latest model loaded~"
     _prompt = f"### Human: {question}### Assistant:"
     batch = tokenizer(_prompt,
                       padding=True,

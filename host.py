@@ -1,3 +1,5 @@
+import platform
+
 from flask import Flask, jsonify, request
 
 from inference import answer
@@ -24,4 +26,4 @@ def get_answer():
 
 
 if __name__ == '__main__':
-    app.run(debug=False, host="gcrsandbox321", port=5000)
+    app.run(debug=False, host=platform.node().lower(), port=5000)
