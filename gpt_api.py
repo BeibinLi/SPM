@@ -10,7 +10,12 @@ import openai
 from nltk.stem import PorterStemmer
 from termcolor import colored
 
-
+api_type = "azure"
+api_base = "https://msrcore.openai.azure.com/"
+#api_base = "https://gcrgpt4aoai4.openai.azure.com/"
+api_version = "2023-03-15-preview"
+api_key = os.getenv("CORE_AZURE_KEY").strip().rstrip()
+#api_key = os.getenv("CORE_AZURE_KEY_GPT_4").strip().rstrip()
 
 ps = PorterStemmer()
 
@@ -200,11 +205,10 @@ def cache_func_call(func):
 
 @cache_func_call
 def get_embedding(text, model="text-embedding-ada-002"):
-    openai.api_type = "azure"
-    #openai.api_base = "https://msrcore.openai.azure.com/"
-    openai.api_base = "https://gcrgpt4aoai4.openai.azure.com/"
-    openai.api_version = "2023-03-15-preview"
-    openai.api_key = os.getenv("CORE_AZURE_KEY_GPT_4").strip().rstrip()
+    openai.api_type = api_type
+    openai.api_base = api_base
+    openai.api_version = api_version
+    openai.api_key = api_key
 
     text = text.replace("\n", " ")
     try:
@@ -238,11 +242,10 @@ def is_question_inbound(question, known_questions, threshold=0.8):
 
 # %%
 def get_llm() -> object:
-    openai.api_type = "azure"
-    #openai.api_base = "https://msrcore.openai.azure.com/"
-    openai.api_base = "https://gcrgpt4aoai4.openai.azure.com/"
-    openai.api_version = "2023-03-15-preview"
-    openai.api_key = os.getenv("CORE_AZURE_KEY_GPT_4").strip().rstrip()
+    openai.api_type = api_type
+    openai.api_base = api_base
+    openai.api_version = api_version
+    openai.api_key = api_key
     api = AzureGPTClient()
 
     return api

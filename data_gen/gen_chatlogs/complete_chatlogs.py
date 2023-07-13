@@ -1,8 +1,8 @@
 import os
 import sys
-sys.path.append("..")
-from SPM.curious_agent import CuriousAgent
-from SPM.gpt_api import get_llm
+sys.path.append(".")
+from curious_agent import CuriousAgent
+from gpt_api import get_llm
 
 from tqdm import tqdm
 

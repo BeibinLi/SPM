@@ -1,17 +1,13 @@
-uri_data_path = "../raw_data/URI/"
-
-uri_attr_to_lang_keyw_prompt_path = "data_gen/prompt_templates/uri/uri_attribute_to_language_keyword.md"
-uri_lang_attr_keyw_prompt_path = "data_gen/prompt_templates/uri/uri_language_attribute_to_keyword.md"
-
-uri_df_path = "data_gen/prompt_templates/uri/df/"
-
-reading_comp_q_path = "data_gen/prompt_templates/intermediate/reading_comprehension_with_question.md"
-
-chatlog_output_path = "data/chatlogs/"
-
-prompt_path = "data_gen/prompt_templates/"
 raw_data_path = "../raw_data/"
-prompt_output_path = "data/prompts/"
+uri_raw_data_path = raw_data_path + "URI/"
 
-pretrain_data_path = "data/pretrain/"
-finetune_data_path = "data/finetune/"
+prompt_template_path = "data_gen/prompt_templates/"
+uri_attr_to_lang_keyw_prompt_path = prompt_template_path + "uri/uri_attribute_to_language_keyword.md"
+uri_df_prompt_path = prompt_template_path + "uri/df/"
+reading_comp_q_prompt_path = prompt_template_path + "intermediate/reading_comprehension_with_question.md"
+
+data_path = "data/"
+chatlog_output_path = data_path + "chatlogs/"
+prompt_output_path = data_path + "prompts/"
+pretrain_data_path = data_path + "pretrain/"
+finetune_data_path = data_path + "finetune/"

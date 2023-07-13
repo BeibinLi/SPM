@@ -1,25 +1,34 @@
-import os
+import os, sys
 import ast
+from tqdm import tqdm
 from collections import defaultdict
 import tiktoken
+sys.path.append(".")
+from data_gen.paths import *
+from curious_agent import CuriousAgent
+from gpt_api import get_llm
 
-from paths import *
-
-max_token_length = 3000
+num_response = 2
+num_interaction = 5
+max_token_length = 10000
 encoder = tiktoken.encoding_for_model("gpt-4")
 
-prompts = {}
+tasks = {}
 files = {}
 total_data_count = defaultdict(int)
+prompt_files = []
 
-def save_content(path, content, prompt):
-    if len(encoder.encode(content)) > max_token_length:
+def save_prompt(prompt, task):
+    if len(encoder.encode(prompt)) > max_token_length:
         return
 
     global total_data_count
+    file_name = task + "_" + str(total_data_count[task]) + ".txt"
+    path = prompt_output_path + file_name
     with open(path, 'w') as handle:
-        handle.write(content)
-    total_data_count[prompt] += 1
+        handle.write(prompt)
+    total_data_count[task] += 1
+    prompt_files.append(file_name)
 
 def find_all_substr(string, substr):
     start_index = 0
@@ -46,9 +55,9 @@ def dfs(path):
                 if content.replace(" ", "").replace("\n", "") != "": # remove empty files
                     files[new_path[len(raw_data_path):]] = content
 
-def enumerate_file_tuples(file_names, content, pos, file_path, prompt):        
+def enumerate_file_tuples(file_names, content, pos, task):        
     if pos == []:
-        save_content(file_path + str(total_data_count[prompt]) + ".txt", content, prompt)
+        save_prompt(content, task)
         return
 
     for i in range(len(file_names)):
@@ -60,11 +69,11 @@ def enumerate_file_tuples(file_names, content, pos, file_path, prompt):
         
         new_content = content[:pos[-1]] + files[file_names[i]] + content[pos_ed+1:]
 
-        enumerate_file_tuples(file_names[i+1:], new_content, pos[:-1], file_path, prompt)
+        enumerate_file_tuples(file_names[i+1:], new_content, pos[:-1], task)
 
-def replace_content(file_names, prompt, template, identifier, suffix):
+def replace_content(file_names, task, prompt_template, identifier, suffix):
     # Replace identifiers in the template with files from file_names
-    pos = find_all_substr(template, identifier)
+    pos = find_all_substr(prompt_template, identifier)
     if pos == []:
         return
     
@@ -72,7 +81,7 @@ def replace_content(file_names, prompt, template, identifier, suffix):
     for file_name in file_names:
         if file_name.endswith(suffix):
             filtered_fn.append(file_name)
-    enumerate_file_tuples(filtered_fn, template, pos, prompt_output_path + prompt[:-len(".md")] + "_", prompt[:-len(".md")])
+    enumerate_file_tuples(filtered_fn, prompt_template, pos, task[:-len(".md")])
 
 def extract_clip(code, clip_type):
     lines = code.split("\n")
@@ -86,9 +95,9 @@ def extract_clip(code, clip_type):
             ret.append("\n".join(lines[start:end]))
     return ret
 
-def gen_code_prompts(file_names, prompt, template, clip_type):
+def gen_code_prompts(file_names, task, prompt_template, clip_type):
     # TODO: implement multi {code_class} support
-    pos = find_all_substr(template, "{code_" + clip_type + "}")
+    pos = find_all_substr(prompt_template, "{code_" + clip_type + "}")
     if len(pos) != 1:
         return
     for file_name in file_names:
@@ -97,7 +106,7 @@ def gen_code_prompts(file_names, prompt, template, clip_type):
         code = files[file_name]
         class_clips = extract_clip(code, clip_type)
         for class_clip in class_clips:
-            content = template
+            content = prompt_template
             pos_ed = pos[0]
             while True:
                 pos_ed += 1
@@ -105,35 +114,56 @@ def gen_code_prompts(file_names, prompt, template, clip_type):
                     break
             content = content[:pos[0]] + class_clip + content[pos_ed+1:]
 
-            save_content(prompt_output_path + prompt[:-len(".md")] + "_" + str(total_data_count[prompt]) + ".txt", content, prompt)
+            save_prompt(content, task)
 
 def gen_data(data_type):
     dfs(raw_data_path + data_type + "/")
     file_names = list(files.keys())
 
-    for (prompt, template) in prompts.items():
+    for (task, prompt_template) in tasks.items():
         # All {content} {content%x} replacement
         # TODO: {prev_generated_QA} in question.md (all hybrid prompt templates)
-        replace_content(file_names, prompt, template, "{content", ".md")
+        replace_content(file_names, task, prompt_template, "{content", ".md")
 
         # All {code} replacement
-        replace_content(file_names, prompt, template, "{code}", ".py")
+        replace_content(file_names, task, prompt_template, "{code}", ".py")
 
         # {code_class} or {code_function}
         for clip_type in ["class", "function"]:
-            gen_code_prompts(file_names, prompt, template, clip_type)
+            gen_code_prompts(file_names, task, prompt_template, clip_type)
 
 
 if __name__ == "__main__":
     os.makedirs(prompt_output_path, exist_ok=True)
+    os.makedirs(chatlog_output_path, exist_ok=True)
 
-    file_list = os.listdir(prompt_path)
+    file_list = os.listdir(prompt_template_path)
     for file in file_list:
         if not file.endswith(".md"):
             continue
-        with open(prompt_path + file, mode = "r") as handle:
-            prompts[file] = handle.read()
+        with open(prompt_template_path + file, mode = "r") as handle:
+            tasks[file] = handle.read()
 
     for data_type in ["IFS_code", "IFS_document"]:
         files = {}
         gen_data(data_type)
+
+    for file in tqdm(prompt_files):
+        store_path = chatlog_output_path + file[:-len(".txt")] + "_chatlog.pickle"
+        if not os.path.exists(store_path):
+            with open(prompt_output_path + file, "r") as handle:
+                prompts = handle.read()
+            agent = CuriousAgent(
+                api=get_llm(),
+                system_msg=prompts,
+                formatter=None,
+                temperature=1,
+                top_p=0.6,
+                num_response=num_response,
+                max_token_length=max_token_length
+            )
+
+            for i in range(num_interaction):
+                agent.reply()
+
+            agent.dump(store_path)

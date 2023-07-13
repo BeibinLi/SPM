@@ -1,14 +1,14 @@
 import os
 import sys
-sys.path.append("..")
-from SPM.curious_agent import CuriousAgent
-from SPM.gpt_api import get_llm
+sys.path.append(".")
+from curious_agent import CuriousAgent
+from gpt_api import get_llm
 from collections import defaultdict
 import tiktoken
 from tqdm import tqdm
-from gen_prompts import dfs
+from data_gen.gen_prompts_chatlogs.general import dfs
 
-from paths import *
+from data_gen.paths import *
 
 max_token_length = None
 encoder = tiktoken.encoding_for_model("gpt-4")
@@ -81,10 +81,10 @@ def verify(response, response_q):
     return correct, len(a1)
 
 if __name__ == "__main__":
-    with open(prompt_path + "reading_comprehension.md", "r") as handle:
+    with open(prompt_template_path + "reading_comprehension.md", "r") as handle:
         template = handle.read()
     
-    with open(reading_comp_q_path, "r") as handle:
+    with open(reading_comp_q_prompt_path, "r") as handle:
         template_q = handle.read()
     
     cnt, correct, total = 0, 0, 0
@@ -92,13 +92,27 @@ if __name__ == "__main__":
         files = {}
         dfs(raw_data_path + data_type + "/")
         file_list = list(files.keys())
-        for file in tqdm(file_list):
-            print(file)
+        pbar = tqdm(file_list)
+        for file in pbar:
             with open(raw_data_path + file, mode = "r") as handle:
                 content = handle.read()
             
             prompt = template.replace("{content}", content)
-            agent = CuriousAgent(api=get_llm(), system_msg=prompt, formatter=None, temperature=1, top_p=0.6, num_response=1, max_token_length=max_token_length)
+            agent = CuriousAgent(
+                api=get_llm(),
+                system_msg=prompt,
+                formatter=None,
+                temperature=1,
+                top_p=0.6,
+                num_response=1,
+                max_token_length=max_token_length
+            )
+
+            prompt_path = prompt_output_path + "multichoice_" + str(cnt) + ".txt"
+            chatlog_path = chatlog_output_path + "multichoice_" + str(cnt) + "_chatlog.pickle"
+
+            with open(prompt_path, 'w') as handle:
+                handle.write(prompt)
 
             response, questions = "", ""
             num_questions = 0
@@ -106,19 +120,34 @@ if __name__ == "__main__":
                 t = agent.reply()[0]
                 response = response + t
                 questions = questions + strip_questions(t)
-            agent.dump(chatlog_output_path + "multichoice" + "_" + str(cnt) + "_chatlog.pickle")
+            agent.dump(chatlog_path)
             
             prompt_q = template_q.replace("{content}", content)
             prompt_q = prompt_q.replace("{questions}", questions)
 
-            agent = CuriousAgent(api=get_llm(), system_msg=prompt_q, formatter=None, temperature=1, top_p=0.6, num_response=1, max_token_length=max_token_length)
+            agent = CuriousAgent(
+                api=get_llm(),
+                system_msg=prompt_q,
+                formatter=None,
+                temperature=1,
+                top_p=0.6,
+                num_response=1,
+                max_token_length=max_token_length
+            )
+
+            prompt_q_path = prompt_output_path + "multichoice_" + str(cnt) + "_verify.txt"
+            chatlog_q_path = chatlog_output_path + "multichoice_" + str(cnt) + "_verify_chatlog.pickle"
+
+            with open(prompt_q_path, 'w') as handle:
+                handle.write(prompt_q)
 
             response_q = agent.reply()[0]
-            agent.dump(chatlog_output_path + "multichoice" + "_" + str(cnt) + "_verify_chatlog.pickle")
-            cnt += 1
+            agent.dump(chatlog_q_path)
 
             c, t = verify(response, response_q)
             correct += c
             total += t
 
-            print("correct: ", correct, "total: ", total, "accuracy: ", correct / total)
+            pbar.set_description("correct: %5d total: %5d accuracy: %5f" % (correct, total, correct / total))
+
+            cnt += 1

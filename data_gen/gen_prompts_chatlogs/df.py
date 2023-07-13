@@ -1,9 +1,10 @@
 import pandas as pd
-import os
-from paths import *
+import os, sys
 import io
 import tiktoken
 from tqdm import tqdm
+sys.path.append(".")
+from data_gen.paths import *
 
 max_token_length = 3000
 encoder = tiktoken.encoding_for_model("gpt-4")
@@ -26,15 +27,15 @@ pd.set_option("display.expand_frame_repr", False)
 
 prompts = {}
 
-df = pd.read_parquet(uri_data_path + "Where-Use/WhereUsed.parquet")
+df = pd.read_parquet(uri_raw_data_path + "Where-Use/WhereUsed.parquet")
 
 os.makedirs(chatlog_output_path, exist_ok=True)
 
-file_list = os.listdir(uri_df_path)
+file_list = os.listdir(uri_df_prompt_path)
 for file in file_list:
     if not file.endswith(".md"):
         continue
-    with open(uri_df_path + file, mode = "r") as handle:
+    with open(uri_df_prompt_path + file, mode = "r") as handle:
         template = handle.read()
     
     for i in tqdm(range(num_samples)):
