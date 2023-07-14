@@ -53,7 +53,7 @@ def spawn_chat_for_uri(msgs, n=10):
     random.shuffle(keywords)
 
     return {
-        f"### Human:\n{q}\n\n### Assistant:\nKeywords: {k}\nURI: {uri}\n": uri
+        f"### Human: {q}\n### Assistant: Keywords: {k}\nURI: {uri}\n": uri
         for q, k in zip(questions[:n], keywords[:n])
     }
 
@@ -77,7 +77,7 @@ def spawn_chat(msgs, n=10):
     random.shuffle(responses)
 
     return {
-        f"### Human:\n{system_msg}\n\n### Assistant:\n{r}\n": system_msg
+        f"### Human: {system_msg}\n### Assistant: {r}\n": system_msg
         for r in responses[:n]
     }
 
@@ -110,7 +110,7 @@ if __name__ == "__main__":
         k for k, v in data.items() if v in train_set
     ]
 
-    train_data = [
+    test_data = [
         k for k, v in data.items() if v not in train_set
     ]
 
