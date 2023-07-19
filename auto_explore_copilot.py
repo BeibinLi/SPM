@@ -3,33 +3,58 @@ from gpt_api import get_llm
 from utils import *
 import re
 import csv, io
+import tiktoken
 
-model = "gpt-4-32k"
-#model = "text-davinci-003"
+root = "C:/Users/t-rzhou/Desktop/peft-main"
 
 class AutoExploreCopilot():
-    def __init__(self, temperature, top_p):
+    def __init__(self, temperature, top_p, max_token_length, model):
         self.temperature = temperature
         self.top_p = top_p
+        self.max_token_length = max_token_length
+        self.model = model
 
-        self.start_prompt = """You are a helpful AI assistant to help code editing in a large code repo. You need to explore the code repo by sending me system commands: ls, cd, cat, and echo. 
+        self.short_mem_path = os.getcwd() + "/short_mem.txt"
+        try:
+            with open(self.short_mem_path, "r") as f:
+                self.short_mem = f.read()
+        except:
+            self.short_mem = ""
 
-Initially, you are at the root of the repo. Using these commands, your target is to get detailed knowledge of each functionality and class. You need to create a cache file named summarization.txt summarizing the knowledge for future reference. This cache file should be at the root of the repository.
+        self.start_prompt = f"""You are a helpful AI assistant to help code editing in a large code repo. You need to explore the code repo by sending me system commands: ls, cd, cat, and echo. 
 
-In the future, an independent instance of you may use the summarized cache files to help writing code upon requests of users. You can update the cache files whenever you want by using system commands.
+The tools you can use
+1.	Read files by using `cat`. You can read files already in the repo and files that you created.
+2.	Write files by using `echo` or `cat`. Note that you should not change files that are already in the repo.
+3.	List all files with `ls`.
+4.	Change directory to a folder with `cd`.
+
+Note that:
+1.	Initially, you are at the root of the repo. Using these commands, your target is to get detailed knowledge of each functionality and class. 
+2.	You need to create two cache files named long_mem.txt and short_mem.txt to help you explore. These cache files must be at the root of the repository {root}.
+a.	long_mem.txt summarizes the knowledge for future reference. You can read it whenever and however you like. This file is used when an independent instance of you is asked to help write code upon requests of users.
+b.	short_mem.txt is maintained automatically by a copilot. It should be short and concise, indicating what you plan to do, which directory you are at, etc. You only need to say “#UpdateShortMem <CONTENT>” at the end of your response and the copilot will update it. It will be given to you every time.
+
+3.	You should not use any other tools or linux commands, besides the ones provided: cd, ls, cat, echo
 
 Use the format:
 ```bash
 YOU CODE GOES HERE
 ```
+
+Here is the information in your short memory. You may need to check it as well as the long memory before you start.
+---- short_mem.txt ----
+{self.short_mem}
 """
 
         self.api = get_llm()
-        self.msgs = [("system", self.start_prompt), ("user", "Now lets start!")]
+        self.msgs = [("system", self.start_prompt), ("user", f"You are at {os.getcwd()}. Now lets start!")]
+
+        self.encoder = tiktoken.encoding_for_model("gpt-4")
+        self.token_length = sum([len(self.encoder.encode(msg[1])) for msg in self.msgs])
     
     def extract_commands(self, response):
         bash_commands = extract_bash_commands(response)
-        print(bash_commands)
 
         parsed_commands = []
         
@@ -54,16 +79,17 @@ YOU CODE GOES HERE
             temperature=self.temperature,
             top_p=self.top_p,
             prev_msgs=self.msgs[:-1],
-            model=model
+            model=self.model
         )[0]
         self.msgs.append(("assistant", response))
+        unencoded_pos = len(self.msgs) - 1
+
         commands = self.extract_commands(response)
-        print(response, "\n", commands)
+        print(response)
         print("*" * 10)
         for cmd in commands:
             if cmd.startswith("cd"):
-                t = os.chdir(cmd[3:].strip())
-                print(t)
+                os.chdir(cmd[3:].strip())
                 self.msgs.append(("user", "Now at: " + os.getcwd()))
             else:
                 ret = os.popen(cmd).read()
@@ -76,10 +102,23 @@ YOU CODE GOES HERE
 
         if commands == []:
             self.msgs.append(("user", "You didn't give me any command. Please try to further explore the code repo by sending me system commands: ls, cd, cat, and echo. You can append to the cache file. You are now at: " + os.getcwd()))
+
+        if response.find("#UpdateShortMem") != -1:
+            self.short_mem = response[response.find("#UpdateShortMem") + len("#UpdateShortMem"):].strip()
+            with open(self.short_mem_path, "w") as f:
+                f.write(self.short_mem)
+            self.msgs.append(("user", "Short-term memory updated!"))
+        
+        self.token_length += sum([len(self.encoder.encode(msg[1])) for msg in self.msgs[unencoded_pos:]])
+        if self.token_length > self.max_token_length:
+            self.__init__(self.temperature, self.top_p, self.max_token_length, self.model)
+
+        for msg in self.msgs[unencoded_pos+1:]:
+            print(msg[1])
         print("*" * 20)
 
 if __name__ == "__main__":
-    os.chdir("C:/Users/t-rzhou/Desktop/peft-main")
-    agent = AutoExploreCopilot(temperature=1, top_p=0.3)
+    os.chdir(root)
+    agent = AutoExploreCopilot(temperature=1, top_p=0.3, max_token_length=16384, model="gpt-4-32k")
     for i in range(100):
         agent.act()

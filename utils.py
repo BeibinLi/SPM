@@ -22,6 +22,6 @@ def extract_bash_commands(response):
 
 def parse_echo(command):
     for i in range(len(command)):
-        if command[i].strip() == ">":
+        if command[i].strip()[0] == ">":
             return 'echo "' + "".join(command[1:i]) + '" ' + " ".join(command[i:])
     return 'echo "' + "".join(command[1]) + '" '
