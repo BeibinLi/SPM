@@ -38,7 +38,7 @@ YOU CODE GOES HERE
 
 Note that:
 1.  Initially, you are at the root of the repo. Using these commands, your target is to get detailed knowledge of each functionality and class. 
-2.  You need to create two cache files named long_mem.txt and short_mem.txt to help you explore. These cache files must be at the root of the repository.
+2.  You need to create two cache files named long_mem.txt and short_mem.txt to help you explore. These cache files must be at the root of the repository {os.path.basename(root)}.
 a.  long_mem.txt summarizes the knowledge for future reference. You can read it whenever and however you like. This file is used when an independent instance of you is asked to help write code upon requests of users.
 b.  short_mem.txt is maintained automatically by a copilot. It should be short and concise, indicating what you plan to do, which directory you are at, etc. You only need to include a code block of current short memory at the end of your response and the copilot will override it. It will be given to you every time you restart.
 
@@ -62,9 +62,9 @@ Current memory to note:
 
 
 Here are the tree structure of directories in the repo:
-{get_directory_tree(root)}
+{display_files_recursively(root)}
 
-Now you are at {os.getcwd().replace(root, "")}
+Now you are at {self.get_cwd()}
 
 
 Here is the information in your short memory. You may need to check it as well as the long memory before you start.
@@ -78,6 +78,9 @@ Here is the information in your short memory. You may need to check it as well a
 
         self.encoder = tiktoken.encoding_for_model("gpt-4")
         self.token_length = sum([len(self.encoder.encode(msg[1])) for msg in self.msgs])
+    
+    def get_cwd(self):
+        return os.getcwd().replace('\\', '/').replace(root.replace(os.path.basename(root), ''), '')
     
     def extract_commands(self, response):
         bash_commands = extract_bash_commands(response)
@@ -116,9 +119,8 @@ Here is the information in your short memory. You may need to check it as well a
         for cmd in commands:
             if cmd.startswith("cd"):
                 temp_path = os.path.join(os.getcwd(), cmd[3:].strip())
-                if temp_path
                 os.chdir(cmd[3:].strip())
-                self.msgs.append(("user", "Now at: " + os.getcwd().replace(root, "")))
+                self.msgs.append(("user", "Now at: " + self.get_cwd()))
             else:
                 ret = os.popen(cmd).read()
                 if cmd.startswith("ls"):
@@ -129,7 +131,7 @@ Here is the information in your short memory. You may need to check it as well a
                     self.msgs.append(("user", "Echo success!"))
 
         if commands == []:
-            self.msgs.append(("user", "You didn't give me any command. Please try to further explore the code repo by sending me system commands: ls, cd, cat, and echo. You can append to the cache file. You are now at: " + os.getcwd().replace(root, "")))
+            self.msgs.append(("user", "You didn't give me any command. Please try to further explore the code repo by sending me system commands: ls, cd, cat, and echo."))
 
         if response.find("#UpdateShortMem") != -1:
             self.short_mem = extract_bash_commands(response, "```short_mem.txt")[0].strip()
