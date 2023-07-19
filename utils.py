@@ -41,10 +41,10 @@ def extract_bash_commands(response, identifier="```bash"):
     commands = []
     positions = find_all_substr(response, identifier)
     for pos in reversed(positions):
-        st = pos + 7
+        st = pos + len(identifier)
         p = response[st:].find("```") + st
         commands.append(response[st:p].strip())
-    return reversed(commands)
+    return commands[::-1]
 
 def parse_echo(command):
     for i in range(len(command)):

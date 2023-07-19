@@ -40,9 +40,8 @@ Note that:
 1.  Initially, you are at the root of the repo. Using these commands, your target is to get detailed knowledge of each functionality and class. 
 2.  You need to create two cache files named long_mem.txt and short_mem.txt to help you explore. These cache files must be at the root of the repository {os.path.basename(root)}.
 a.  long_mem.txt summarizes the knowledge for future reference. You can read it whenever and however you like. This file is used when an independent instance of you is asked to help write code upon requests of users.
-b.  short_mem.txt is maintained automatically by a copilot. It should be short and concise, indicating what you plan to do, which directory you are at, etc. You only need to include a code block of current short memory at the end of your response and the copilot will override it. It will be given to you every time you restart.
+b.  short_mem.txt is maintained automatically by a copilot. Make sure to update it in every response. It should be short and concise, indicating what you plan to do, which directory you are at, etc. You only need to include a code block after #UpdateShortMem, containing current short memory and the copilot will override it. It will be given to you every time you restart. Here is an example of short_mem.txt.
 
-Sample short_mem.txt
 ```short_mem.txt
 Planning: 
 1.	TODO 1
@@ -53,7 +52,7 @@ Reasons:
 Current memory to note:
 1.	Memory 1
 2.	Memory 2
-3.	…
+3.	...
 4.	At most 10 memories here!
 ```
 
@@ -118,7 +117,7 @@ Here is the information in your short memory. You may need to check it as well a
         print("*" * 10)
         for cmd in commands:
             if cmd.startswith("cd"):
-                temp_path = os.path.join(os.getcwd(), cmd[3:].strip())
+                #temp_path = os.path.join(os.getcwd(), cmd[3:].strip())
                 os.chdir(cmd[3:].strip())
                 self.msgs.append(("user", "Now at: " + self.get_cwd()))
             else:
@@ -127,7 +126,7 @@ Here is the information in your short memory. You may need to check it as well a
                     self.msgs.append(("user", "The result of ls is:\n" + ret))
                 elif cmd.startswith("cat"):
                     self.msgs.append(("user", "The result of " + cmd + " is:\n" + ret))
-                else:
+                elif cmd.startswith("echo"):
                     self.msgs.append(("user", "Echo success!"))
 
         if commands == []:
@@ -139,7 +138,7 @@ Here is the information in your short memory. You may need to check it as well a
                 f.write(self.short_mem)
             self.msgs.append(("user", "Short memory updated!"))
         else:
-            self.msgs.append(("user", "You forgot to update short memory."))
+            self.msgs.append(("user", "You forgot to update short memory. You need to update it in every response."))
         
         self.token_length += sum([len(self.encoder.encode(msg[1])) for msg in self.msgs[unencoded_pos:]])
         if self.token_length > self.max_token_length:
