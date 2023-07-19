@@ -1,4 +1,5 @@
 import os
+from termcolor import colored
 
 
 def display_files_recursively(folder_path, indent='', 
@@ -48,7 +49,7 @@ def extract_bash_commands(response, identifier="```bash"):
 
 def parse_echo(command):
     for i in range(len(command)):
-        if command[i].strip()[0] == ">":
+        if command[i].strip().startswith(">"):
             return 'echo "' + "".join(command[1:i]) + '" ' + " ".join(command[i:])
     return 'echo "' + "".join(command[1]) + '" '
 
@@ -67,3 +68,7 @@ def get_directory_tree(path, indention_level=0):
                 ret += "\n" + get_directory_tree(item_path, indention_level + 1)
     
     return ret
+
+def colored_string(msg):
+    color_dict = {"system": "blue", "user": "green", "assistant": "cyan"}
+    return colored(msg[1], color_dict[msg[0]])

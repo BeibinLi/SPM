@@ -42,6 +42,7 @@ Note that:
 a.  long_mem.txt summarizes the knowledge for future reference. You can read it whenever and however you like. This file is used when an independent instance of you is asked to help write code upon requests of users.
 b.  short_mem.txt is maintained automatically by a copilot. Make sure to update it in every response. It should be short and concise, indicating what you plan to do, which directory you are at, etc. You only need to include a code block after #UpdateShortMem, containing current short memory and the copilot will override it. It will be given to you every time you restart. Here is an example of short_mem.txt.
 
+#UpdateShortMem
 ```short_mem.txt
 Planning: 
 1.	TODO 1
@@ -71,17 +72,20 @@ Here is the information in your short memory. You may need to check it as well a
 {self.short_mem}
 
 """
-
         self.api = get_llm()
         self.msgs = [("system", self.start_prompt), ("user", "Lets start!")]
 
         self.encoder = tiktoken.encoding_for_model("gpt-4")
         self.token_length = sum([len(self.encoder.encode(msg[1])) for msg in self.msgs])
+
+        for msg in self.msgs:
+            print(colored_string(msg))
     
     def get_cwd(self):
         return os.getcwd().replace('\\', '/').replace(root.replace(os.path.basename(root), ''), '')
     
     def extract_commands(self, response):
+        response = response.replace("'", '"')
         bash_commands = extract_bash_commands(response)
 
         parsed_commands = []
@@ -113,13 +117,14 @@ Here is the information in your short memory. You may need to check it as well a
         unencoded_pos = len(self.msgs) - 1
 
         commands = self.extract_commands(response)
-        print(response)
-        print("*" * 10)
         for cmd in commands:
             if cmd.startswith("cd"):
                 #temp_path = os.path.join(os.getcwd(), cmd[3:].strip())
-                os.chdir(cmd[3:].strip())
-                self.msgs.append(("user", "Now at: " + self.get_cwd()))
+                try:
+                    os.chdir(cmd[3:].strip())
+                    self.msgs.append(("user", "Now at: " + self.get_cwd()))
+                except FileNotFoundError:
+                    self.msgs.append(("user", "FileNotFoundError: The system cannot find the directory specified."))
             else:
                 ret = os.popen(cmd).read()
                 if cmd.startswith("ls"):
@@ -133,9 +138,14 @@ Here is the information in your short memory. You may need to check it as well a
             self.msgs.append(("user", "You didn't give me any command. Please try to further explore the code repo by sending me system commands: ls, cd, cat, and echo."))
 
         if response.find("#UpdateShortMem") != -1:
-            self.short_mem = extract_bash_commands(response, "```short_mem.txt")[0].strip()
-            with open(self.short_mem_path, "w") as f:
-                f.write(self.short_mem)
+            mem_blocks = extract_bash_commands(response, "```short_mem.txt")
+            if mem_blocks == []:
+                self.short_mem = ""
+                # TODO: assert updated using echo
+            else:
+                self.short_mem = mem_blocks[0].strip()
+                with open(self.short_mem_path, "w") as f:
+                    f.write(self.short_mem)
             self.msgs.append(("user", "Short memory updated!"))
         else:
             self.msgs.append(("user", "You forgot to update short memory. You need to update it in every response."))
@@ -146,9 +156,8 @@ Here is the information in your short memory. You may need to check it as well a
             self.msgs.append(("user", "You have reached the maximum token length. Send fewer commands in a single response. Now restarted."))
             self.token_length += len(self.encoder.encode(self.msgs[-1][1]))
 
-        for msg in self.msgs[unencoded_pos+1:]:
-            print(msg[1])
-        print("*" * 20)
+        for msg in self.msgs[unencoded_pos:]:
+            print(colored_string(msg))
 
 if __name__ == "__main__":
     os.chdir(root)
