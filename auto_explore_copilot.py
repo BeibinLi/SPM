@@ -17,10 +17,7 @@ class AutoExploreCopilot():
         self.top_p = top_p
         self.max_token_length = max_token_length
         self.model = model
-
-        exp_id = get_exp_id(data_path)
-        self.data_path = os.path.join(data_path, exp_id)
-        os.makedirs(self.data_path, exist_ok=True)
+        self.data_path = data_path
 
         self.short_mem_path = root + "/short_mem.txt"
         try:
@@ -134,7 +131,7 @@ Here is the information in your short memory. You may need to check it as well a
             if cmd[0] == "ls":
                 self.msgs.append(("user", "The result of ls is:\n" + ret))
             elif cmd[0] == "cat":
-                self.msgs.append(("user", "The result of " + cmd + " is:\n" + ret))
+                self.msgs.append(("user", "The content of " + cmd[1] + " is:\n" + ret))
             elif cmd[0] == "echo":
                 self.msgs.append(("user", "Echo success!"))
 
@@ -205,13 +202,18 @@ Here is the information in your short memory. You may need to check it as well a
             ], f, indent=4)
 
 if __name__ == "__main__":
+    os.makedirs(auto_explore_data_path, exist_ok=True)
+    exp_id = get_exp_id(auto_explore_data_path)
+    data_path = os.path.abspath(os.path.join(auto_explore_data_path, exp_id))
+    os.makedirs(data_path, exist_ok=True)
+    
     os.chdir(root)
     agent = AutoExploreCopilot(
         temperature=1,
         top_p=0.3,
         max_token_length=32768 // 2,
         model="gpt-4-32k",
-        data_path=auto_explore_data_path
+        data_path=data_path
     )
     for i in range(100):
         agent.act()
