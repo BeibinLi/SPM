@@ -1,4 +1,4 @@
-name: SPM1
+name: SPM
 channels:
   - pyg
   - pytorch

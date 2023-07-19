@@ -247,5 +247,4 @@ def get_llm() -> object:
     openai.api_version = api_version
     openai.api_key = api_key
     api = AzureGPTClient()
-
     return api

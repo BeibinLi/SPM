@@ -4,6 +4,7 @@ from tqdm import tqdm
 from collections import defaultdict
 import tiktoken
 sys.path.append(".")
+from utils import *
 from data_gen.paths import *
 from curious_agent import CuriousAgent
 from gpt_api import get_llm
@@ -29,19 +30,6 @@ def save_prompt(prompt, task):
         handle.write(prompt)
     total_data_count[task] += 1
     prompt_files.append(file_name)
-
-def find_all_substr(string, substr):
-    start_index = 0
-    positions = []
-
-    while True:
-        index = string.find(substr, start_index)
-        if index == -1:
-            break
-        positions.append(index)
-        start_index = index + 1
-    
-    return positions
 
 def dfs(path):
     file_list = os.listdir(path)
