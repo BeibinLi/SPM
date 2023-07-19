@@ -11,6 +11,15 @@ def find_all_substr(string, substr):
     
     return positions
 
+def extract_bash_commands(response):
+    commands = []
+    positions = find_all_substr(response, "```bash")
+    for pos in reversed(positions):
+        st = pos + 7
+        p = response[st:].find("```") + st
+        commands.append(response[st:p].strip())
+    return reversed(commands)
+
 def parse_echo(command):
     for i in range(len(command)):
         if command[i].strip() == ">":

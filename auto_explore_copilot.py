@@ -28,7 +28,8 @@ YOU CODE GOES HERE
         self.msgs = [("system", self.start_prompt), ("user", "Now lets start!")]
     
     def extract_commands(self, response):
-        bash_commands = re.findall(r"```bash(.*)```", response, re.DOTALL)
+        bash_commands = extract_bash_commands(response)
+        print(bash_commands)
 
         parsed_commands = []
         
@@ -59,7 +60,6 @@ YOU CODE GOES HERE
         commands = self.extract_commands(response)
         print(response, "\n", commands)
         print("*" * 10)
-        rets = []
         for cmd in commands:
             if cmd.startswith("cd"):
                 t = os.chdir(cmd[3:].strip())
@@ -74,8 +74,8 @@ YOU CODE GOES HERE
                 else:
                     self.msgs.append(("user", "Echo success!"))
 
-        if rets == []:
-            self.msgs.append(("user", "You didn't give me any command. Please try to further explore the code repo by sending me system commands: ls, cd, cat, and echo. You can append to the cache file."))
+        if commands == []:
+            self.msgs.append(("user", "You didn't give me any command. Please try to further explore the code repo by sending me system commands: ls, cd, cat, and echo. You can append to the cache file. You are now at: " + os.getcwd()))
         print("*" * 20)
 
 if __name__ == "__main__":
