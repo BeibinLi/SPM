@@ -38,21 +38,6 @@ def find_all_substr(string, substr):
     
     return positions
 
-def extract_bash_commands(response, identifier="```bash"):
-    commands = []
-    positions = find_all_substr(response, identifier)
-    for pos in reversed(positions):
-        st = pos + len(identifier)
-        p = response[st:].find("```") + st
-        commands.append(response[st:p].strip())
-    return commands[::-1]
-
-def parse_echo(command):
-    for i in range(len(command)):
-        if command[i].strip().startswith(">"):
-            return 'echo "' + "".join(command[1:i]) + '" ' + " ".join(command[i:])
-    return 'echo "' + "".join(command[1]) + '" '
-
 def get_directory_tree(path, indention_level=0):
     # add the '|' symbol before the folder name to represent levels
     if indention_level:
@@ -72,3 +57,11 @@ def get_directory_tree(path, indention_level=0):
 def colored_string(msg):
     color_dict = {"system": "blue", "user": "green", "assistant": "cyan"}
     return colored(msg[1], color_dict[msg[0]])
+
+
+def get_exp_id(ckpt_path):
+    os.makedirs(ckpt_path, exist_ok=True)
+    exp_dirs = os.listdir(ckpt_path)
+    exp_num_list = [int(x) for x in exp_dirs if x.isdigit()]
+    exp_id = max(exp_num_list) + 1 if exp_num_list != [] else 0
+    return str(exp_id).zfill(3)

@@ -5,15 +5,22 @@ import re
 import csv, io
 import tiktoken
 import glob
+from config import *
+import pickle, json
+
 
 root = "C:/Users/t-rzhou/Desktop/peft-main"
 
 class AutoExploreCopilot():
-    def __init__(self, temperature, top_p, max_token_length, model):
+    def __init__(self, temperature, top_p, max_token_length, model, data_path):
         self.temperature = temperature
         self.top_p = top_p
         self.max_token_length = max_token_length
         self.model = model
+
+        exp_id = get_exp_id(data_path)
+        self.data_path = os.path.join(data_path, exp_id)
+        os.makedirs(self.data_path, exist_ok=True)
 
         self.short_mem_path = root + "/short_mem.txt"
         try:
@@ -84,9 +91,24 @@ Here is the information in your short memory. You may need to check it as well a
     def get_cwd(self):
         return os.getcwd().replace('\\', '/').replace(root.replace(os.path.basename(root), ''), '')
     
+    def extract_bash_commands(self, response, identifier="```bash"):
+        commands = []
+        positions = find_all_substr(response, identifier)
+        for pos in reversed(positions):
+            st = pos + len(identifier)
+            p = response[st:].find("```") + st
+            commands.append(response[st:p].strip())
+        return commands[::-1]
+
+    def parse_echo(self, command):
+        for i in range(len(command)):
+            if command[i].strip().startswith(">"):
+                return 'echo "' + "".join(command[1:i]) + '" ' + " ".join(command[i:])
+        return ["echo", '"' + "".join(command[1]) + '"']
+    
     def extract_commands(self, response):
         response = response.replace("'", '"')
-        bash_commands = extract_bash_commands(response)
+        bash_commands = self.extract_bash_commands(response)
 
         parsed_commands = []
         
@@ -97,11 +119,24 @@ Here is the information in your short memory. You may need to check it as well a
                 if row == []:
                     continue
                 if row[0] == "echo":
-                    parsed_commands.append(parse_echo(row))
+                    parsed_commands.append(self.parse_echo(row))
                 else:
-                    parsed_commands.append(" ".join(row))
+                    parsed_commands.append(row)
         
         return parsed_commands
+    
+    def handle_command(self, cmd):
+        if cmd[0] == "cd":
+            os.chdir(cmd[1].strip())
+            self.msgs.append(("user", "Now at: " + self.get_cwd()))
+        else:
+            ret = os.popen(" ".join(cmd)).read()
+            if cmd[0] == "ls":
+                self.msgs.append(("user", "The result of ls is:\n" + ret))
+            elif cmd[0] == "cat":
+                self.msgs.append(("user", "The result of " + cmd + " is:\n" + ret))
+            elif cmd[0] == "echo":
+                self.msgs.append(("user", "Echo success!"))
 
     def act(self):
         response = self.api.reply(
@@ -118,27 +153,13 @@ Here is the information in your short memory. You may need to check it as well a
 
         commands = self.extract_commands(response)
         for cmd in commands:
-            if cmd.startswith("cd"):
-                #temp_path = os.path.join(os.getcwd(), cmd[3:].strip())
-                try:
-                    os.chdir(cmd[3:].strip())
-                    self.msgs.append(("user", "Now at: " + self.get_cwd()))
-                except FileNotFoundError:
-                    self.msgs.append(("user", "FileNotFoundError: The system cannot find the directory specified."))
-            else:
-                ret = os.popen(cmd).read()
-                if cmd.startswith("ls"):
-                    self.msgs.append(("user", "The result of ls is:\n" + ret))
-                elif cmd.startswith("cat"):
-                    self.msgs.append(("user", "The result of " + cmd + " is:\n" + ret))
-                elif cmd.startswith("echo"):
-                    self.msgs.append(("user", "Echo success!"))
+            self.handle_command(cmd)
 
         if commands == []:
             self.msgs.append(("user", "You didn't give me any command. Please try to further explore the code repo by sending me system commands: ls, cd, cat, and echo."))
 
         if response.find("#UpdateShortMem") != -1:
-            mem_blocks = extract_bash_commands(response, "```short_mem.txt")
+            mem_blocks = self.extract_bash_commands(response, "```short_mem.txt")
             if mem_blocks == []:
                 self.short_mem = ""
                 # TODO: assert updated using echo
@@ -152,15 +173,45 @@ Here is the information in your short memory. You may need to check it as well a
         
         self.token_length += sum([len(self.encoder.encode(msg[1])) for msg in self.msgs[unencoded_pos:]])
         if self.token_length > self.max_token_length:
+            self.dump()
             self.__init__(self.temperature, self.top_p, self.max_token_length, self.model)
             self.msgs.append(("user", "You have reached the maximum token length. Send fewer commands in a single response. Now restarted."))
             self.token_length += len(self.encoder.encode(self.msgs[-1][1]))
 
         for msg in self.msgs[unencoded_pos:]:
             print(colored_string(msg))
+    
+    def dump(self):
+        ckpts = os.listdir(self.data_path)
+        ckpt_num_list = [int(x) for x in ckpts if x.isdigit()]
+        ckpt_id = max(ckpt_num_list) + 1 if ckpt_num_list != [] else 0
+        ckpt = str(ckpt_id).zfill(5)
+        out_loc = os.path.join(self.data_path, ckpt + ".pickle")
+        with open(out_loc, "wb") as f:
+            pickle.dump([
+                self.msgs,
+                self.temperature,
+                self.top_p,
+                self.max_token_length,
+                self.model
+            ], f)
+        with open(out_loc.replace(".pickle", ".json"), "w") as f:
+            json.dump([
+                self.msgs,
+                self.temperature,
+                self.top_p,
+                self.max_token_length,
+                self.model
+            ], f, indent=4)
 
 if __name__ == "__main__":
     os.chdir(root)
-    agent = AutoExploreCopilot(temperature=1, top_p=0.3, max_token_length=32768 // 2, model="gpt-4-32k")
+    agent = AutoExploreCopilot(
+        temperature=1,
+        top_p=0.3,
+        max_token_length=32768 // 2,
+        model="gpt-4-32k",
+        data_path=auto_explore_data_path
+    )
     for i in range(100):
         agent.act()

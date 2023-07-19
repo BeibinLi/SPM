@@ -43,13 +43,8 @@ local_rank = accelerator.process_index
 
 from termcolor import colored
 
+from utils import *
 
-# Get checkpoint folder name
-os.makedirs(ckpt_path, exist_ok=True)
-exp_dirs = os.listdir(ckpt_path)
-exp_num_list = [int(x) for x in exp_dirs if x.isdigit()]
-exp_id = max(exp_num_list) + 1 if exp_num_list != [] else 0
-exp_id = str(exp_id).zfill(3)
 
 
 # Distributed
@@ -237,6 +232,8 @@ def create_and_prepare_model(args):
 
     return model, peft_config, tokenizer
 
+
+exp_id = get_exp_id(ckpt_path)
 
 training_arguments = TrainingArguments(
     output_dir=ckpt_path + exp_id + "/",
