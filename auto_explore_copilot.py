@@ -14,7 +14,7 @@ from gpt_api import get_llm
 from utils import *
 
 root = "/home/t-rzhou/raw_data/IFS_code/src/DataProcessing/"
-# root = "/home/beibinli/MCIO-SCEE-IntelligentFulfillmentService/src/DataProcessing/"
+root = "/home/beibinli/MCIO-SCEE-IntelligentFulfillmentService/src/DataProcessing/"
 
 if not os.path.exists(os.path.join(root, "long_mem.txt")):
     open(os.path.join(root, "long_mem.txt"), "w").write("")
@@ -46,7 +46,9 @@ class AutoExploreCopilot():
         except:
             self.short_mem = ""
 
-        self.start_prompt = f"""You are a helpful AI assistant to help code editing in a large code repo.
+        self.api = get_llm()
+
+        start_prompt = f"""You are a helpful AI assistant to help code editing in a large code repo.
 You need to explore the code repo by sending me system commands: ls, cd, cat, and echo. 
 
 Your GOAL is: read the repo, understand what it means and all its files. Then, summarize the knowledge in long_mem.txt.
@@ -67,10 +69,22 @@ YOU CODE GOES HERE
 Note that:
 1.  Initially, you are at the root of the repo. Using these commands, your target is to get detailed knowledge of each functionality and class. 
 2.  You need to create two cache files named long_mem.txt and short_mem.txt to help you explore.
-a.  long_mem.txt must be at the root of the code repo: {os.path.basename(root)}/. It summarizes the knowledge for future reference, e.g., the functionality/purpose of each file/folder. You should update it whenever you finish exploration of a file. Sometimes you will restart, then you may find it helpful to read long_mem.txt to get a sense of what you have done.
-b.  {os.path.basename(root)}/short_mem.txt is maintained automatically by a copilot. Make sure to update it whenever necessary. It should be short and concise, indicating what you plan to do, which directory you are at, what directory you have finished exploration so that no future exploration is needed, etc. You only need to include a code block after #UpdateShortMem, containing current short memory and the copilot will override it. It will be given to you every time you restart. Here is an example:
+    a.  long_mem.txt must be at the root of the code repo: {os.path.basename(root)}/. 
+        It summarizes the knowledge for future reference, e.g., the functionality/purpose of each file/folder. 
+        You should update it whenever you finish exploration of a file.
+          Sometimes you will restart, then you may find it helpful to read long_mem.txt to get a sense of what you have done.
+    b.  {os.path.basename(root)}/short_mem.txt is maintained automatically by a copilot. 
+        You can write and override it with `cat` command. 
+        You should rewrite it whenever you finish exploration of a file.
+3. You cannot use any other tools or linux commands, besides the ones provided: cd, ls, cat, echo
+4. I am just a bash terminal which can run your commands. I don't have intelligence and can not answer your questions. 
+You are all by yourself, and you need to explore the code repo by yourself. 
+5. You can use various techniques here, such as summarizing a book, thinking about code logic / architecture design, and performing analyses.
+Feel free to use any other abilities, such as planning, executive functioning, etc.
+6. Read files one-by-one is not enough. You need to cross reference different files!
 
-#UpdateShortMem
+
+----- Sample short_mem.txt file ------
 ```short_mem.txt
 Reasons and Plans:
 1. Read file X.py because it is referenced in Y.py
@@ -92,30 +106,17 @@ Current memory to note:
 6. I found that xyz is about ..., but I haven't written it to long_mem.txt yet. I will need a little bit more time to understand it and then writing to the long_mem.txt
 ```
 
-
-3. You cannot use any other tools or linux commands, besides the ones provided: cd, ls, cat, echo
-4. I am just a bash terminal which can run your commands. I don't have intelligence and can not answer your questions. 
-You are all by yourself, and you need to explore the code repo by yourself. 
-5. You can use various techniques here, such as summarizing a book, thinking about code logic / architecture design, and performing analyses.
-Feel free to use any other abilities, such as planning, executive functioning, etc.
-
-
+----- long_mem.txt information ------
 The long_mem.txt file should be a long file with lots of details, and it is append only. 
 For instance, you can add details about class, function, helpers, test cases, important variables, and comments into this long-term memory.
 You should add as many details as possible here, but not to record duplicate, redundant, trivial, or not useful information. 
 You can organize the information in a structured way, e.g., by using a table, or by using a hierarchical structure.
 
-Here are the tree structure of directories in the repo:
+
+----- tree structure of directories in the repo ------
 {display_files_recursively(root)}
-
-
-Here is the information in your short memory. You may need to check it as well as the long memory before you start.
----- short_mem.txt ----
-{self.short_mem}
-
 """
-        self.api = get_llm()
-        self.msgs = [("system", self.start_prompt), ("user", "Lets start!")]
+        self.msgs = [("system", start_prompt), ("user", "Lets start!")]
 
         self.encoder = tiktoken.encoding_for_model("gpt-4")
         self.token_length = sum([len(self.encoder.encode(msg[1])) for msg in self.msgs])
@@ -208,13 +209,15 @@ Here is the information in your short memory. You may need to check it as well a
     def act(self):
         self.read_count = 0
 
+        msgs_with_short_mem = self.msgs[:-1] + [("assistant", f'---- Current short_mem.txt file. Please update it! ----\n{open(os.path.join(root, "short_mem.txt"), "r").read()}')]
+
         response = self.api.reply(
             agent_name=self.msgs[-1][0],
             msg=self.msgs[-1][1],
             num_response=1,
             temperature=self.temperature,
             top_p=self.top_p,
-            prev_msgs=self.msgs[:-1],
+            prev_msgs=msgs_with_short_mem,
             model=self.model
         )[0]
         
@@ -223,7 +226,7 @@ Here is the information in your short memory. You may need to check it as well a
         if self.token_length > self.max_token_length:
             self.dump()
             self.__init__(self.temperature, self.top_p, self.max_token_length, self.model, self.data_path)
-            self.msgs.append(("user", "You have reached the maximum token length. Now restarted. You may need to read long memory to pick up the progress."))
+            self.msgs.append(("user", "You just restarted the task. You may need to read long memory to pick up the progress."))
             self.token_length += len(self.encoder.encode(self.msgs[-1][1]))
             return
         
@@ -237,16 +240,16 @@ Here is the information in your short memory. You may need to check it as well a
         if commands == []:
             self.msgs.append(("user", "Warning: You didn't give me any command. Further explore the code repo by sending me system commands: ls, cd, cat, and echo."))
 
-        if response.find("#UpdateShortMem") != -1:
-            mem_blocks = self.extract_bash_commands(response, "```short_mem.txt")
-            if mem_blocks == []:
-                self.short_mem = ""
-                # TODO: assert updated using echo
-            else:
-                self.short_mem = mem_blocks[0].strip()
-                with open(self.short_mem_path, "w") as f:
-                    f.write(self.short_mem)
-            self.msgs.append(("user", "Short memory updated!"))
+        # if response.find("#UpdateShortMem") != -1:
+        #     mem_blocks = self.extract_bash_commands(response, "```short_mem.txt")
+        #     if mem_blocks == []:
+        #         self.short_mem = ""
+        #         # TODO: assert updated using echo
+        #     else:
+        #         self.short_mem = mem_blocks[0].strip()
+        #         with open(self.short_mem_path, "w") as f:
+        #             f.write(self.short_mem)
+        #     self.msgs.append(("user", "Short memory updated!"))
         #else:
         #    self.msgs.append(("user", "Warning: You forgot to update short memory."))
         
