@@ -35,7 +35,7 @@ class AutoExploreCopilot():
         self.start_prompt = f"""You are a helpful AI assistant to help code editing in a large code repo. You need to explore the code repo by sending me system commands: ls, cd, cat, and echo. 
 
 The tools you can use
-1.  Read files by using `cat`. You can read files already in the repo and files that you created. You can only read one file a time to avoid memory and space limits.
+1.  Read files by using `cat`. You can read files already in the repo and files that you created. You can only read one file a time to avoid memory and space limits, and you should avoid reading a file multiple times.
 2.  Write files by using `echo`. Note that you should not change files that are already in the repo.
 3.  List all files with `ls`.
 4.  Change directory to a folder with `cd`.
@@ -49,7 +49,7 @@ YOU CODE GOES HERE
 Note that:
 1.  Initially, you are at the root of the repo. Using these commands, your target is to get detailed knowledge of each functionality and class. 
 2.  You need to create two cache files named long_mem.txt and short_mem.txt to help you explore.
-a.  long_mem.txt must be at the root of the code repo: {os.path.basename(root)}/. It summarizes the knowledge for future reference, e.g., the functionality/purpose of each file/folder. You should update it after you finish exploration of each folder. Sometimes you will restart, then you may find it helpful to read long_mem.txt to get a sense of what you have done.
+a.  long_mem.txt must be at the root of the code repo: {os.path.basename(root)}/. It summarizes the knowledge for future reference, e.g., the functionality/purpose of each file/folder. You should update it whenever you finish exploration of a file. Sometimes you will restart, then you may find it helpful to read long_mem.txt to get a sense of what you have done.
 b.  {os.path.basename(root)}/short_mem.txt is maintained automatically by a copilot. Make sure to update it whenever necessary. It should be short and concise, indicating what you plan to do, which directory you are at, what directory you have finished exploration so that no future exploration is needed, etc. You only need to include a code block after #UpdateShortMem, containing current short memory and the copilot will override it. It will be given to you every time you restart. Here is an example:
 
 #UpdateShortMem
