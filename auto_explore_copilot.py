@@ -183,18 +183,10 @@ Here is the information in your short memory. You may need to check it as well a
         )[0]
         
         self.msgs.append(("assistant", response))
-
-        if self.token_length > self.max_token_length:
-            self.dump()
-            self.__init__(self.temperature, self.top_p, self.max_token_length, self.model, self.data_path)
-            self.msgs.append(("user", "You have reached the maximum token length. Now restarted. You may need to read long memory to pick up the progress."))
-            self.token_length += len(self.encoder.encode(self.msgs[-1][1]))
-            return
         
         unencoded_pos = len(self.msgs) - 1
 
         commands = self.extract_commands(response)
-        print(commands)
         for cmd in commands:
             self.handle_command(cmd)
 
@@ -213,6 +205,14 @@ Here is the information in your short memory. You may need to check it as well a
             self.msgs.append(("user", "Short memory updated!"))
         #else:
         #    self.msgs.append(("user", "Warning: You forgot to update short memory."))
+
+        # Reset here to incorporate the last assistant messages
+        if self.token_length > self.max_token_length:
+            self.dump()
+            self.__init__(self.temperature, self.top_p, self.max_token_length, self.model, self.data_path)
+            self.msgs.append(("user", "You have reached the maximum token length. Now restarted. You may need to read long memory to pick up the progress."))
+            self.token_length += len(self.encoder.encode(self.msgs[-1][1]))
+            return
         
         self.token_length += sum([len(self.encoder.encode(msg[1])) for msg in self.msgs[unencoded_pos:]])
         
