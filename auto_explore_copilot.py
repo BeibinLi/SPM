@@ -1,15 +1,29 @@
-import sys, os
+import csv
+import glob
+import io
+import json
+import os
+import pickle
+import re
+import sys
+
+import tiktoken
+
+from config import *
 from gpt_api import get_llm
 from utils import *
-import re
-import csv, io
-import tiktoken
-import glob
-from config import *
-import pickle, json
 
+root = "/home/t-rzhou/raw_data/IFS_code/src/DataProcessing/"
+# root = "/home/beibinli/MCIO-SCEE-IntelligentFulfillmentService/src/DataProcessing/"
 
-root = "/home/t-rzhou/raw_data/IFS_code"
+if not os.path.exists(os.path.join(root, "long_mem.txt")):
+    open(os.path.join(root, "long_mem.txt"), "w").write("")
+if not os.path.exists(os.path.join(root, "short_mem.txt")):
+    open(os.path.join(root, "short_mem.txt"), "w").write("")
+
+if not os.path.exists(root):
+    print("ROOT not found!")
+    exit(1)
 
 class AutoExploreCopilot():
     def __init__(self, temperature, top_p, max_token_length, model, data_path):
@@ -32,11 +46,15 @@ class AutoExploreCopilot():
         except:
             self.short_mem = ""
 
-        self.start_prompt = f"""You are a helpful AI assistant to help code editing in a large code repo. You need to explore the code repo by sending me system commands: ls, cd, cat, and echo. 
+        self.start_prompt = f"""You are a helpful AI assistant to help code editing in a large code repo.
+You need to explore the code repo by sending me system commands: ls, cd, cat, and echo. 
+
+Your GOAL is: read the repo, understand what it means and all its files. Then, summarize the knowledge in long_mem.txt.
+
 
 The tools you can use
 1.  Read files by using `cat`. You can read files already in the repo and files that you created. You can only read one file a time to avoid memory and space limits, and you should avoid reading a file multiple times.
-2.  Write files by using `echo`. Note that you should not change files that are already in the repo.
+2.  Write memory files by using `echo`.
 3.  List all files with `ls`.
 4.  Change directory to a folder with `cd`.
 
@@ -54,20 +72,38 @@ b.  {os.path.basename(root)}/short_mem.txt is maintained automatically by a copi
 
 #UpdateShortMem
 ```short_mem.txt
-Planning: 
-1.	TODO 1
-2.	TODO 2
-Reasons:
-1.	Reason 1
-2.	Reason 2
+Reasons and Plans:
+1. Read file X.py because it is referenced in Y.py
+2. I am unclear about the purpose of Z.py, so I will read it.
+3. abc.md uses the term "xyz", but I am not sure what it means. So, I will expore "x1.md", "y2.py".
+5. The "abc" folder contains a lot of files, so I will explore it later.
+6. I have read "abc.py" in the past, but at that time I don't know it is related to "xyz.py". Now, I will re-read abc.py again and check my previous notes in long_mem.txt.
+7. Other plans
+The files we already read:
+  a.py
+  b.txt
+  xyz/abc.md
 Current memory to note:
-1.	Memory 1
-2.	Memory 2
+1. The project is about xyz, with subfolders a, b, c.
+2. The xyz folder contains 8 code about the data structures.
+3. Folder abc is related to code in folder xyz, which is reference by ...
+4. Files in abc folder are read, and they are simple to understand. They represent ...
+5. The information about abc is missing, and I am not sure where to find the related information. I will keep reading other files to see if I can find it in the future. But no rush.
+6. I found that xyz is about ..., but I haven't written it to long_mem.txt yet. I will need a little bit more time to understand it and then writing to the long_mem.txt
 ```
 
 
-3.  You cannot use any other tools or linux commands, besides the ones provided: cd, ls, cat, echo
+3. You cannot use any other tools or linux commands, besides the ones provided: cd, ls, cat, echo
+4. I am just a bash terminal which can run your commands. I don't have intelligence and can not answer your questions. 
+You are all by yourself, and you need to explore the code repo by yourself. 
+5. You can use various techniques here, such as summarizing a book, thinking about code logic / architecture design, and performing analyses.
+Feel free to use any other abilities, such as planning, executive functioning, etc.
 
+
+The long_mem.txt file should be a long file with lots of details, and it is append only. 
+For instance, you can add details about class, function, helpers, test cases, important variables, and comments into this long-term memory.
+You should add as many details as possible here, but not to record duplicate, redundant, trivial, or not useful information. 
+You can organize the information in a structured way, e.g., by using a table, or by using a hierarchical structure.
 
 Here are the tree structure of directories in the repo:
 {display_files_recursively(root)}
@@ -140,7 +176,7 @@ Here is the information in your short memory. You may need to check it as well a
                 return
             cwd = os.getcwd().replace('\\', '/')
             os.chdir(original_cwd)
-            if not cwd.startswith(root):
+            if not os.path.abspath(cwd).startswith(os.path.abspath(root)):
                 self.msgs.append(("user", "Error: You cannot access files outside the repo!"))
                 return
             
