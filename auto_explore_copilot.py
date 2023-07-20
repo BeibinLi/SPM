@@ -121,19 +121,40 @@ Here is the information in your short memory. You may need to check it as well a
                     parsed_commands.append(row)
         
         return parsed_commands
-    
+
     def handle_command(self, cmd):
-        if cmd[0] == "cd":
-            os.chdir(cmd[1].strip())
-            self.msgs.append(("user", "Now at: " + self.get_cwd()))
-        else:
-            ret = os.popen(" ".join(cmd)).read()
-            if cmd[0] == "ls":
-                self.msgs.append(("user", "The result of ls is:\n" + ret))
-            elif cmd[0] == "cat":
-                self.msgs.append(("user", "The content of " + cmd[1] + " is:\n" + ret))
-            elif cmd[0] == "echo":
-                self.msgs.append(("user", "Echo success!"))
+        # Test outside repo
+        if cmd[0] in ["cd", "cat"]:
+            cmd[1] = cmd[1].strip()
+            path = os.path.dirname(cmd[1]) if os.path.isfile(cmd[1]) else cmd[1]
+            if path == "":
+                path = "."
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(path)
+            except Exception as e:
+                self.msgs.append(("user", "Error: " + str(e)))
+                return
+            cwd = os.getcwd().replace('\\', '/')
+            os.chdir(original_cwd)
+            if not cwd.startswith(root):
+                self.msgs.append(("user", "Error: You cannot access files outside the repo!"))
+                return
+
+        try:
+            if cmd[0] == "cd":
+                os.chdir(cmd[1])
+                self.msgs.append(("user", "Now at: " + self.get_cwd()))
+            else:
+                ret = os.popen(" ".join(cmd)).read()
+                if cmd[0] == "ls":
+                    self.msgs.append(("user", "The result of ls is:\n" + ret))
+                elif cmd[0] == "cat":
+                    self.msgs.append(("user", "The content of " + cmd[1] + " is:\n" + ret))
+                elif cmd[0] == "echo":
+                    self.msgs.append(("user", "Echo success!"))
+        except Exception as e:
+            self.msgs.append(("user", "Error: " + str(e)))
 
     def act(self):
         response = self.api.reply(
