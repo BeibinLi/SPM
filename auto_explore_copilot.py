@@ -9,7 +9,7 @@ from config import *
 import pickle, json
 
 
-root = "C:/Users/t-rzhou/Desktop/peft-main"
+root = "/home/t-rzhou/raw_data/IFS_code"
 
 class AutoExploreCopilot():
     def __init__(self, temperature, top_p, max_token_length, model, data_path):
@@ -192,7 +192,7 @@ Here is the information in your short memory. You may need to check it as well a
         self.token_length += sum([len(self.encoder.encode(msg[1])) for msg in self.msgs[unencoded_pos:]])
         if self.token_length > self.max_token_length:
             self.dump()
-            self.__init__(self.temperature, self.top_p, self.max_token_length, self.model)
+            self.__init__(self.temperature, self.top_p, self.max_token_length, self.model, self.data_path)
             self.msgs.append(("user", "You have reached the maximum token length. Send fewer commands in a single response. Now restarted."))
             self.token_length += len(self.encoder.encode(self.msgs[-1][1]))
 
@@ -211,7 +211,8 @@ Here is the information in your short memory. You may need to check it as well a
                 self.temperature,
                 self.top_p,
                 self.max_token_length,
-                self.model
+                self.model,
+                self.data_path
             ], f)
         with open(out_loc.replace(".pickle", ".json"), "w") as f:
             json.dump([
@@ -219,7 +220,8 @@ Here is the information in your short memory. You may need to check it as well a
                 self.temperature,
                 self.top_p,
                 self.max_token_length,
-                self.model
+                self.model,
+                self.data_path
             ], f, indent=4)
 
 if __name__ == "__main__":
