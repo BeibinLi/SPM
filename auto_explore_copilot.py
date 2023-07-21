@@ -13,8 +13,9 @@ from config import *
 from gpt_api import get_llm
 from utils import *
 
-root = "/home/t-rzhou/raw_data/IFS_code/src/DataProcessing/"
-root = "/home/beibinli/MCIO-SCEE-IntelligentFulfillmentService/src/DataProcessing/"
+root = "/home/t-rzhou/raw_data/IFS_code"
+#root = "/home/t-rzhou/RL-for-Combinatorial-Optimization"
+#root = "/home/beibinli/MCIO-SCEE-IntelligentFulfillmentService/src/DataProcessing/"
 
 if not os.path.exists(os.path.join(root, "long_mem.txt")):
     open(os.path.join(root, "long_mem.txt"), "w").write("")
@@ -35,9 +36,10 @@ class AutoExploreCopilot():
         self.model = model
         self.data_path = data_path
 
-        
-        with open(root + "/long_mem.txt", "a") as f:
-            f.write("")
+        self.long_mem_path = root + "/long_mem.txt"
+        if not os.path.exists(self.long_mem_path):
+            with open(self.long_mem_path, "w"):
+                pass
 
         self.short_mem_path = root + "/short_mem.txt"
         try:
@@ -141,7 +143,7 @@ You can organize the information in a structured way, e.g., by using a table, or
             if command[i].strip().startswith(">"):
                 assert i == len(command) - 2
                 return ["echo", '"' + "".join(command[1:i]) + '"', command[i].strip(), command[i+1]]
-        raise Exception("Invalid echo command: " + str(command))
+        return ["echo", '"' + "".join(command[1:]) + '"']
     
     def extract_commands(self, response):
         response = response.replace("'", '"')
@@ -165,6 +167,10 @@ You can organize the information in a structured way, e.g., by using a table, or
     def handle_command(self, cmd):
         # Test outside repo
         if cmd[0] in ["cd", "cat", "echo"]:
+            if cmd[0] == "echo" and len(cmd) != 4:
+                self.msgs.append(("user", "Warning: echo command without output file, ignored."))
+                return
+            
             cmd[-1] = cmd[-1].strip()
             path = os.path.dirname(cmd[-1]) if "." in os.path.basename(cmd[-1]) else cmd[-1]
             if path == "":
@@ -182,10 +188,12 @@ You can organize the information in a structured way, e.g., by using a table, or
                 return
             
             if cmd[0] == "echo":
-                print(cmd[-1], cwd)
                 if cmd[-1].endswith("long_mem.txt") and cwd != root:
                     cmd[-1] = root + "/long_mem.txt"
                     self.msgs.append(("user", "Warning: long_mem.txt must be at the root of repo! The file path is redirected to root."))
+                if cmd[-1].endswith("short_mem.txt") and cwd != root:
+                    cmd[-1] = root + "/short_mem.txt"
+                    self.msgs.append(("user", "Warning: short_mem.txt must be at the root of repo, and you do not need to use echo to update it! The file path is redirected to root."))
 
         try:
             if cmd[0] == "cd":
@@ -202,6 +210,8 @@ You can organize the information in a structured way, e.g., by using a table, or
                     else:
                         self.msgs.append(("user", "Warning: You can only read one file at a time. " + cmd[1] + " is ignored."))
                 elif cmd[0] == "echo":
+                    if cmd[-1].endswith("short_mem.txt"):
+                        self.updated_short_mem = True
                     self.msgs.append(("user", "Echo success!"))
         except Exception as e:
             self.msgs.append(("user", "Error: " + str(e)))
@@ -232,6 +242,8 @@ You can organize the information in a structured way, e.g., by using a table, or
         
         unencoded_pos = len(self.msgs) - 1
 
+        self.updated_short_mem = False
+
         commands = self.extract_commands(response)
         for cmd in commands:
             self.handle_command(cmd)
@@ -239,18 +251,18 @@ You can organize the information in a structured way, e.g., by using a table, or
         if commands == []:
             self.msgs.append(("user", "Warning: You didn't give me any command. Further explore the code repo by sending me system commands: ls, cd, cat, and echo."))
 
-        # if response.find("#UpdateShortMem") != -1:
-        #     mem_blocks = self.extract_bash_commands(response, "```short_mem.txt")
-        #     if mem_blocks == []:
-        #         self.short_mem = ""
-        #         # TODO: assert updated using echo
-        #     else:
-        #         self.short_mem = mem_blocks[0].strip()
-        #         with open(self.short_mem_path, "w") as f:
-        #             f.write(self.short_mem)
-        #     self.msgs.append(("user", "Short memory updated!"))
-        #else:
-        #    self.msgs.append(("user", "Warning: You forgot to update short memory."))
+        if response.find("#UpdateShortMem") != -1:
+            mem_blocks = self.extract_bash_commands(response, "```short_mem.txt")
+            if mem_blocks != []:
+                self.short_mem = mem_blocks[0].strip()
+                with open(self.short_mem_path, "w") as f:
+                    f.write(self.short_mem)
+                self.updated_short_mem = True
+        
+        if self.updated_short_mem:
+            self.msgs.append(("user", "Short memory updated!"))
+        else:
+            self.msgs.append(("user", "Warning: No update to short memory."))
 
         # Reset here to incorporate the last assistant messages
         if self.token_length > self.max_token_length:
