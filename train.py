@@ -216,12 +216,12 @@ def create_and_prepare_model(args):
         r=script_args.lora_r,
         bias="none",
         task_type="CAUSAL_LM",
-        target_modules=[
-            "query_key_value",
-            "dense",
-            "dense_h_to_4h",
-            "dense_4h_to_h",
-        ],  # , "word_embeddings", "lm_head"],
+        # target_modules=[
+        #     "query_key_value",
+        #     "dense",
+        #     "dense_h_to_4h",
+        #     "dense_4h_to_h",
+        # ],
     )
 
     tokenizer = AutoTokenizer.from_pretrained(script_args.model_name,
@@ -253,11 +253,10 @@ training_arguments = TrainingArguments(
     ddp_find_unused_parameters=False
 )
 
-dataset = get_spm_dataset("pretrain")
+train_dataset = get_spm_dataset("pretrain")
 
 model, peft_config, tokenizer = create_and_prepare_model(script_args)
 model.config.use_cache = False
-
 
 trainer = SFTTrainer(
     model=model,
@@ -269,7 +268,6 @@ trainer = SFTTrainer(
     args=training_arguments,
     packing=script_args.packing
 )
-
 
 
 for name, module in trainer.model.named_modules():
