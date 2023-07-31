@@ -188,6 +188,7 @@ You can organize the information in a structured way, e.g., by using a table, or
                 return
             
             if cmd[0] == "echo":
+                # TODO: check if it writes to repo files
                 if cmd[-1].endswith("long_mem.txt") and cwd != root:
                     cmd[-1] = root + "/long_mem.txt"
                     self.msgs.append(("user", "Warning: long_mem.txt must be at the root of repo! The file path is redirected to root."))

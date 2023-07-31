@@ -15,6 +15,8 @@
 from dataclasses import dataclass, field
 from typing import Optional
 
+from llama import Llama
+
 import os, glob
 
 import torch
@@ -24,6 +26,8 @@ from peft import LoraConfig, PeftModel
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
+    LlamaForCausalLM,
+    LlamaTokenizer,
     BitsAndBytesConfig,
     HfArgumentParser,
     TrainingArguments,
@@ -202,7 +206,7 @@ def create_and_prepare_model(args):
         trust_remote_code=True,
         cache_dir=script_args.cache_dir
     )
-    
+
     if args.load_dir:
         print(colored("Loading from " + args.load_dir, "green"))
         model = PeftModel.from_pretrained(model=base_model, model_id=args.load_dir, is_trainable=True)
@@ -216,12 +220,12 @@ def create_and_prepare_model(args):
         r=script_args.lora_r,
         bias="none",
         task_type="CAUSAL_LM",
-        target_modules=[
-            "query_key_value",
-            "dense",
-            "dense_h_to_4h",
-            "dense_4h_to_h",
-        ],  # , "word_embeddings", "lm_head"],
+        # target_modules=[
+        #     "query_key_value",
+        #     "dense",
+        #     "dense_h_to_4h",
+        #     "dense_4h_to_h",
+        # ],
     )
 
     tokenizer = AutoTokenizer.from_pretrained(script_args.model_name,
@@ -253,11 +257,10 @@ training_arguments = TrainingArguments(
     ddp_find_unused_parameters=False
 )
 
-dataset = get_spm_dataset("pretrain")
+train_dataset = get_spm_dataset("pretrain")
 
 model, peft_config, tokenizer = create_and_prepare_model(script_args)
 model.config.use_cache = False
-
 
 trainer = SFTTrainer(
     model=model,
@@ -269,19 +272,6 @@ trainer = SFTTrainer(
     args=training_arguments,
     packing=script_args.packing
 )
-
-
-
-for name, module in trainer.model.named_modules():
-    if isinstance(module, LoraLayer):
-        if script_args.bf16:
-            module = module.to(torch.bfloat16)
-    if "norm" in name:
-        module = module.to(torch.float32)
-    if "lm_head" in name or "embed_tokens" in name:
-        if hasattr(module, "weight"):
-            if script_args.bf16 and module.weight.dtype == torch.float32:
-                module = module.to(torch.bfloat16)
 
 trainer.train(resume_from_checkpoint=script_args.load_dir)
 

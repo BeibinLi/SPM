@@ -1,6 +1,7 @@
 import os
 from termcolor import colored
-
+from datasets import load_dataset
+from data_gen.paths import *
 
 def display_files_recursively(folder_path, indent='', 
                               file_suffixes=[".py", ".cpp", ".cs", ".md", ".txt"]):
@@ -65,3 +66,17 @@ def get_exp_id(ckpt_path):
     exp_num_list = [int(x) for x in exp_dirs if x.isdigit()]
     exp_id = max(exp_num_list) + 1 if exp_num_list != [] else 0
     return str(exp_id).zfill(3)
+
+def get_spm_dataset(type: str):
+    if type == "pretrain":
+        data_files = [
+            pretrain_data_path + "train.jsonl",
+        ]
+    elif type == "finetune":
+        data_files = [
+            finetune_data_path + "train.jsonl",
+        ]
+    else:
+        raise ValueError("Invalid dataset type: " + type + ". Valid types are: {pretrain, finetune}")
+    
+    return load_dataset("json", data_files=data_files, split="train").shuffle(seed=42)
