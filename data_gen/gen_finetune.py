@@ -1,7 +1,7 @@
 import os, sys, re, random, json
 import glob
 sys.path.append(".")
-from data_gen.paths import chatlog_output_path, finetune_data_path
+from data_gen.paths import chatlog_output_path, finetune_data_path, raw_data_path
 from curious_agent import CuriousAgent
 
 os.makedirs(finetune_data_path, exist_ok=True)
@@ -18,7 +18,7 @@ TEST_OUT_FILE = finetune_data_path + "test.jsonl"
 char_set = set("0123456789:([{ ")
 num_set = set("0123456789")
 
-def gen_data_uri(msgs):
+def gen_data_uri(type, msgs):
 
     # Get URI from the system message
     assert msgs[0][0] == "system"
@@ -41,11 +41,11 @@ def gen_data_uri(msgs):
     random.shuffle(keywords)
 
     return {
-        f"### Human: {q}\n### Assistant: {uri}\n": uri
+        f"### Human: {q}\n### Assistant: {type} {uri}\n": uri
         for q in questions
     }
 
-def gen_data(msgs):
+def gen_data(type, msgs):
     # Get information from Bot's response
     questions, answers = [], []
     for ppl, msg in msgs:
@@ -80,7 +80,7 @@ def gen_data(msgs):
             msg = msg[t:]
     
     return {
-        f"### Human: {questions[i]}\n### Assistant: {answers[i]}\n": questions[i]
+        f"### Human: {questions[i]}\n### Assistant: {type} {answers[i]}\n": questions[i]
         for i in range(len(questions))
     }
 
@@ -98,12 +98,19 @@ if __name__ == "__main__":
             agent = CuriousAgent(api=None, system_msg="")
             agent.load(file)
             if type == "[URI] ":
-                _data = gen_data_uri(agent.msgs)
+                _data = gen_data_uri(type, agent.msgs)
             else:
-                _data = gen_data(agent.msgs)
+                _data = gen_data(type, agent.msgs)
             
-            for k, v in _data.items():
-                data.update({type + k: v})
+            data.update(_data)
+    
+    with open(raw_data_path + "ifs_train.jsonl", "r") as f:
+        raw_data = [json.loads(line) for line in f]
+
+    for (i, d) in enumerate(raw_data):
+        t = d["text"]
+        t = t.replace("[IFS]", "").replace("### Assistant:", "### Assistant: [IFS]")
+        data.update({t: i})
 
     all_values = set(list(data.values()))
 
