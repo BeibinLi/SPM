@@ -11,3 +11,6 @@ chatlog_output_path = data_path + "chatlogs/"
 prompt_output_path = data_path + "prompts/"
 pretrain_data_path = data_path + "pretrain/"
 finetune_data_path = data_path + "finetune/"
+
+self_instruct_data_path = data_path + "self-instruct/"
+raw_self_instruct_data_path = data_path + "self-instruct/finetuning/self_instruct_221203/gpt3_finetuning_data.jsonl"

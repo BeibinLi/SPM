@@ -67,7 +67,7 @@ def get_exp_id(ckpt_path):
     exp_id = max(exp_num_list) + 1 if exp_num_list != [] else 0
     return str(exp_id).zfill(3)
 
-def get_spm_dataset(type: str):
+def get_spm_dataset(type: str, with_self_instruct: bool = False):
     if type == "pretrain":
         data_files = [
             pretrain_data_path + "train.jsonl",
@@ -78,5 +78,8 @@ def get_spm_dataset(type: str):
         ]
     else:
         raise ValueError("Invalid dataset type: " + type + ". Valid types are: {pretrain, finetune}")
+
+    if with_self_instruct:
+        data_files.append(self_instruct_data_path + "train.jsonl")
     
     return load_dataset("json", data_files=data_files, split="train").shuffle(seed=42)

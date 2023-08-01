@@ -253,7 +253,7 @@ training_arguments = TrainingArguments(
     ddp_find_unused_parameters=False
 )
 
-train_dataset = get_spm_dataset("pretrain")
+train_dataset = get_spm_dataset(type="pretrain", with_self_instruct=True)
 
 model, peft_config, tokenizer = create_and_prepare_model(script_args)
 model.config.use_cache = False
