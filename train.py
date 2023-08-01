@@ -143,7 +143,7 @@ class ScriptArguments:
         },
     )
     max_steps: int = field(
-        default=100000,
+        default=10000,
         metadata={"help": "How many optimizer update steps to take"})
     warmup_ratio: float = field(
         default=0.03, metadata={"help": "Fraction of steps to do a warmup for"})
@@ -165,9 +165,13 @@ class ScriptArguments:
         metadata={"help": "Where to store the pretrained models."})
     
     load_dir: Optional[str] = field(
-        default=ckpt_path + "011/checkpoint-8200/",
-        #default=None,
+        #default=ckpt_path + "011/checkpoint-8200/",
+        default=None,
         metadata={"help": "Where to load the pretrained models. None for no loading. latest for latest checkpoint. directory for loading from a directory."})
+    
+    with_self_instruct: Optional[bool] = field(
+        default=False,
+        metadata={"help": "Whether to use self-instruct data."})
 
 
 parser = HfArgumentParser(ScriptArguments)
@@ -253,35 +257,38 @@ training_arguments = TrainingArguments(
     ddp_find_unused_parameters=False
 )
 
-train_dataset = get_spm_dataset(phase="finetune", mode="train", with_self_instruct=True)
-
 model, peft_config, tokenizer = create_and_prepare_model(script_args)
 model.config.use_cache = False
 
-trainer = SFTTrainer(
-    model=model,
-    train_dataset=train_dataset,
-    peft_config=peft_config,
-    dataset_text_field="text",
-    max_seq_length=script_args.max_seq_length,
-    tokenizer=tokenizer,
-    args=training_arguments,
-    packing=script_args.packing
-)
+for phase in ["pretrain", "finetune"]:
+    dataset = get_spm_dataset(phase=phase, mode="train", with_self_instruct=script_args.with_self_instruct)
+
+    trainer = SFTTrainer(
+        model=model,
+        train_dataset=dataset,
+        peft_config=peft_config,
+        dataset_text_field="text",
+        max_seq_length=script_args.max_seq_length,
+        tokenizer=tokenizer,
+        args=training_arguments,
+        packing=script_args.packing
+    )
 
 
-for name, module in trainer.model.named_modules():
-    if isinstance(module, LoraLayer):
-        if script_args.bf16:
-            module = module.to(torch.bfloat16)
-    if "norm" in name:
-        module = module.to(torch.float32)
-    if "lm_head" in name or "embed_tokens" in name:
-        if hasattr(module, "weight"):
-            if script_args.bf16 and module.weight.dtype == torch.float32:
+    for name, module in trainer.model.named_modules():
+        if isinstance(module, LoraLayer):
+            if script_args.bf16:
                 module = module.to(torch.bfloat16)
+        if "norm" in name:
+            module = module.to(torch.float32)
+        if "lm_head" in name or "embed_tokens" in name:
+            if hasattr(module, "weight"):
+                if script_args.bf16 and module.weight.dtype == torch.float32:
+                    module = module.to(torch.bfloat16)
 
-#trainer.train(resume_from_checkpoint=script_args.load_dir)
-trainer.train()
+    trainer.train()
 
-print("Done")
+if local_rank == 0:
+    print(colored("="*10, "green"))
+    print(colored("Done", "green"))
+    print(colored("="*10, "green"))

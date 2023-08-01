@@ -123,15 +123,15 @@ if __name__ == "__main__":
         test_dataset = get_spm_dataset(phase="pretrain", mode="test", with_self_instruct=True)
         for i in range(20):
             text = test_dataset[i]["text"]
-            text = text.split("### Human: ")[-1]
-            texts = text.split("### Assistant: ")
+            text = text.split("### Human:")[-1].strip()
+            texts = text.split("### Assistant:")
             input = texts[0].strip()
             if len(texts) == 1:
                 std = ""
             else:
                 std = texts[1].strip()
             output = answer(input)
-            
+
             print("-" * 30)
             print("Input:", input)
             print("Output:", colored(output, "green"))
