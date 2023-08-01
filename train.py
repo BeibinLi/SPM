@@ -165,8 +165,8 @@ class ScriptArguments:
         metadata={"help": "Where to store the pretrained models."})
     
     load_dir: Optional[str] = field(
-        #default=ckpt_path + "001/checkpoint-4700",
-        default=None,
+        default=ckpt_path + "011/checkpoint-8200/",
+        #default=None,
         metadata={"help": "Where to load the pretrained models. None for no loading. latest for latest checkpoint. directory for loading from a directory."})
 
 
@@ -253,7 +253,7 @@ training_arguments = TrainingArguments(
     ddp_find_unused_parameters=False
 )
 
-train_dataset = get_spm_dataset(type="pretrain", with_self_instruct=True)
+train_dataset = get_spm_dataset(phase="finetune", mode="train", with_self_instruct=True)
 
 model, peft_config, tokenizer = create_and_prepare_model(script_args)
 model.config.use_cache = False
@@ -281,6 +281,7 @@ for name, module in trainer.model.named_modules():
             if script_args.bf16 and module.weight.dtype == torch.float32:
                 module = module.to(torch.bfloat16)
 
-trainer.train(resume_from_checkpoint=script_args.load_dir)
+#trainer.train(resume_from_checkpoint=script_args.load_dir)
+trainer.train()
 
 print("Done")

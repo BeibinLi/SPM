@@ -1,5 +1,6 @@
 raw_data_path = "../raw_data/"
 uri_raw_data_path = raw_data_path + "URI/"
+self_instruct_raw_data_path = raw_data_path + "self-instruct/finetuning/self_instruct_221203/gpt3_finetuning_data.jsonl"
 
 prompt_template_path = "data_gen/prompt_templates/"
 uri_attr_to_lang_keyw_prompt_path = prompt_template_path + "uri/uri_attribute_to_language_keyword.md"
@@ -11,6 +12,4 @@ chatlog_output_path = data_path + "chatlogs/"
 prompt_output_path = data_path + "prompts/"
 pretrain_data_path = data_path + "pretrain/"
 finetune_data_path = data_path + "finetune/"
-
 self_instruct_data_path = data_path + "self-instruct/"
-raw_self_instruct_data_path = data_path + "self-instruct/finetuning/self_instruct_221203/gpt3_finetuning_data.jsonl"

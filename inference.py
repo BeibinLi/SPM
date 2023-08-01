@@ -1,5 +1,5 @@
 import glob
-import os
+import os, sys
 import pdb
 from dataclasses import dataclass, field
 from typing import Optional
@@ -19,51 +19,46 @@ from trl import SFTTrainer
 from trl.trainer import ConstantLengthDataset
 
 from config import *
+from utils import *
 
-################ Constants/Variables ################
+sys.path.append(".")
+from data_gen.paths import *
+
 list_all_checkpoints = lambda x: glob.glob(x + "checkpoint-*")
-# peft_model_id = "dfurman/falcon-40b-chat-oasst1"
 
-#accelerator = Accelerator()
-#device_map = {"": accelerator.process_index}
-device_map = {"": 0}
+#mode = "inference"
+mode = "test"
 
-default_question = "What is the  PDU Amperage for A100 in Gen 7.1?"
+def load_inference_model(dir):
+    global tokenizer
+    bnb_config = BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_compute_dtype="float16",
+        bnb_4bit_use_double_quant=False,
+    )
 
-#############
+    llm_model = AutoModelForCausalLM.from_pretrained(model_name,
+                                                    quantization_config=bnb_config,
+                                                    trust_remote_code=True,
+                                                    cache_dir=model_path)
+
+    # Load the Lora model
+    load_latest_model(llm_model, dir)
+
+    tokenizer = AutoTokenizer.from_pretrained(model_name,
+                                            trust_remote_code=True,
+                                            cache_dir=model_path)
+    tokenizer.pad_token = tokenizer.eos_token
 
 
-def load_latest_model():
+def load_latest_model(llm_model, dir):
     global config, model
-    checkpoints = list_all_checkpoints(ckpt_path + "002/")
+    checkpoints = list_all_checkpoints(ckpt_path + dir)
     latest_checkpoint = max(checkpoints, key=os.path.getctime)
     print(colored(f"Loading model from {latest_checkpoint}", "yellow"))
     config = PeftConfig.from_pretrained(latest_checkpoint)
     model = PeftModel.from_pretrained(llm_model, latest_checkpoint)
-
-
-################
-
-bnb_config = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_quant_type="nf4",
-    bnb_4bit_compute_dtype="float16",
-    bnb_4bit_use_double_quant=False,
-)
-
-llm_model = AutoModelForCausalLM.from_pretrained(model_name,
-                                                 quantization_config=bnb_config,
-                                                 device_map=device_map,
-                                                 trust_remote_code=True,
-                                                 cache_dir=model_path)
-
-# Load the Lora model
-load_latest_model()
-
-tokenizer = AutoTokenizer.from_pretrained(model_name,
-                                          trust_remote_code=True,
-                                          cache_dir=model_path)
-tokenizer.pad_token = tokenizer.eos_token
 
 
 def answer(question):
@@ -71,6 +66,7 @@ def answer(question):
         load_latest_model()
         return "Latest model loaded~"
     _prompt = f"### Human: {question}### Assistant:"
+
     batch = tokenizer(_prompt,
                       padding=True,
                       truncation=True,
@@ -102,26 +98,43 @@ def answer(question):
 
 if __name__ == "__main__":
 
-    ################
-    print("Example: ", default_question)
-    print("Bot:", colored(answer(default_question), "green"))
-    ################
+    load_inference_model("011/")
 
-    while True:
-        print("-" * 30)
-        question = input("Human: ")
+    if mode == "inference":
+        while True:
+            print("-" * 30)
+            question = input("Human: ")
 
-        question = question.strip().rstrip()
+            question = question.strip().rstrip()
 
-        if question == "":
-            continue
+            if question == "":
+                continue
 
-        if question == "quit":
-            break
-        elif question == "pdb":
-            pdb.set_trace()
-        elif question == "load":
-            load_latest_model()
-        else:
-            ans = answer(question)
-            print("Bot:", colored(ans, "green"))
+            if question == "quit":
+                break
+            elif question == "pdb":
+                pdb.set_trace()
+            elif question == "load":
+                load_latest_model()
+            else:
+                ans = answer(question)
+                print("Bot:", colored(ans, "green"))
+    elif mode == "test":
+        test_dataset = get_spm_dataset(phase="pretrain", mode="test", with_self_instruct=True)
+        for i in range(20):
+            text = test_dataset[i]["text"]
+            text = text.split("### Human: ")[-1]
+            texts = text.split("### Assistant: ")
+            input = texts[0].strip()
+            if len(texts) == 1:
+                std = ""
+            else:
+                std = texts[1].strip()
+            output = answer(input)
+            
+            print("-" * 30)
+            print("Input:", input)
+            print("Output:", colored(output, "green"))
+            print("Standard output:", colored(std, "blue"))
+    else:
+        print(colored("Invalid mode", "red"))

@@ -12,7 +12,7 @@ def dump(data: list, filename: str):
         f.write("\n".join([json.dumps({"text": d}) for d in data]))
 
 if __name__ == "__main__":
-    with open(raw_self_instruct_data_path, "r") as f:
+    with open(self_instruct_raw_data_path, "r") as f:
         raw_data = [json.loads(line) for line in f]
     data = {}
     for (i, d) in enumerate(raw_data):
