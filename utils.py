@@ -1,7 +1,7 @@
 import os
 from termcolor import colored
 from datasets import load_dataset
-from data_gen.paths import *
+from data_gen.paths import pretrain_data_path, finetune_data_path, self_instruct_data_path
 
 def display_files_recursively(folder_path, indent='', 
                               file_suffixes=[".py", ".cpp", ".cs", ".md", ".txt"]):
@@ -80,14 +80,15 @@ def get_spm_dataset(phase: str, mode: str, with_self_instruct: bool = False):
         data_files = [
             pretrain_data_path + mode + ".jsonl",
         ]
+        if with_self_instruct:
+            data_files.append(self_instruct_data_path + mode + ".jsonl")
     elif phase == "finetune":
         data_files = [
             finetune_data_path + mode + ".jsonl",
         ]
+        if with_self_instruct:
+            print(colored("Warning: self-instructed data is not used in finetune phase", "yellow"))
     else:
         raise ValueError("Invalid phase: " + phase + ". Valid phases are: {pretrain, finetune}")
-
-    if with_self_instruct:
-        data_files.append(self_instruct_data_path + mode + ".jsonl")
     
     return load_dataset("json", data_files=data_files, split="train").shuffle(seed=42)

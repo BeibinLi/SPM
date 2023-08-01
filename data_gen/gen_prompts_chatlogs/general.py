@@ -4,8 +4,8 @@ from tqdm import tqdm
 from collections import defaultdict
 import tiktoken
 sys.path.append(".")
-from utils import *
-from data_gen.paths import *
+from utils import find_all_substr
+from data_gen.paths import prompt_output_path, raw_data_path, chatlog_output_path, prompt_template_path
 from curious_agent import CuriousAgent
 from gpt_api import get_llm
 

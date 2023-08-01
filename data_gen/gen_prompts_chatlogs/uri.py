@@ -6,7 +6,7 @@ from gpt_api import get_llm
 
 from tqdm import tqdm
 
-from data_gen.paths import *
+from data_gen.paths import uri_attr_to_lang_keyw_prompt_path,  prompt_output_path, chatlog_output_path, uri_raw_data_path
 
 import json
 from collections import Counter

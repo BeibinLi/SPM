@@ -6,7 +6,7 @@ Desired reply:
 import os, sys, glob, re, random, json
 import hashlib
 sys.path.append(".")
-from data_gen.paths import *
+from data_gen.paths import chatlog_output_path, pretrain_data_path
 from curious_agent import CuriousAgent
 
 

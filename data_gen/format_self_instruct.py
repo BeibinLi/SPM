@@ -1,7 +1,7 @@
 import sys
 import random
 sys.path.append(".")
-from data_gen.paths import *
+from data_gen.paths import self_instruct_data_path, self_instruct_raw_data_path
 import json
 
 TRAIN_OUT_FILE = self_instruct_data_path + "train.jsonl"

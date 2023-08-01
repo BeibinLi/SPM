@@ -1,7 +1,7 @@
 import os, sys, re, random, json
 import glob
 sys.path.append(".")
-from data_gen.paths import *
+from data_gen.paths import chatlog_output_path, finetune_data_path
 from curious_agent import CuriousAgent
 
 os.makedirs(finetune_data_path, exist_ok=True)

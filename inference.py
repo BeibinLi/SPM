@@ -18,11 +18,8 @@ from transformers import (AutoModelForCausalLM, AutoTokenizer,
 from trl import SFTTrainer
 from trl.trainer import ConstantLengthDataset
 
-from config import *
-from utils import *
-
-sys.path.append(".")
-from data_gen.paths import *
+from config import model_name, model_path, ckpt_path
+from utils import get_spm_dataset
 
 list_all_checkpoints = lambda x: glob.glob(x + "checkpoint-*")
 

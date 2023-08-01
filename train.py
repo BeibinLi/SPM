@@ -15,10 +15,8 @@
 from dataclasses import dataclass, field
 from typing import Optional
 
-import os, glob
 
 import torch
-from torch.utils.data import DataLoader
 from peft import LoraConfig, PeftModel
 # from transformers.models import AutoModelForCausalLM
 from transformers import (
@@ -29,26 +27,18 @@ from transformers import (
     TrainingArguments,
 )
 from peft.tuners.lora import LoraLayer
-
 from trl import SFTTrainer
-from trl.trainer import ConstantLengthDataset
+from termcolor import colored
 
-from data_gen.paths import *
-from config import *
+from utils import get_exp_id, get_spm_dataset
+from config import model_name, model_path, ckpt_path
 
 from accelerate import Accelerator
 accelerator = Accelerator()
 local_rank = accelerator.process_index
 
-from termcolor import colored
-
-from utils import *
-
-
 
 # Distributed
-import torch.distributed as dist
-from torch.utils.data.distributed import DistributedSampler
 
 
 ########################################################################
