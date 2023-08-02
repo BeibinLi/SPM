@@ -1,7 +1,7 @@
 import os
 from termcolor import colored
 from datasets import load_dataset
-from data_gen.paths import pretrain_data_path, finetune_data_path, self_instruct_data_path
+from data_gen.paths import pretrain_data_path, finetune_data_path, self_instruct_data_path, pretrain_raw_data_path
 
 def display_files_recursively(folder_path, indent='', 
                               file_suffixes=[".py", ".cpp", ".cs", ".md", ".txt"]):
@@ -76,7 +76,13 @@ def get_spm_dataset(phase: str, mode: str, with_self_instruct: bool = False):
     if mode not in ["train", "test"]:
         raise ValueError("Invalid mode: " + mode + ". Valid modes are: {train, test}")
     
-    if phase == "pretrain":
+    if phase == "baseline":
+        data_files = [
+            pretrain_raw_data_path + mode + ".jsonl",
+        ]
+        if with_self_instruct:
+            print(colored("Warning: self-instructed data is not used in baseline", "yellow"))
+    elif phase == "pretrain":
         data_files = [
             pretrain_data_path + mode + ".jsonl",
         ]
@@ -89,6 +95,6 @@ def get_spm_dataset(phase: str, mode: str, with_self_instruct: bool = False):
         if with_self_instruct:
             print(colored("Warning: self-instructed data is not used in finetune phase", "yellow"))
     else:
-        raise ValueError("Invalid phase: " + phase + ". Valid phases are: {pretrain, finetune}")
+        raise ValueError("Invalid phase: " + phase + ". Valid phases are: {baseline, pretrain, finetune}")
     
     return load_dataset("json", data_files=data_files, split="train").shuffle(seed=42)

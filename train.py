@@ -133,7 +133,7 @@ class ScriptArguments:
         },
     )
     max_steps: int = field(
-        default=10000,
+        default=5000,
         metadata={"help": "How many optimizer update steps to take"})
     warmup_ratio: float = field(
         default=0.03, metadata={"help": "Fraction of steps to do a warmup for"})
@@ -162,6 +162,11 @@ class ScriptArguments:
     with_self_instruct: Optional[bool] = field(
         default=False,
         metadata={"help": "Whether to use self-instruct data."})
+    
+    baseline: Optional[bool] = field(
+        default=False,
+        metadata={"help": "Whether be in baseline mode, i.e., only pretrain on raw data."})
+    
 
 
 parser = HfArgumentParser(ScriptArguments)
@@ -250,7 +255,9 @@ training_arguments = TrainingArguments(
 model, peft_config, tokenizer = create_and_prepare_model(script_args)
 model.config.use_cache = False
 
-for phase in ["pretrain", "finetune"]:
+procedure = ["baseline" if script_args.baseline else "pretrain", "finetune"]
+
+for phase in procedure:
     dataset = get_spm_dataset(phase=phase, mode="train", with_self_instruct=script_args.with_self_instruct)
 
     trainer = SFTTrainer(
