@@ -24,7 +24,7 @@ Then set `model_name = "model/llama2/7B"` in `config.py`.
 
 If you want single-GPU training, simply run
 ```
-python train.py
+python train.py <Args>
 ```
 
 This code uses `accelerate` for parallel training. Make sure to configure `accelerate` before each run if you want multiple-GPU training:
