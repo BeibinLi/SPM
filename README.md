@@ -33,5 +33,5 @@ accelerate configure
 ```
 After this, run
 ```
-accelerate launch train.py <Args>
+accelerate launch --main_process_port <PORT> train.py <Args>
 ```
