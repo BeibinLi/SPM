@@ -1,4 +1,4 @@
-import os
+import os, json, random
 from termcolor import colored
 from datasets import load_dataset
 from data_gen.paths import pretrain_data_path, finetune_data_path, self_instruct_data_path, pretrain_raw_data_path
@@ -63,7 +63,12 @@ def colored_string(msg):
 def get_exp_id(ckpt_path):
     os.makedirs(ckpt_path, exist_ok=True)
     exp_dirs = os.listdir(ckpt_path)
-    exp_num_list = [int(x) for x in exp_dirs if x.isdigit()]
+    exp_num_list = []
+    for x in exp_dirs:
+        try:
+            exp_num_list.append(int(x[:3]))
+        except:
+            pass
     exp_id = max(exp_num_list) + 1 if exp_num_list != [] else 0
     return str(exp_id).zfill(3)
 
@@ -98,3 +103,24 @@ def get_spm_dataset(phase: str, mode: str, with_self_instruct: bool = False):
         raise ValueError("Invalid phase: " + phase + ". Valid phases are: {baseline, pretrain, finetune}")
     
     return load_dataset("json", data_files=data_files, split="train").shuffle(seed=42)
+
+def save_data(data: dict, train_path: str, test_path: str):
+    all_values = set(list(data.values()))
+
+    random.seed(1)
+    train_set = random.sample(list(all_values), int(len(all_values) * 0.7))
+
+    train_data = [
+        k for k, v in data.items() if v in train_set
+    ]
+
+    test_data = [
+        k for k, v in data.items() if v not in train_set
+    ]
+
+    def dump(data: list, filename: str):
+        with open(filename, "w") as f:
+            f.write("\n".join([json.dumps({"text": d}) for d in data]))
+
+    dump(train_data, train_path)
+    dump(test_data, test_path)

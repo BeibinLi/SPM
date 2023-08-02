@@ -95,7 +95,7 @@ def answer(question):
 
 if __name__ == "__main__":
 
-    load_inference_model("011/")
+    load_inference_model("023/")
 
     if mode == "inference":
         while True:

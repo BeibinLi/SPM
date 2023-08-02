@@ -234,7 +234,7 @@ def create_and_prepare_model(args):
 exp_id = get_exp_id(ckpt_path)
 
 training_arguments = TrainingArguments(
-    output_dir=ckpt_path + exp_id + "/",
+    output_dir=ckpt_path + exp_id + "/", # dummy path
     per_device_train_batch_size=script_args.per_device_train_batch_size,
     gradient_accumulation_steps=script_args.gradient_accumulation_steps,
     optim=script_args.optim,
@@ -258,6 +258,7 @@ model.config.use_cache = False
 procedure = ["baseline" if script_args.baseline else "pretrain", "finetune"]
 
 for phase in procedure:
+    training_arguments.output_dir = ckpt_path + exp_id + "_" + phase + "/"
     dataset = get_spm_dataset(phase=phase, mode="train", with_self_instruct=script_args.with_self_instruct)
 
     trainer = SFTTrainer(

@@ -1,8 +1,9 @@
 import os, sys, re, random, json
 import glob
 sys.path.append(".")
-from data_gen.paths import chatlog_output_path, finetune_data_path, raw_data_path
+from data_gen.paths import chatlog_output_path, finetune_data_path, raw_data_path, self_instruct_raw_data_path
 from curious_agent import CuriousAgent
+from utils import save_data
 
 os.makedirs(finetune_data_path, exist_ok=True)
 
@@ -85,14 +86,10 @@ def gen_data(type, msgs):
     }
 
 
-def dump(data: list, filename: str):
-    with open(filename, "w") as f:
-        f.write("\n".join([json.dumps({"text": d}) for d in data]))
-
-
 if __name__ == "__main__":
     questions, answers = [], []
     data = {}
+    print("Generating IFS doc and URI data...")
     for type, files in FILES.items():
         for file in files:
             agent = CuriousAgent(api=None, system_msg="")
@@ -104,6 +101,8 @@ if __name__ == "__main__":
             
             data.update(_data)
     
+    # Add IFS code data
+    print("Generating IFS code data...")
     with open(raw_data_path + "ifs_train.jsonl", "r") as f:
         raw_data = [json.loads(line) for line in f]
 
@@ -111,19 +110,16 @@ if __name__ == "__main__":
         t = d["text"]
         t = t.replace("[IFS]", "").replace("### Assistant:", "### Assistant: [IFS]")
         data.update({t: i})
+    
+    # Add negative examples from self-instruct data
+    print("Generating negative examples from self-instruct data...")
+    with open(self_instruct_raw_data_path, "r") as f:
+        raw_data = [json.loads(line) for line in f]
+    idx = random.sample(range(len(raw_data)), 5000)
+    for i in idx:
+        d = raw_data[i]
+        prompt, completion = d["prompt"], d["completion"]
+        completion = completion.replace("<|endoftext|>", "")
+        data.update({f"### Human: {prompt}\n### Assistant: [UNK] {completion}\n": i})
 
-    all_values = set(list(data.values()))
-
-    random.seed(1)
-    train_set = random.sample(list(all_values), int(len(all_values) * 0.7))
-
-    train_data = [
-        k for k, v in data.items() if v in train_set
-    ]
-
-    test_data = [
-        k for k, v in data.items() if v not in train_set
-    ]
-
-    dump(train_data, TRAIN_OUT_FILE)
-    dump(test_data, TEST_OUT_FILE)
+    save_data(data, TRAIN_OUT_FILE, TEST_OUT_FILE)

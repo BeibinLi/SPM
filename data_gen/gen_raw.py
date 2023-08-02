@@ -3,6 +3,7 @@ import glob
 sys.path.append(".")
 from data_gen.paths import raw_data_path, pretrain_raw_data_path
 from data_gen.gen_prompts_chatlogs.general import dfs
+from utils import save_data
 import tiktoken
 
 slicing_gap = 800
@@ -46,27 +47,8 @@ def dfs(path):
             except:
                 pass
 
-def dump(data: list, filename: str):
-    with open(filename, "w") as f:
-        f.write("\n".join([json.dumps({"text": d}) for d in data]))
-
-
 if __name__ == "__main__":
     for type in ["IFS_code/", "IFS_document/"]:
         dfs(raw_data_path + type)
 
-    all_values = set(list(data.values()))
-
-    random.seed(1)
-    train_set = random.sample(list(all_values), int(len(all_values) * 0.7))
-
-    train_data = [
-        k for k, v in data.items() if v in train_set
-    ]
-
-    test_data = [
-        k for k, v in data.items() if v not in train_set
-    ]
-
-    dump(train_data, TRAIN_OUT_FILE)
-    dump(test_data, TEST_OUT_FILE)
+    save_data(data, TRAIN_OUT_FILE, TEST_OUT_FILE)

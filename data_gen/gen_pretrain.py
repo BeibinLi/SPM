@@ -8,6 +8,7 @@ import hashlib
 sys.path.append(".")
 from data_gen.paths import chatlog_output_path, pretrain_data_path
 from curious_agent import CuriousAgent
+from utils import save_data
 
 
 uri_files = glob.glob(chatlog_output_path + "uri*.pickle")
@@ -101,19 +102,5 @@ if __name__ == "__main__":
 
         data.update(spawn_chat(agent.msgs, 10))
 
-    all_values = set(list(data.values()))
-
-    random.seed(1)
-    train_set = random.sample(list(all_values), int(len(all_values) * 0.7))
-
-    train_data = [
-        k for k, v in data.items() if v in train_set
-    ]
-
-    test_data = [
-        k for k, v in data.items() if v not in train_set
-    ]
-
-    dump_chat(train_data, TRAIN_OUT_FILE)
-    dump_chat(test_data, TEST_OUT_FILE)
+    save_data(data, TRAIN_OUT_FILE, TEST_OUT_FILE)
     
