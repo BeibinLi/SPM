@@ -1,4 +1,4 @@
-model_path = "model/falcon/"
+model_path = "model/"
 ckpt_path = "results/"
 
 

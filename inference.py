@@ -1,30 +1,25 @@
 import glob
-import os, sys
+import os
 import pdb
-from dataclasses import dataclass, field
-from typing import Optional
 
 import torch
-import transformers
-from accelerate import Accelerator
-from datasets import load_dataset
-from peft import LoraConfig, PeftConfig, PeftModel
-from peft.tuners.lora import LoraLayer
+from peft import PeftConfig, PeftModel
 from termcolor import colored
 # from transformers.models import AutoModelForCausalLM
 from transformers import (AutoModelForCausalLM, AutoTokenizer,
-                          BitsAndBytesConfig, HfArgumentParser,
-                          TrainingArguments)
-from trl import SFTTrainer
-from trl.trainer import ConstantLengthDataset
+                          BitsAndBytesConfig)
 
 from config import model_name, model_path, ckpt_path
 from utils import get_spm_dataset
 
-list_all_checkpoints = lambda x: glob.glob(x + "checkpoint-*")
+import argparse
 
-#mode = "inference"
-mode = "test"
+
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dir", type=str, default=None, required=True, help="Dir to load model")
+    parser.add_argument("--mode", type=str, default="auto", choices=["auto", "manual"], help="Mode: 'auto' for auto testing on random samples, 'manual' for manual input")
+    return parser.parse_args()
 
 def load_inference_model(dir):
     global tokenizer
@@ -51,6 +46,7 @@ def load_inference_model(dir):
 
 def load_latest_model(llm_model, dir):
     global config, model
+    list_all_checkpoints = lambda x: glob.glob(x + "checkpoint-*")
     checkpoints = list_all_checkpoints(ckpt_path + dir)
     latest_checkpoint = max(checkpoints, key=os.path.getctime)
     print(colored(f"Loading model from {latest_checkpoint}", "yellow"))
@@ -58,17 +54,13 @@ def load_latest_model(llm_model, dir):
     model = PeftModel.from_pretrained(llm_model, latest_checkpoint)
 
 
-def answer(question):
-    if question == "!load":
-        load_latest_model()
-        return "Latest model loaded~"
-    _prompt = f"### Human: {question}### Assistant:"
+def answer(question, rectifier=""):
+    prompt = f"### Human: {question}\n### Assistant: {rectifier}"
 
-    batch = tokenizer(_prompt,
+    batch = tokenizer(prompt,
                       padding=True,
                       truncation=True,
                       return_tensors='pt')
-    #batch = batch.to(f'cuda:{accelerator.process_index}')
     batch = batch.to(f'cuda:{0}')
 
     with torch.cuda.amp.autocast():
@@ -84,20 +76,17 @@ def answer(question):
     generated_text = tokenizer.decode(output_tokens[0],
                                       skip_special_tokens=True)
 
-    # print(colored(generated_text, "green"))
-
-    # Inspect message response in the outputs
-    #ans = generated_text.split("### Human: ")[1].split("### Assistant: ")[-1]
-    ans = generated_text.split("### Assistant:")[-1].strip()
+    ans = generated_text.split("### Assistant:")[-1].replace(rectifier, "").strip()
 
     return ans
 
 
 if __name__ == "__main__":
+    args = get_args()
 
-    load_inference_model("023/")
+    load_inference_model(args.dir)
 
-    if mode == "inference":
+    if args.mode == "manual":
         while True:
             print("-" * 30)
             question = input("Human: ")
@@ -116,8 +105,8 @@ if __name__ == "__main__":
             else:
                 ans = answer(question)
                 print("Bot:", colored(ans, "green"))
-    elif mode == "test":
-        test_dataset = get_spm_dataset(phase="pretrain", mode="test", with_self_instruct=True)
+    else:
+        test_dataset = get_spm_dataset(phase="finetune", mode="test", with_self_instruct=True)
         for i in range(20):
             text = test_dataset[i]["text"]
             text = text.split("### Human:")[-1].strip()
@@ -133,5 +122,7 @@ if __name__ == "__main__":
             print("Input:", input)
             print("Output:", colored(output, "green"))
             print("Standard output:", colored(std, "blue"))
-    else:
-        print(colored("Invalid mode", "red"))
+            
+            if output[:5] != std[:5]:
+                output = answer(input, std[:5])
+                print("Rectified output:", std[:5], colored(output, "yellow"))

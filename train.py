@@ -145,7 +145,7 @@ class ScriptArguments:
         },
     )
     save_steps: int = field(
-        default=1, metadata={"help": "Save checkpoint every X updates steps."})
+        default=10, metadata={"help": "Save checkpoint every X updates steps."})
     save_total_limit: int = field(
         default=100, metadata={"help": "Limit the total amount of checkpoints. Deletes the older checkpoints."})
     logging_steps: int = field(default=10,
@@ -164,7 +164,7 @@ class ScriptArguments:
         metadata={"help": "Whether to use self-instruct data."})
     
     baseline: Optional[bool] = field(
-        default=False,
+        default=True,
         metadata={"help": "Whether be in baseline mode, i.e., only pretrain on raw data."})
     
 

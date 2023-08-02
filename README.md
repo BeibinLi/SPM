@@ -18,3 +18,8 @@ python src/transformers/models/llama/convert_llama_weights_to_hf.py \
 Then set `model_name = "model/llama2/7B"` in `config.py`.
 
 **Note:** To use xB-chat, you still need to put the weights under the folder `<WEIGHT_PATH>/xB` and call with `--model_size xB`.
+
+
+## Run the code
+
+This code uses `accelerate` for parallel training. Make sure to configure `accelerate` before each run, even if 
