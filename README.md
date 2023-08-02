@@ -22,4 +22,12 @@ Then set `model_name = "model/llama2/7B"` in `config.py`.
 
 ## Run the code
 
-This code uses `accelerate` for parallel training. Make sure to configure `accelerate` before each run, even if 
+This code uses `accelerate` for parallel training. Make sure to configure `accelerate` before each run, even if you plan to run it on a single GPU.
+```
+accelerate configure
+# select 1 node, no for all applicable questions, and customize your GPU setting
+```
+After this, run
+```
+accelerate launch train.py <Args>
+```

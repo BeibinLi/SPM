@@ -33,6 +33,8 @@ from termcolor import colored
 from utils import get_exp_id, get_spm_dataset
 from config import model_name, model_path, ckpt_path
 
+import argparse
+
 from accelerate import Accelerator
 accelerator = Accelerator()
 local_rank = accelerator.process_index
@@ -51,7 +53,14 @@ local_rank = accelerator.process_index
 ########################################################################
 
 # Define and parse arguments.
-
+parser = argparse.ArgumentParser()
+parser.add_argument("--max_steps", type=int, default=5000, help="Max steps to train for")
+parser.add_argument("--save_steps", type=int, default=10, help="Save checkpoint every n steps")
+parser.add_argument("--save_total_limit", type=int, default=100, help="Maximum number of checkpoints to save, delete older checkpoints")
+parser.add_argument("--load_dir", type=str, default=None, help="Dir to load model, load from Huggingface if not specified")
+parser.add_argument("--with_self_instruct", action="store_false", help="Whether to use self-instruct data")
+parser.add_argument("--baseline", action="store_false", help="Whether to use baseline mode in pretraining phase")
+args = parser.parse_args()
 
 @dataclass
 class ScriptArguments:
@@ -59,8 +68,8 @@ class ScriptArguments:
     These arguments vary depending on how many GPUs you have, what their capacity and features are, and what size model you want to train.
     """
 
-    local_rank: Optional[int] = field(default=-1,
-                                      metadata={"help": "Used for multi-gpu"})
+    # local_rank: Optional[int] = field(default=-1,
+    #                                   metadata={"help": "Used for multi-gpu"})
 
     per_device_train_batch_size: Optional[int] = field(default=4)
     per_device_eval_batch_size: Optional[int] = field(default=1)
@@ -79,10 +88,10 @@ class ScriptArguments:
                 "The model that you want to train from the Hugging Face hub. E.g. gpt2, gpt2-xl, bert, etc."
         },
     )
-    dataset_name: Optional[str] = field(
-        default="timdettmers/openassistant-guanaco",
-        metadata={"help": "The preference dataset to use."},
-    )
+    # dataset_name: Optional[str] = field(
+    #     default="timdettmers/openassistant-guanaco",
+    #     metadata={"help": "The preference dataset to use."},
+    # )
     use_4bit: Optional[bool] = field(
         default=True,
         metadata={"help": "Activate 4bit precision base model loading"},
@@ -133,7 +142,7 @@ class ScriptArguments:
         },
     )
     max_steps: int = field(
-        default=5000,
+        default=args.max_steps,
         metadata={"help": "How many optimizer update steps to take"})
     warmup_ratio: float = field(
         default=0.03, metadata={"help": "Fraction of steps to do a warmup for"})
@@ -145,9 +154,9 @@ class ScriptArguments:
         },
     )
     save_steps: int = field(
-        default=10, metadata={"help": "Save checkpoint every X updates steps."})
+        default=args.save_steps, metadata={"help": "Save checkpoint every X updates steps."})
     save_total_limit: int = field(
-        default=100, metadata={"help": "Limit the total amount of checkpoints. Deletes the older checkpoints."})
+        default=args.save_total_limit, metadata={"help": "Limit the total amount of checkpoints. Deletes the older checkpoints."})
     logging_steps: int = field(default=10,
                                metadata={"help": "Log every X updates steps."})
     cache_dir: Optional[str] = field(
@@ -155,16 +164,15 @@ class ScriptArguments:
         metadata={"help": "Where to store the pretrained models."})
     
     load_dir: Optional[str] = field(
-        #default=ckpt_path + "011/checkpoint-8200/",
-        default=None,
+        default=args.load_dir,
         metadata={"help": "Where to load the pretrained models. None for no loading. latest for latest checkpoint. directory for loading from a directory."})
     
     with_self_instruct: Optional[bool] = field(
-        default=False,
+        default=args.with_self_instruct,
         metadata={"help": "Whether to use self-instruct data."})
     
     baseline: Optional[bool] = field(
-        default=True,
+        default=args.baseline,
         metadata={"help": "Whether be in baseline mode, i.e., only pretrain on raw data."})
     
 
