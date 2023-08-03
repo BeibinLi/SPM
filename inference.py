@@ -19,7 +19,8 @@ import argparse
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dir", type=str, default=None, required=True, help="Dir to load model")
-    parser.add_argument("--mode", type=str, default="auto", choices=["auto", "manual"], help="Mode: 'auto' for auto testing on random samples, 'manual' for manual input")
+    parser.add_argument("--mode", type=str, default="auto", choices=["auto", "manual"], help="Mode: 'auto' for auto testing on random samples, 'manual' for manual input.")
+    parser.add_argument("--dataset", type=str, default="finetune", choices=["finetune", "pretrain"], help="Dataset to use: 'finetune' for finetune dataset, 'pretrain' for pretrain dataset. If set to 'finetune', the output with wrong classification will be rectified.")
     return parser.parse_args()
 
 def load_inference_model(experiment_dir):
@@ -119,7 +120,7 @@ if __name__ == "__main__":
                 ans = answer(question)
                 print("Bot:", colored(ans, "green"))
     else:
-        test_dataset = get_spm_dataset(phase="finetune", mode="test", with_self_instruct=True)
+        test_dataset = get_spm_dataset(phase=args.dataset, mode="test", with_self_instruct=True)
         for i in range(20):
             text = test_dataset[i]["text"]
             text = text.split("### Human:")[-1].strip()
@@ -136,6 +137,6 @@ if __name__ == "__main__":
             print("Output:", colored(output, "green"))
             print("Standard output:", colored(std, "blue"))
             
-            if output[:5] != std[:5]:
+            if args.dataset == "finetune" and output[:5] != std[:5]:
                 output = answer(input, std[:5])
                 print("Rectified output:", std[:5], colored(output, "yellow"))
