@@ -316,9 +316,9 @@ if __name__ == "__main__":
         print("ROOT not found!")
         exit(1)
 
-    os.makedirs(auto_explore_data_path, exist_ok=True)
-    exp_id = get_exp_id(auto_explore_data_path)
-    data_path = os.path.abspath(os.path.join(auto_explore_data_path, exp_id))
+    os.makedirs(args.data_path, exist_ok=True)
+    exp_id = get_exp_id(args.data_path)
+    data_path = os.path.abspath(os.path.join(args.data_path, exp_id))
     os.makedirs(data_path, exist_ok=True)
     
     agent = AutoExploreCopilot(
