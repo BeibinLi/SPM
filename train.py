@@ -33,7 +33,6 @@ from trl import SFTTrainer
 from termcolor import colored
 
 from utils import get_exp_id, get_spm_dataset
-from config import model_name, model_path, ckpt_path
 
 import argparse
 
@@ -75,13 +74,19 @@ class ScriptArguments:
     lora_r: Optional[int] = field(default=64)
     max_seq_length: Optional[int] = field(default=512)
     model_name: Optional[str] = field(
-        default=model_name,
+        default="model/llama2/7B-chat",
+        metadata={
+            "help":
+                "The model that you want to train from the Hugging Face hub. E.g. gpt2, gpt2-xl, bert, etc."
+        },
+    )    
+    ckpt_path: Optional[str] = field(
+        default="results/",
         metadata={
             "help":
                 "The model that you want to train from the Hugging Face hub. E.g. gpt2, gpt2-xl, bert, etc."
         },
     )
-
     use_4bit: Optional[bool] = field(
         default=True,
         metadata={"help": "Activate 4bit precision base model loading"},
@@ -150,7 +155,7 @@ class ScriptArguments:
     logging_steps: int = field(default=10,
                                metadata={"help": "Log every X updates steps."})
     cache_dir: Optional[str] = field(
-        default=model_path,
+        default="model/",
         metadata={"help": "Where to store the pretrained models."})
     
     load_dir: Optional[str] = field(
@@ -234,11 +239,10 @@ def create_and_prepare_model(args):
 
     return model, peft_config, tokenizer
 
-
-exp_id = get_exp_id(ckpt_path)
+exp_id = get_exp_id(script_args.ckpt_path)
 
 training_arguments = TrainingArguments(
-    output_dir=ckpt_path + exp_id + "/", # dummy path
+    output_dir=script_args.ckpt_path + exp_id + "/", # dummy path
     per_device_train_batch_size=script_args.per_device_train_batch_size,
     gradient_accumulation_steps=script_args.gradient_accumulation_steps,
     optim=script_args.optim,
@@ -263,11 +267,12 @@ procedure = ["baseline" if script_args.baseline else "pretrain", "finetune"]
 
 # iterate multiple training stages. Usually 1 - 2 stages.
 for phase in procedure:
-    training_arguments.output_dir = ckpt_path + exp_id + "_" + phase + "/"
+    training_arguments.output_dir = script_args.ckpt_path + exp_id + "_" + phase + "/"
     
     # Saving the arguments for reference in the future
     os.makedirs(training_arguments.output_dir, exist_ok=True)
-    yaml.dump(script_args, open(os.path.join(training_arguments.output_dir, "setting.yml"), "w"))
+    yaml.dump(script_args.__dict__, open(os.path.join(training_arguments.output_dir, "setting.yml"), "w"))
+    pdb.set_trace()
 
     dataset = get_spm_dataset(phase=phase, mode="train", with_self_instruct=script_args.with_self_instruct)
 

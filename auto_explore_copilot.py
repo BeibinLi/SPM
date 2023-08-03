@@ -9,13 +9,12 @@ import sys
 
 import tiktoken
 
-from config import *
 from gpt_api import get_llm
-from utils import *
+from utils import * # TODO: change the code style here.
 
 root = "/home/t-rzhou/raw_data/IFS_code"
+auto_explore_data_path = "data/auto_explore/"
 #root = "/home/t-rzhou/RL-for-Combinatorial-Optimization"
-#root = "/home/beibinli/MCIO-SCEE-IntelligentFulfillmentService/src/DataProcessing/"
 
 if not os.path.exists(os.path.join(root, "long_mem.txt")):
     open(os.path.join(root, "long_mem.txt"), "w").write("")
