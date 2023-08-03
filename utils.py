@@ -86,7 +86,7 @@ def get_spm_dataset(phase: str, mode: str, with_self_instruct: bool = False):
             pretrain_raw_data_path + mode + ".jsonl",
         ]
         if with_self_instruct:
-            print(colored("Warning: self-instructed data is not used in baseline", "yellow"))
+            data_files.append(self_instruct_data_path + mode + ".jsonl")
     elif phase == "pretrain":
         data_files = [
             pretrain_data_path + mode + ".jsonl",
