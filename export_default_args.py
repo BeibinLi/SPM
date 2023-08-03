@@ -258,48 +258,4 @@ training_arguments = TrainingArguments(
     ddp_find_unused_parameters=False
 )
 
-model, peft_config, tokenizer = create_and_prepare_model(script_args)
-model.config.use_cache = False
-
-procedure = ["baseline" if script_args.baseline else "pretrain", "finetune"]
-
-# iterate multiple training stages. Usually 1 - 2 stages.
-for phase in procedure:
-    training_arguments.output_dir = script_args.ckpt_path + exp_id + "_" + phase + "/"
-    
-    # Saving the arguments for reference in the future
-    os.makedirs(training_arguments.output_dir, exist_ok=True)
-    yaml.dump(script_args.__dict__, open(os.path.join(training_arguments.output_dir, "setting.yml"), "w"))
-    pdb.set_trace()
-
-    dataset = get_spm_dataset(phase=phase, mode="train", with_self_instruct=script_args.with_self_instruct)
-
-    trainer = SFTTrainer(
-        model=model,
-        train_dataset=dataset,
-        peft_config=peft_config,
-        dataset_text_field="text",
-        max_seq_length=script_args.max_seq_length,
-        tokenizer=tokenizer,
-        args=training_arguments,
-        packing=script_args.packing
-    )
-
-
-    for name, module in trainer.model.named_modules():
-        if isinstance(module, LoraLayer):
-            if script_args.bf16:
-                module = module.to(torch.bfloat16)
-        if "norm" in name:
-            module = module.to(torch.float32)
-        if "lm_head" in name or "embed_tokens" in name:
-            if hasattr(module, "weight"):
-                if script_args.bf16 and module.weight.dtype == torch.float32:
-                    module = module.to(torch.bfloat16)
-
-    trainer.train()
-
-if local_rank == 0:
-    print(colored("="*10, "green"))
-    print(colored("Done", "green"))
-    print(colored("="*10, "green"))
+yaml.dump(script_args.__dict__, open("default_setting.yml", "w"))
