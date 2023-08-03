@@ -104,11 +104,29 @@ def get_spm_dataset(phase: str, mode: str, with_self_instruct: bool = False):
     
     return load_dataset("json", data_files=data_files, split="train").shuffle(seed=42)
 
-def save_data(data: dict, train_path: str, test_path: str):
+def save_data(data: dict, train_path: str, test_path: str, train_percent: float=0.7):
+    """
+    Splits the input data into training and testing datasets and saves them to the specified paths.
+
+    The function first identifies the unique values from the input data. It then samples
+    70% of these unique values to form the training set. The keys corresponding to these
+    sampled values form the training data. The rest form the testing data. Each dataset
+    is saved in JSON format where each line corresponds to an entry with a "text" key.
+
+    Args:
+    - data (dict): The input data dictionary. Expected to have a structure where keys 
+                   correspond to textual data and values are some identifiers.
+    - train_path (str): The path to the file where the training data should be saved.
+    - test_path (str): The path to the file where the testing data should be saved.
+    - train_percent (float): the percentage of training data. Default to 0.7
+
+    Returns:
+        None
+    """
     all_values = set(list(data.values()))
 
     random.seed(1)
-    train_set = random.sample(list(all_values), int(len(all_values) * 0.7))
+    train_set = random.sample(list(all_values), int(len(all_values) * train_percent))
 
     train_data = [
         k for k, v in data.items() if v in train_set
