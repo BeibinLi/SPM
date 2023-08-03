@@ -1,12 +1,10 @@
-import os
-import sys
-sys.path.append(".")
 from curious_agent import CuriousAgent
 from gpt_api import get_llm
 
-from tqdm import tqdm
+from paths import chatlog_output_path
 
-from paths import *
+from tqdm import tqdm
+import os
 
 num_interaction = 5
 

@@ -3,10 +3,11 @@ from typing import Optional
 
 import yaml
 
+
 @dataclass
 class ScriptArguments:
     """
-    These arguments vary depending on model location, data location, 
+    These arguments vary depending on model location, data location,
     what their capacity, features, etc.
     """
 
@@ -23,15 +24,15 @@ class ScriptArguments:
     model_name: Optional[str] = field(
         default="model/llama2/7B-chat",
         metadata={
-            "help":
-                "The model that you want to train from the Hugging Face hub. E.g. gpt2, gpt2-xl, bert, etc."
+            "help": "The model that you want to train from the Hugging "
+                    "Face hub. E.g. gpt2, gpt2-xl, bert, etc."
         },
-    )    
+    )
     ckpt_path: Optional[str] = field(
         default="results/",
         metadata={
-            "help":
-                "The location to save the experiment checkpoints. It should be the folder with all experiments."
+            "help": "The location to save the experiment checkpoints. It "
+                    " should be the folder with all experiments."
         },
     )
     use_4bit: Optional[bool] = field(
@@ -79,44 +80,60 @@ class ScriptArguments:
     lr_scheduler_type: str = field(
         default="constant",
         metadata={
-            "help":
-                "Learning rate schedule. Constant a bit better than cosine, and has advantage for analysis"
+            "help": "Learning rate schedule. Constant a bit better than "
+                    "cosine, and has advantage for analysis"
         },
     )
     max_steps: int = field(
         default=5000,
-        metadata={"help": "How many optimizer update steps to take"})
+        metadata={"help": "How many optimizer "
+                          "update steps to take"})
     warmup_ratio: float = field(
-        default=0.03, metadata={"help": "Fraction of steps to do a warmup for"})
+        default=0.03,
+        metadata={"help": "Fraction of "
+                          "steps to do a warmup for"})
     group_by_length: bool = field(
         default=False,
         metadata={
-            "help":
-                "Group sequences into batches with same length. Saves memory and speeds up training considerably."
+            "help": "Group sequences into batches with same length. Saves "
+                    "memory and speeds up training considerably."
         },
     )
     save_steps: int = field(
-        default=10, metadata={"help": "Save checkpoint every X updates steps."})
+        default=10,
+        metadata={"help": "Save checkpoint "
+                          "every X updates steps."})
     save_total_limit: int = field(
-        default=100, metadata={"help": "Limit the total amount of checkpoints. Deletes the older checkpoints."})
+        default=100,
+        metadata={
+            "help": "Limit the total amount of checkpoints. "
+                    "Deletes the older checkpoints."
+        })
     logging_steps: int = field(default=10,
                                metadata={"help": "Log every X updates steps."})
     cache_dir: Optional[str] = field(
         default="model/",
         metadata={"help": "Where to store the pretrained models."})
-    
+
     load_dir: Optional[str] = field(
         default=None,
-        metadata={"help": "Where to load the pretrained models. None for no loading. latest for latest checkpoint. directory for loading from a directory."})
-    
+        metadata={
+            "help":
+                "Where to load the pretrained models. None for no loading. "
+                "latest for latest checkpoint. directory for loading from a "
+                "directory."
+        })
+
     with_self_instruct: Optional[bool] = field(
-        default=True,
-        metadata={"help": "Whether to use self-instruct data."})
-    
+        default=True, metadata={"help": "Whether to use self-instruct data."})
+
     baseline: Optional[bool] = field(
         default=False,
-        metadata={"help": "Whether be in baseline mode, i.e., only pretrain on raw data."})
-    
+        metadata={
+            "help": "Whether be in baseline "
+                    "mode, i.e., only pretrain on raw data."
+        })
+
     def load(self, yaml_file: str):
         with open(yaml_file, 'r') as file:
             yaml_data = yaml.safe_load(file)
@@ -125,6 +142,6 @@ class ScriptArguments:
             if hasattr(self, key):
                 setattr(self, key, value)
 
-    def dump(self, filename:str):
+    def dump(self, filename: str):
         with open(filename, 'w') as file:
             yaml.dump(self.__dict__, file)

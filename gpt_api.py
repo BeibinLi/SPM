@@ -19,6 +19,7 @@ api_key = os.getenv("CORE_AZURE_KEY").strip().rstrip()
 
 ps = PorterStemmer()
 
+
 def persistent_hash(obj):
     # Convert the input object to a string representation
     obj_str = repr(obj).encode('utf-8')
@@ -45,7 +46,7 @@ def stem_and_hash(sentence):
 
 
 def cache_llm_infer_result(func):
-    cache_data = diskcache.Cache(".diskcache")  # setup the cache database
+    cache_data = diskcache.Cache(".diskcache")    # setup the cache database
 
     def wrapper(*args, **kwargs):
 
@@ -74,10 +75,9 @@ def handle_prev_message_history(agent_name, msg, prev_msgs):
         # Handle missing system message for ChatCompletion
         messages = [
             {
-                "role":
-                    "system",
-                "content":
-                    "You are an AI assistant that writes Python code to answer questions."
+                "role": "system",
+                "content": "You are an AI assistant that writes Python code to "
+                           "answer questions."
             },
         ]
 
@@ -107,8 +107,8 @@ class AzureGPTClient():
               prev_msgs=None,
               temperature=0,
               top_p=1):
-        while True:  # Run until succeed
-            time_to_sleep = 5  # seconds between tries
+        while True:    # Run until succeed
+            time_to_sleep = 5    # seconds between tries
             try:
                 return self._try_reply(agent_name=agent_name,
                                        msg=msg,
@@ -183,7 +183,7 @@ class AzureGPTClient():
 
 
 def cache_func_call(func):
-    cache_data = diskcache.Cache(".diskcache")  # setup the cache database
+    cache_data = diskcache.Cache(".diskcache")    # setup the cache database
 
     def wrapper(*args, **kwargs):
         key = f"{func.__name__}_{stem_and_hash(str(args) + str(kwargs))}"
@@ -219,8 +219,8 @@ def get_embedding(text, model="text-embedding-ada-002"):
         time_to_sleep = re.findall(r"retry after (\d+) second", str(e))[0]
         print(
             colored(
-                f"(get_embedding) Rate limit exceeded. Waiting for {time_to_sleep} seconds...",
-                "yellow"))
+                f"(get_embedding) Rate limit exceeded. Waiting for "
+                f"{time_to_sleep} seconds...", "yellow"))
         time.sleep(int(time_to_sleep))
 
         return get_embedding(text, model="text-embedding-ada-002")

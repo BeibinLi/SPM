@@ -4,12 +4,15 @@ b7:
 b13:
 	accelerate launch train.py --max_steps 1000 --model_name ~/llama/converted-llama-2-13b-chat/
 
-b13:
-	accelerate launch train.py --max_steps 1000 --model_name ~/llama/converted-llama-2-13b-chat/
-
 b70:
 	accelerate launch train.py --max_steps 200 --model_name ~/llama/converted-llama-2-70b-chat/
 
-
 inference:
 	python inference.py --dir results/005_finetune
+
+
+format:
+	# yapf --in-place --style=google *.py
+	# yapf --in-place --style=google **/**.py
+	# yapf -ir --style=google .
+	find . -name '*.py' -print0 | xargs -0 yapf -i
