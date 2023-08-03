@@ -1,34 +1,34 @@
 import csv
-import glob
 import io
 import json
 import os
 import pickle
-import re
-import sys
 
 import tiktoken
 
 from gpt_api import get_llm
-from utils import * # TODO: change the code style here.
+from utils import get_exp_id, display_files_recursively, colored_string, find_all_substr
 
-root = "/home/t-rzhou/raw_data/IFS_code"
-auto_explore_data_path = "data/auto_explore/"
-#root = "/home/t-rzhou/RL-for-Combinatorial-Optimization"
+import argparse
 
-if not os.path.exists(os.path.join(root, "long_mem.txt")):
-    open(os.path.join(root, "long_mem.txt"), "w").write("")
-if not os.path.exists(os.path.join(root, "short_mem.txt")):
-    open(os.path.join(root, "short_mem.txt"), "w").write("")
+def get_args():
+    parser = argparse.ArgumentParser()
 
-if not os.path.exists(root):
-    print("ROOT not found!")
-    exit(1)
+    parser.add_argument("--data_path", type=str, default="data/auto_explore/", help="The path to save the auto-explore data.")
+    parser.add_argument("--dir", type=str, required=True, help="The directory of the code repo to explore.")
+    parser.add_argument("--temperature", type=float, default=1, help="Temperature of language model.")
+    parser.add_argument("--top_p", type=float, default=0.3, help="Top_p of language model.")
+    args = parser.parse_args()
+    parser.add_argument("--max_token_length", type=int, default=32768 // 2, help="The maximum token length in a chat. If exceed this amount, the chat will be reset.")
+    parser.add_argument("--model", type=str, default="gpt-4-32k", help="The model to use.")
+
+    return parser.parse_args()
 
 class AutoExploreCopilot():
-    def __init__(self, temperature, top_p, max_token_length, model, data_path):
+    def __init__(self, root, temperature, top_p, max_token_length, model, data_path):
         os.chdir(root)
 
+        self.root = root
         self.temperature = temperature
         self.top_p = top_p
         self.max_token_length = max_token_length
@@ -182,17 +182,17 @@ You can organize the information in a structured way, e.g., by using a table, or
                 return
             cwd = os.getcwd().replace('\\', '/')
             os.chdir(original_cwd)
-            if not os.path.abspath(cwd).startswith(os.path.abspath(root)):
+            if not os.path.abspath(cwd).startswith(os.path.abspath(self.root)):
                 self.msgs.append(("user", "Error: You cannot access files outside the repo!"))
                 return
             
             if cmd[0] == "echo":
                 # TODO: check if it writes to repo files
-                if cmd[-1].endswith("long_mem.txt") and cwd != root:
-                    cmd[-1] = root + "/long_mem.txt"
+                if cmd[-1].endswith("long_mem.txt") and cwd != self.root:
+                    cmd[-1] = self.root + "/long_mem.txt"
                     self.msgs.append(("user", "Warning: long_mem.txt must be at the root of repo! The file path is redirected to root."))
-                if cmd[-1].endswith("short_mem.txt") and cwd != root:
-                    cmd[-1] = root + "/short_mem.txt"
+                if cmd[-1].endswith("short_mem.txt") and cwd != self.root:
+                    cmd[-1] = self.root + "/short_mem.txt"
                     self.msgs.append(("user", "Warning: short_mem.txt must be at the root of repo, and you do not need to use echo to update it! The file path is redirected to root."))
 
         try:
@@ -219,7 +219,7 @@ You can organize the information in a structured way, e.g., by using a table, or
     def act(self):
         self.read_count = 0
 
-        msgs_with_short_mem = self.msgs[:-1] + [("assistant", f'---- Current short_mem.txt file. Please update it! ----\n{open(os.path.join(root, "short_mem.txt"), "r").read()}')]
+        msgs_with_short_mem = self.msgs[:-1] + [("assistant", f'---- Current short_mem.txt file. Please update it! ----\n{open(os.path.join(self.root, "short_mem.txt"), "r").read()}')]
 
         response = self.api.reply(
             agent_name=self.msgs[-1][0],
@@ -267,7 +267,7 @@ You can organize the information in a structured way, e.g., by using a table, or
         # Reset here to incorporate the last assistant messages
         if self.token_length > self.max_token_length:
             self.dump()
-            self.__init__(self.temperature, self.top_p, self.max_token_length, self.model, self.data_path)
+            self.__init__(self.root, self.temperature, self.top_p, self.max_token_length, self.model, self.data_path)
             self.msgs.append(("user", "You have reached the maximum token length. Now restarted. You may need to read long memory to pick up the progress."))
             self.token_length += len(self.encoder.encode(self.msgs[-1][1]))
             return
@@ -304,16 +304,29 @@ You can organize the information in a structured way, e.g., by using a table, or
             ], f, indent=4)
 
 if __name__ == "__main__":
-    os.makedirs(auto_explore_data_path, exist_ok=True)
-    exp_id = get_exp_id(auto_explore_data_path)
-    data_path = os.path.abspath(os.path.join(auto_explore_data_path, exp_id))
+    args = get_args()
+    root = args.dir
+
+    if not os.path.exists(os.path.join(root, "long_mem.txt")):
+        open(os.path.join(root, "long_mem.txt"), "w").write("")
+    if not os.path.exists(os.path.join(root, "short_mem.txt")):
+        open(os.path.join(root, "short_mem.txt"), "w").write("")
+
+    if not os.path.exists(root):
+        print("ROOT not found!")
+        exit(1)
+
+    os.makedirs(args.data_path, exist_ok=True)
+    exp_id = get_exp_id(args.data_path)
+    data_path = os.path.abspath(os.path.join(args.data_path, exp_id))
     os.makedirs(data_path, exist_ok=True)
     
     agent = AutoExploreCopilot(
-        temperature=1,
-        top_p=0.3,
-        max_token_length=32768 // 2,
-        model="gpt-4-32k",
+        root=root,
+        temperature=args.temperature,
+        top_p=args.top_p,
+        max_token_length=args.max_token_length,
+        model=args.model,
         data_path=data_path
     )
     while True:

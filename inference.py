@@ -24,36 +24,37 @@ def get_args():
 
 def load_inference_model(experiment_dir):
     global tokenizer
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype="float16",
-        bnb_4bit_use_double_quant=False,
-    )
-
     # Find the base model's path dir.
     setting_file = os.path.join(experiment_dir, "setting.yml")
     if os.path.exists(setting_file):
         setting = yaml.safe_load(open(setting_file, "r"))
-        model_name = setting["model_name"]
-        model_path = setting["model_path"]
     else:
         # TODO: remove this manual location in the future.
-        print(colored("We can not find the setting.yml file. So, using llama-2 7B base model.", "yellow"))
-        model_name = "model/llama2/7B-chat"
-        model_path = "model/"
+        print(colored("We can not find the setting.yml file. So loading the default_setting.yml from root of repo.", "yellow"))
+        setting = yaml.safe_load(open("default_setting.yml", "r"))
+        
+    model_name = setting["model_name"]
 
-    llm_model = AutoModelForCausalLM.from_pretrained(model_name,
-                                                    quantization_config=bnb_config,
-                                                    trust_remote_code=True,
-                                                    cache_dir=model_path)
+    bnb_config = BitsAndBytesConfig(
+        load_in_4bit=setting["use_4bit"],
+        bnb_4bit_quant_type=setting["bnb_4bit_quant_type"],
+        bnb_4bit_compute_dtype=setting["bnb_4bit_compute_dtype"],
+        bnb_4bit_use_double_quant=setting["use_nested_quant"],
+    )
+
+    llm_model = AutoModelForCausalLM.from_pretrained(
+        pretrained_model_name_or_path=model_name,
+        quantization_config=bnb_config,
+        trust_remote_code=True
+    )
 
     # Load the Lora model
     load_latest_model(llm_model, experiment_dir)
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name,
-                                            trust_remote_code=True,
-                                            cache_dir=model_path)
+    tokenizer = AutoTokenizer.from_pretrained(
+        pretrained_model_name_or_path=model_name,
+        trust_remote_code=True
+    )
     tokenizer.pad_token = tokenizer.eos_token
 
 
