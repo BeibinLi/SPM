@@ -84,7 +84,7 @@ class ScriptArguments:
         default="results/",
         metadata={
             "help":
-                "The model that you want to train from the Hugging Face hub. E.g. gpt2, gpt2-xl, bert, etc."
+                "The location to save the experiment checkpoints. It should be the folder with all experiments."
         },
     )
     use_4bit: Optional[bool] = field(
