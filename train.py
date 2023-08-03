@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pdb
 import os
 import torch
 from peft import LoraConfig, PeftModel
@@ -37,10 +36,10 @@ from accelerate import Accelerator
 accelerator = Accelerator()
 local_rank = accelerator.process_index
 
-
 # Distributed
 parser = HfArgumentParser(ScriptArguments)
 script_args = parser.parse_args_into_dataclasses()[0]
+
 
 def create_and_prepare_model(args):
     compute_dtype = getattr(torch, args.bnb_4bit_compute_dtype)
@@ -57,8 +56,8 @@ def create_and_prepare_model(args):
         if major >= 8:
             print("=" * 80)
             print(
-                "Your GPU supports bfloat16, you can accelerate training with the argument --bf16"
-            )
+                "Your GPU supports bfloat16, you can accelerate training with "
+                "the argument --bf16")
             print("=" * 80)
 
     device_map = {"": local_rank}
@@ -68,12 +67,13 @@ def create_and_prepare_model(args):
         quantization_config=bnb_config,
         device_map=device_map,
         trust_remote_code=True,
-        cache_dir=script_args.cache_dir
-    )
-    
+        cache_dir=script_args.cache_dir)
+
     if args.load_dir:
         print(colored("Loading from " + args.load_dir, "green"))
-        model = PeftModel.from_pretrained(model=base_model, model_id=args.load_dir, is_trainable=True)
+        model = PeftModel.from_pretrained(model=base_model,
+                                          model_id=args.load_dir,
+                                          is_trainable=True)
         del base_model
     else:
         model = base_model
@@ -93,10 +93,11 @@ def create_and_prepare_model(args):
 
     return model, peft_config, tokenizer
 
+
 exp_id = get_exp_id(script_args.ckpt_path)
 
 training_arguments = TrainingArguments(
-    output_dir=script_args.ckpt_path + exp_id + "/", # dummy path
+    output_dir=script_args.ckpt_path + exp_id + "/",    # dummy path
     per_device_train_batch_size=script_args.per_device_train_batch_size,
     gradient_accumulation_steps=script_args.gradient_accumulation_steps,
     optim=script_args.optim,
@@ -111,8 +112,7 @@ training_arguments = TrainingArguments(
     warmup_ratio=script_args.warmup_ratio,
     group_by_length=script_args.group_by_length,
     lr_scheduler_type=script_args.lr_scheduler_type,
-    ddp_find_unused_parameters=False
-)
+    ddp_find_unused_parameters=False)
 
 model, peft_config, tokenizer = create_and_prepare_model(script_args)
 model.config.use_cache = False
@@ -121,24 +121,25 @@ procedure = ["baseline" if script_args.baseline else "pretrain", "finetune"]
 
 # iterate multiple training stages. Usually 1 - 2 stages.
 for phase in procedure:
-    training_arguments.output_dir = script_args.ckpt_path + exp_id + "_" + phase + "/"
-    
+    training_arguments.output_dir = (script_args.ckpt_path + exp_id + "_" +
+                                     phase + "/")
+
     # Saving the arguments for reference in the future
     os.makedirs(training_arguments.output_dir, exist_ok=True)
     script_args.dump(os.path.join(training_arguments.output_dir, "setting.yml"))
 
-    dataset = get_spm_dataset(phase=phase, mode="train", with_self_instruct=script_args.with_self_instruct)
+    dataset = get_spm_dataset(phase=phase,
+                              mode="train",
+                              with_self_instruct=script_args.with_self_instruct)
 
-    trainer = SFTTrainer(
-        model=model,
-        train_dataset=dataset,
-        peft_config=peft_config,
-        dataset_text_field="text",
-        max_seq_length=script_args.max_seq_length,
-        tokenizer=tokenizer,
-        args=training_arguments,
-        packing=script_args.packing
-    )
+    trainer = SFTTrainer(model=model,
+                         train_dataset=dataset,
+                         peft_config=peft_config,
+                         dataset_text_field="text",
+                         max_seq_length=script_args.max_seq_length,
+                         tokenizer=tokenizer,
+                         args=training_arguments,
+                         packing=script_args.packing)
 
     for name, module in trainer.model.named_modules():
         if isinstance(module, LoraLayer):

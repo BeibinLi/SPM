@@ -18,16 +18,29 @@ def get_args() -> argparse.Namespace:
         argparse.Namespace: Parsed arguments.
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dir", type=str, default=None, required=True, help="Dir to load model")
-    parser.add_argument("--mode", type=str, default="auto", choices=["auto", "manual"], help="Mode: 'auto' for auto testing on random samples, 'manual' for manual input")
+    parser.add_argument("--dir",
+                        type=str,
+                        default=None,
+                        required=True,
+                        help="Dir to load model")
+    parser.add_argument(
+        "--mode",
+        type=str,
+        default="auto",
+        choices=["auto", "manual"],
+        help="Mode: 'auto' for auto testing on random samples, 'manual' "
+        "for manual input")
     return parser.parse_args()
 
-def load_inference_model(experiment_dir:str) -> (AutoTokenizer, PeftConfig, PeftModel):
+
+def load_inference_model(
+        experiment_dir: str) -> (AutoTokenizer, PeftConfig, PeftModel):
     """
-    Load the model for inference based on the given experiment directory. 
+    Load the model for inference based on the given experiment directory.
 
     Args:
-        experiment_dir (str): Path to the experiment directory containing the model's checkpoint and settings.
+        experiment_dir (str): Path to the experiment directory containing the
+         model's checkpoint and settings.
 
     Returns:
         tuple: A tuple containing:
@@ -39,7 +52,10 @@ def load_inference_model(experiment_dir:str) -> (AutoTokenizer, PeftConfig, Peft
     if os.path.exists(setting_file):
         setting = yaml.safe_load(open(setting_file, "r"))
     else:
-        print(colored("We cannot find the setting.yml file. So loading the default_setting.yml from the root of the repo.", "yellow"))
+        print(
+            colored(
+                "We cannot find the setting.yml file. So loading the "
+                "default_setting.yml from the root of the repo.", "yellow"))
         setting = yaml.safe_load(open("default_setting.yml", "r"))
 
     model_name = setting["model_name"]
@@ -54,15 +70,12 @@ def load_inference_model(experiment_dir:str) -> (AutoTokenizer, PeftConfig, Peft
     llm_model = AutoModelForCausalLM.from_pretrained(
         pretrained_model_name_or_path=model_name,
         quantization_config=bnb_config,
-        trust_remote_code=True
-    )
+        trust_remote_code=True)
 
     config, model = load_latest_model(llm_model, experiment_dir)
 
     tokenizer = AutoTokenizer.from_pretrained(
-        pretrained_model_name_or_path=model_name,
-        trust_remote_code=True
-    )
+        pretrained_model_name_or_path=model_name, trust_remote_code=True)
     tokenizer.pad_token = tokenizer.eos_token
 
     return tokenizer, config, model
@@ -74,14 +87,16 @@ def load_latest_model(llm_model, experiment_dir):
 
     Args:
         llm_model (AutoModelForCausalLM): Base model for loading checkpoint.
-        experiment_dir (str): Path to the experiment directory containing the model's checkpoint.
+        experiment_dir (str): Path to the experiment directory containing the
+             model's checkpoint.
 
     Returns:
         tuple: A tuple containing:
             - config (PeftConfig): Configuration of the loaded model.
             - model (PeftModel): Loaded model from the latest checkpoint.
     """
-    latest_checkpoint = max(glob.glob(os.path.join(experiment_dir, "checkpoint-*")), 
+    latest_checkpoint = max(glob.glob(
+        os.path.join(experiment_dir, "checkpoint-*")),
                             key=os.path.getctime)
     print(colored(f"Loading model from {latest_checkpoint}", "yellow"))
     config = PeftConfig.from_pretrained(latest_checkpoint)
@@ -91,13 +106,14 @@ def load_latest_model(llm_model, experiment_dir):
 
 def answer(question, tokenizer, model, rectifier=""):
     """
-    Generates an answer for the given question using the provided model and tokenizer.
+    Generates an answer for the given question using the provided model and
+    tokenizer.
 
     Args:
         question (str): User's question.
         tokenizer (AutoTokenizer): Tokenizer associated with the model.
         model (PeftModel): Model to generate the answer.
-        rectifier (str, optional): Text used for rectifying the model's output. 
+        rectifier (str, optional): Text used for rectifying the model's output.
             Defaults to an empty string.
 
     Returns:
@@ -124,8 +140,10 @@ def answer(question, tokenizer, model, rectifier=""):
     generated_text = tokenizer.decode(output_tokens[0],
                                       skip_special_tokens=True)
 
-    ans = generated_text.split("### Assistant:")[-1].replace(rectifier, "").strip()
+    ans = generated_text.split("### Assistant:")[-1].replace(rectifier,
+                                                             "").strip()
     return ans
+
 
 if __name__ == "__main__":
     args = get_args()
@@ -150,10 +168,13 @@ if __name__ == "__main__":
                 ans = answer(question, tokenizer, model)
                 print("Bot:", colored(ans, "green"))
     else:
-        test_dataset = get_spm_dataset(phase="finetune", mode="test", with_self_instruct=True)
+        test_dataset = get_spm_dataset(phase="finetune",
+                                       mode="test",
+                                       with_self_instruct=True)
         for i in range(20):
             text = test_dataset[i]["text"].split("### Human:")[-1].strip()
-            input, std = text.split("### Assistant:") if "### Assistant:" in text else (text, "")
+            input, std = text.split(
+                "### Assistant:") if "### Assistant:" in text else (text, "")
             input, std = input.strip(), std.strip()
             output = answer(input, tokenizer, model)
 
