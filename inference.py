@@ -1,19 +1,20 @@
+"""
+Sample usage: 
+    python inference.py --dir results/001_finetune
+"""
 import glob
 import os
 import pdb
+import yaml
 
 import torch
 from peft import PeftConfig, PeftModel
 from termcolor import colored
-# from transformers.models import AutoModelForCausalLM
 from transformers import (AutoModelForCausalLM, AutoTokenizer,
                           BitsAndBytesConfig)
-
-from config import model_name, model_path, ckpt_path
 from utils import get_spm_dataset
 
 import argparse
-
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -21,7 +22,7 @@ def get_args():
     parser.add_argument("--mode", type=str, default="auto", choices=["auto", "manual"], help="Mode: 'auto' for auto testing on random samples, 'manual' for manual input")
     return parser.parse_args()
 
-def load_inference_model(dir):
+def load_inference_model(experiment_dir):
     global tokenizer
     bnb_config = BitsAndBytesConfig(
         load_in_4bit=True,
@@ -30,13 +31,25 @@ def load_inference_model(dir):
         bnb_4bit_use_double_quant=False,
     )
 
+    # Find the base model's path dir.
+    setting_file = os.path.join(experiment_dir, "setting.yml")
+    if os.path.exists(setting_file):
+        setting = yaml.safe_load(open(setting_file, "r"))
+        model_name = setting["model_name"]
+        model_path = setting["model_path"]
+    else:
+        # TODO: remove this manual location in the future.
+        print(colored("We can not find the setting.yml file. So, using llama-2 7B base model.", "yellow"))
+        model_name = "model/llama2/7B-chat"
+        model_path = "model/"
+
     llm_model = AutoModelForCausalLM.from_pretrained(model_name,
                                                     quantization_config=bnb_config,
                                                     trust_remote_code=True,
                                                     cache_dir=model_path)
 
     # Load the Lora model
-    load_latest_model(llm_model, dir)
+    load_latest_model(llm_model, experiment_dir)
 
     tokenizer = AutoTokenizer.from_pretrained(model_name,
                                             trust_remote_code=True,
@@ -44,11 +57,10 @@ def load_inference_model(dir):
     tokenizer.pad_token = tokenizer.eos_token
 
 
-def load_latest_model(llm_model, dir):
-    global config, model
-    list_all_checkpoints = lambda x: glob.glob(x + "checkpoint-*")
-    checkpoints = list_all_checkpoints(ckpt_path + dir)
-    latest_checkpoint = max(checkpoints, key=os.path.getctime)
+def load_latest_model(llm_model, experiment_dir):
+    global config, model # TODO: avoid using global variables!
+    latest_checkpoint = max(glob.glob(os.path.join(experiment_dir, "checkpoint-*")), 
+                            key=os.path.getctime)
     print(colored(f"Loading model from {latest_checkpoint}", "yellow"))
     config = PeftConfig.from_pretrained(latest_checkpoint)
     model = PeftModel.from_pretrained(llm_model, latest_checkpoint)

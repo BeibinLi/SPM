@@ -6,4 +6,3 @@ ckpt_path = "results/"
 model_name = "model/llama2/7B-chat"
 
 
-auto_explore_data_path = "data/auto_explore/"
