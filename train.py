@@ -15,7 +15,9 @@
 from dataclasses import dataclass, field
 from typing import Optional
 
-
+import yaml
+import pdb
+import os
 import torch
 from peft import LoraConfig, PeftModel
 # from transformers.models import AutoModelForCausalLM
@@ -52,15 +54,6 @@ local_rank = accelerator.process_index
 #
 ########################################################################
 
-# Define and parse arguments.
-parser = argparse.ArgumentParser()
-parser.add_argument("--max_steps", type=int, default=5000, help="Max steps to train for")
-parser.add_argument("--save_steps", type=int, default=10, help="Save checkpoint every n steps")
-parser.add_argument("--save_total_limit", type=int, default=100, help="Maximum number of checkpoints to save, delete older checkpoints")
-parser.add_argument("--load_dir", type=str, default=None, help="Dir to load model, load from Huggingface if not specified")
-parser.add_argument("--with_self_instruct", action="store_false", help="Whether to use self-instruct data")
-parser.add_argument("--baseline", action="store_false", help="Whether to use baseline mode in pretraining phase")
-args = parser.parse_args()
 
 @dataclass
 class ScriptArguments:
@@ -88,10 +81,7 @@ class ScriptArguments:
                 "The model that you want to train from the Hugging Face hub. E.g. gpt2, gpt2-xl, bert, etc."
         },
     )
-    # dataset_name: Optional[str] = field(
-    #     default="timdettmers/openassistant-guanaco",
-    #     metadata={"help": "The preference dataset to use."},
-    # )
+
     use_4bit: Optional[bool] = field(
         default=True,
         metadata={"help": "Activate 4bit precision base model loading"},
@@ -142,7 +132,7 @@ class ScriptArguments:
         },
     )
     max_steps: int = field(
-        default=args.max_steps,
+        default=5000,
         metadata={"help": "How many optimizer update steps to take"})
     warmup_ratio: float = field(
         default=0.03, metadata={"help": "Fraction of steps to do a warmup for"})
@@ -154,9 +144,9 @@ class ScriptArguments:
         },
     )
     save_steps: int = field(
-        default=args.save_steps, metadata={"help": "Save checkpoint every X updates steps."})
+        default=10, metadata={"help": "Save checkpoint every X updates steps."})
     save_total_limit: int = field(
-        default=args.save_total_limit, metadata={"help": "Limit the total amount of checkpoints. Deletes the older checkpoints."})
+        default=100, metadata={"help": "Limit the total amount of checkpoints. Deletes the older checkpoints."})
     logging_steps: int = field(default=10,
                                metadata={"help": "Log every X updates steps."})
     cache_dir: Optional[str] = field(
@@ -164,18 +154,24 @@ class ScriptArguments:
         metadata={"help": "Where to store the pretrained models."})
     
     load_dir: Optional[str] = field(
-        default=args.load_dir,
+        default=None,
         metadata={"help": "Where to load the pretrained models. None for no loading. latest for latest checkpoint. directory for loading from a directory."})
     
     with_self_instruct: Optional[bool] = field(
-        default=args.with_self_instruct,
+        default=True,
         metadata={"help": "Whether to use self-instruct data."})
     
     baseline: Optional[bool] = field(
-        default=args.baseline,
+        default=False,
         metadata={"help": "Whether be in baseline mode, i.e., only pretrain on raw data."})
     
+    def load(self, yaml_file: str):
+        with open(yaml_file, 'r') as file:
+            yaml_data = yaml.safe_load(file)
 
+        for key, value in yaml_data.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
 
 parser = HfArgumentParser(ScriptArguments)
 script_args = parser.parse_args_into_dataclasses()[0]
@@ -267,6 +263,12 @@ procedure = ["baseline" if script_args.baseline else "pretrain", "finetune"]
 
 for phase in procedure:
     training_arguments.output_dir = ckpt_path + exp_id + "_" + phase + "/"
+    
+    # Saving the arguments for reference in the future
+    os.makedirs(training_arguments.output_dir, exist_ok=True)
+    yaml.dump(script_args, open(os.path.join(training_arguments.output_dir, "setting.yml"), "w"))
+    pdb.set_trace()
+
     dataset = get_spm_dataset(phase=phase, mode="train", with_self_instruct=script_args.with_self_instruct)
 
     trainer = SFTTrainer(
