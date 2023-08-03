@@ -63,3 +63,5 @@ model/*
 .github/*
 test.txt
 Pipfile
+
+draft.md

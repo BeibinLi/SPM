@@ -261,13 +261,13 @@ model.config.use_cache = False
 
 procedure = ["baseline" if script_args.baseline else "pretrain", "finetune"]
 
+# iterate multiple training stages. Usually 1 - 2 stages.
 for phase in procedure:
     training_arguments.output_dir = ckpt_path + exp_id + "_" + phase + "/"
     
     # Saving the arguments for reference in the future
     os.makedirs(training_arguments.output_dir, exist_ok=True)
     yaml.dump(script_args, open(os.path.join(training_arguments.output_dir, "setting.yml"), "w"))
-    pdb.set_trace()
 
     dataset = get_spm_dataset(phase=phase, mode="train", with_self_instruct=script_args.with_self_instruct)
 

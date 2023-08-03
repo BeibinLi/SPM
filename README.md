@@ -7,8 +7,7 @@ To load a downloaded Llama 2 model, you may need to convert it to Hugging Face. 
 
 ```
 ## Install HuggingFace Transformers from source
-pip freeze | grep transformers ## verify it is version 4.31.0 or higher
-# If not, run: 
+
 pip install "transformers>=4.31"
 pip install "tokenizers>=0.13.3"
 
@@ -21,18 +20,6 @@ python src/transformers/models/llama/convert_llama_weights_to_hf.py \
 
 
 # Note: you may need to change the "main" function in "src/transformers/models/llama/convert_llama_weights_to_hf.py"
-python src/transformers/models/llama/convert_llama_weights_to_hf.py  --input_dir /home/beibinli/llama/llama-2-13b --model_size 13B --output_dir /home/beibinli/llama/converted-llama-2-13b
-
-python src/transformers/models/llama/convert_llama_weights_to_hf.py  --input_dir /home/beibinli/llama/ --model_size 13Bf --output_dir /home/beibinli/llama/converted-llama-2-13b
-
-python src/transformers/models/llama/convert_llama_weights_to_hf.py  --input_dir /home/beibinli/llama/ --model_size tokenizer_only --output_dir /home/beibinli/llama/converted-llama-2-13b
-python src/transformers/models/llama/convert_llama_weights_to_hf.py  --input_dir /home/beibinli/llama/ --model_size tokenizer_only --output_dir /home/beibinli/llama/converted-llama-2-13b-chat
-
-python src/transformers/models/llama/convert_llama_weights_to_hf.py  --input_dir /home/beibinli/llama/llama-2-13b-chat --model_size 13B --output_dir /home/beibinli/llama/converted-llama-2-13b-chat
-python src/transformers/models/llama/convert_llama_weights_to_hf.py  --input_dir /home/beibinli/llama/ --model_size 7B --output_dir /home/beibinli/llama/converted-llama-2-7b-chat
-
-
-python src/transformers/models/llama/convert_llama_weights_to_hf.py  --input_dir /home/beibinli/llama/ --model_size 70B --output_dir /home/beibinli/llama/converted-llama-2-70b-chat
 ```
 
 If you received tokenizer warnings, you can try to change the line to `tokenizer = tokenizer_class(input_tokenizer_path, legacy=False)`
@@ -49,19 +36,20 @@ Packages:
 
 
 If you want single-GPU training, simply run
-```
+```bash
 python train.py <Args>
 ```
 
 This code uses `accelerate` for parallel training. Make sure to configure `accelerate` before each run if you want multiple-GPU training:
-```
+
+```bash
 accelerate configure
 ```
 After this, run
-```
+
+```bash
 accelerate launch --main_process_port <PORT> train.py <Args>
 ```
-
 
 
 `accelerator config` and answer with default choices. When asked "yes/No", always answer: NO, NO, NO
