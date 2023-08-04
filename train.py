@@ -117,7 +117,10 @@ training_arguments = TrainingArguments(
 model, peft_config, tokenizer = create_and_prepare_model(script_args)
 model.config.use_cache = False
 
-procedure = ["baseline" if script_args.baseline else "pretrain", "finetune"]
+if script_args.only_finetune:
+    procedure = ["finetune"]
+else:
+    procedure = ["baseline" if script_args.baseline else "pretrain", "finetune"]
 
 # iterate multiple training stages. Usually 1 - 2 stages.
 for phase in procedure:
