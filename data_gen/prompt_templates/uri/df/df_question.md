@@ -1,5 +1,5 @@
 Given a pandas data frame, please ask some questions regarding this table and then using Python to write pandas code to answer the question.
-Please use the format 
+Please use the format
 
 QUESTION: a question goes here
 ANSWER Code:

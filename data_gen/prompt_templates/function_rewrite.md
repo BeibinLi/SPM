@@ -6,4 +6,3 @@ If it can be improved using a better design or algorithm, do it.
 {code_function}
 
 --- Rewrite ---
-

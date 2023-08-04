@@ -1,13 +1,14 @@
-import os, sys
+from utils import find_all_substr
+from data_gen.paths import (prompt_output_path, raw_data_path,
+                            chatlog_output_path, prompt_template_path)
+from curious_agent import CuriousAgent
+from gpt_api import get_llm
+
+import os
 import ast
 from tqdm import tqdm
 from collections import defaultdict
 import tiktoken
-sys.path.append(".")
-from utils import find_all_substr
-from data_gen.paths import prompt_output_path, raw_data_path, chatlog_output_path, prompt_template_path
-from curious_agent import CuriousAgent
-from gpt_api import get_llm
 
 num_response = 2
 num_interaction = 5
@@ -18,6 +19,7 @@ tasks = {}
 files = {}
 total_data_count = defaultdict(int)
 prompt_files = []
+
 
 def save_prompt(prompt, task):
     if len(encoder.encode(prompt)) > max_token_length:
@@ -31,6 +33,7 @@ def save_prompt(prompt, task):
     total_data_count[task] += 1
     prompt_files.append(file_name)
 
+
 def dfs(path):
     file_list = os.listdir(path)
     for file in file_list:
@@ -38,12 +41,14 @@ def dfs(path):
         if os.path.isdir(new_path):
             dfs(new_path + "/")
         else:
-            with open(new_path, mode = "r") as handle:
+            with open(new_path, mode="r") as handle:
                 content = handle.read()
-                if content.replace(" ", "").replace("\n", "") != "": # remove empty files
+                if content.replace(" ", "").replace(
+                        "\n", "") != "":    # remove empty files
                     files[new_path[len(raw_data_path):]] = content
 
-def enumerate_file_tuples(file_names, content, pos, task):        
+
+def enumerate_file_tuples(file_names, content, pos, task):
     if pos == []:
         save_prompt(content, task)
         return
@@ -54,22 +59,25 @@ def enumerate_file_tuples(file_names, content, pos, task):
             pos_ed += 1
             if content[pos_ed] == "}":
                 break
-        
-        new_content = content[:pos[-1]] + files[file_names[i]] + content[pos_ed+1:]
 
-        enumerate_file_tuples(file_names[i+1:], new_content, pos[:-1], task)
+        new_content = content[:pos[-1]] + files[
+            file_names[i]] + content[pos_ed + 1:]
+
+        enumerate_file_tuples(file_names[i + 1:], new_content, pos[:-1], task)
+
 
 def replace_content(file_names, task, prompt_template, identifier, suffix):
     # Replace identifiers in the template with files from file_names
     pos = find_all_substr(prompt_template, identifier)
     if pos == []:
         return
-    
+
     filtered_fn = []
     for file_name in file_names:
         if file_name.endswith(suffix):
             filtered_fn.append(file_name)
     enumerate_file_tuples(filtered_fn, prompt_template, pos, task[:-len(".md")])
+
 
 def extract_clip(code, clip_type):
     lines = code.split("\n")
@@ -82,6 +90,7 @@ def extract_clip(code, clip_type):
             end = node.end_lineno
             ret.append("\n".join(lines[start:end]))
     return ret
+
 
 def gen_code_prompts(file_names, task, prompt_template, clip_type):
     # TODO: implement multi {code_class} support
@@ -100,9 +109,10 @@ def gen_code_prompts(file_names, task, prompt_template, clip_type):
                 pos_ed += 1
                 if content[pos_ed] == "}":
                     break
-            content = content[:pos[0]] + class_clip + content[pos_ed+1:]
+            content = content[:pos[0]] + class_clip + content[pos_ed + 1:]
 
             save_prompt(content, task)
+
 
 def gen_data(data_type):
     dfs(raw_data_path + data_type + "/")
@@ -129,7 +139,7 @@ if __name__ == "__main__":
     for file in file_list:
         if not file.endswith(".md"):
             continue
-        with open(prompt_template_path + file, mode = "r") as handle:
+        with open(prompt_template_path + file, mode="r") as handle:
             tasks[file] = handle.read()
 
     for data_type in ["IFS_code", "IFS_document"]:
@@ -137,19 +147,18 @@ if __name__ == "__main__":
         gen_data(data_type)
 
     for file in tqdm(prompt_files):
-        store_path = chatlog_output_path + file[:-len(".txt")] + "_chatlog.pickle"
+        store_path = chatlog_output_path + file[:-len(".txt"
+                                                     )] + "_chatlog.pickle"
         if not os.path.exists(store_path):
             with open(prompt_output_path + file, "r") as handle:
                 prompts = handle.read()
-            agent = CuriousAgent(
-                api=get_llm(),
-                system_msg=prompts,
-                formatter=None,
-                temperature=1,
-                top_p=0.6,
-                num_response=num_response,
-                max_token_length=max_token_length
-            )
+            agent = CuriousAgent(api=get_llm(),
+                                 system_msg=prompts,
+                                 formatter=None,
+                                 temperature=1,
+                                 top_p=0.6,
+                                 num_response=num_response,
+                                 max_token_length=max_token_length)
 
             for i in range(num_interaction):
                 agent.reply()

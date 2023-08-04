@@ -11,5 +11,3 @@ ANSWER: the answer to the question goes here
 --- Here are some sample Q&A ---
 
 {prev_generated_QA}
-
-

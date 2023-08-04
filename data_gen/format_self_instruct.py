@@ -1,6 +1,5 @@
-import sys
-sys.path.append(".")
-from data_gen.paths import self_instruct_data_path, self_instruct_raw_data_path
+from data_gen.paths import (self_instruct_data_path,
+                            self_instruct_raw_data_path)
 import json
 from utils import save_data
 
@@ -15,5 +14,5 @@ if __name__ == "__main__":
         prompt, completion = d["prompt"], d["completion"]
         completion = completion.replace("<|endoftext|>", "")
         data.update({f"### Human: {prompt}\n### Assistant: {completion}\n": i})
-    
+
     save_data(data, TRAIN_OUT_FILE, TEST_OUT_FILE)

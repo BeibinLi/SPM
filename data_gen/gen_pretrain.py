@@ -3,13 +3,17 @@
 Task prompts: explain / rewrite / compare / summarize / correlation / logic
 Desired reply:
 """
-import os, sys, glob, re, random, json
-import hashlib
-sys.path.append(".")
+
 from data_gen.paths import chatlog_output_path, pretrain_data_path
 from curious_agent import CuriousAgent
 from utils import save_data
 
+import os
+import glob
+import re
+import random
+import json
+import hashlib
 
 uri_files = glob.glob(chatlog_output_path + "uri*.pickle")
 general_files = glob.glob(chatlog_output_path + "*rewrite*.pickle") + \
@@ -22,10 +26,13 @@ general_files = glob.glob(chatlog_output_path + "*rewrite*.pickle") + \
 TRAIN_OUT_FILE = pretrain_data_path + "train.jsonl"
 TEST_OUT_FILE = pretrain_data_path + "test.jsonl"
 
-hash_to_int = lambda s: int(hashlib.sha1(s.encode("utf-8")).hexdigest(), 16) % (
-    10**8)
+
+def hash_to_int(s):
+    return int(hashlib.sha1(s.encode("utf-8")).hexdigest(), 16) % 10**8
+
 
 os.makedirs(pretrain_data_path, exist_ok=True)
+
 
 def spawn_chat_for_uri(msgs, n=10):
 
@@ -58,11 +65,12 @@ def spawn_chat_for_uri(msgs, n=10):
         for q, k in zip(questions[:n], keywords[:n])
     }
 
+
 def spawn_chat(msgs, n=10):
 
     # Get URI from the system message
     assert msgs[0][0] == "system"
-    system_msg = msgs[0][1] # Task prompts
+    system_msg = msgs[0][1]    # Task prompts
 
     responses = []
 
@@ -82,13 +90,14 @@ def spawn_chat(msgs, n=10):
         for r in responses[:n]
     }
 
+
 def dump_chat(chats: list, filename: str):
     with open(filename, "w") as f:
         f.write("\n".join([json.dumps({"text": c}) for c in chats]))
 
 
 if __name__ == "__main__":
-    data = {}  # key: question; value: uri
+    data = {}    # key: question; value: uri
 
     for file in uri_files:
         agent = CuriousAgent(api=None, system_msg="")
@@ -103,4 +112,3 @@ if __name__ == "__main__":
         data.update(spawn_chat(agent.msgs, 10))
 
     save_data(data, TRAIN_OUT_FILE, TEST_OUT_FILE)
-    
