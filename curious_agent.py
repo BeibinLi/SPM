@@ -81,7 +81,7 @@ class CuriousAgent:
     def load(self, in_loc):
         with open(in_loc, "rb") as f:
             (self.system_msg, self.msgs, self.details, self.temperature,
-            self.top_p, self.num_response, self.formatter) = pickle.load(f)
+             self.top_p, self.num_response, self.formatter) = pickle.load(f)
         self.formatter = dill.loads(self.formatter)
         self.token_length = sum(
             len(m[1]) for m in self.msgs if m[0] == "asisstant")
