@@ -1,7 +1,7 @@
 from curious_agent import CuriousAgent
 from gpt_api import get_llm
 
-from paths import chatlog_output_path
+from data_gen.paths import chatlog_output_path
 
 from tqdm import tqdm
 import os

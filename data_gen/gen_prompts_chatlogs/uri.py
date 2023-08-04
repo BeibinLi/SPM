@@ -23,10 +23,9 @@ def extract_attributes_and_values(data):
     #    if item["Description"] != item["ShortDescription"]:
     #        print(item["Description"], "|||", item["ShortDescription"])
     properties_list = [item["Properties"] for item in items]
-    properties = [{k: v
-                   for k, v in properties.items()
-                   if v}
-                  for properties in properties_list]
+    properties = [{
+        k: v for k, v in properties.items() if v
+    } for properties in properties_list]
     # Find the common keys
     keys = [list(p.keys()) for p in properties]
     # 2d list to 1d

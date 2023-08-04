@@ -10,5 +10,3 @@ Please generate as many questions as possible
 {code}
 
 --- Quiz ---
-
-

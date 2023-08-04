@@ -87,7 +87,7 @@ def gen_data(type, msgs):
 
     return {
         f"### Human: {questions[i]}\n### Assistant: {type} {answers[i]}\n":
-        questions[i] for i in range(len(questions))
+            questions[i] for i in range(len(questions))
     }
 
 

@@ -1,5 +1,5 @@
-Given a pandas data frame, please summarize what the DF is about. 
-For instance, what data it has, what columns it has, what does it designed for. 
+Given a pandas data frame, please summarize what the DF is about.
+For instance, what data it has, what columns it has, what does it designed for.
 
 Please write a 800-word essay about it. Thanks!
 

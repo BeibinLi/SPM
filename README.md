@@ -32,7 +32,7 @@ Then set `model_name = "model/llama2/7B"` in `config.py`.
 ## Run the code
 
 Packages:
-`pip install termcolor, trl, peft, bitsandbytes`
+`pip install termcolor, trl, peft, bitsandbytes, tiktoken`
 
 
 If you want single-GPU training, simply run

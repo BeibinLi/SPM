@@ -47,7 +47,7 @@ def raw_dfs(path):
                         s = slice_text(content)
                         data.update(
                             {"### Assistant: " + t: new_path for t in s})
-            except Exception:
+            except Exception as e:
                 del e
 
 
