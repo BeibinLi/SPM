@@ -20,6 +20,7 @@ def get_args() -> argparse.Namespace:
                         help="Dir to load model")
     return parser.parse_args()
 
+
 def load_latest_state(experiment_dir):
     """
     Loads the latest trainer state from the given experiment directory.
@@ -37,6 +38,7 @@ def load_latest_state(experiment_dir):
     print(colored(f"Loading model from {latest_checkpoint}", "yellow"))
     return json.load(open(latest_checkpoint + "/trainer_state.json", "r"))
 
+
 if __name__ == "__main__":
     args = get_args()
 
@@ -47,10 +49,9 @@ if __name__ == "__main__":
     for log in log_history:
         x.append(log["step"])
         y.append(log["loss"])
-    
+
     plt.plot(x, y)
     plt.title("Loss Curve")
     plt.xlabel("Step")
     plt.ylabel("Loss")
     plt.savefig("loss_curve.png")
-    
