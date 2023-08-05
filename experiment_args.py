@@ -100,11 +100,11 @@ class ScriptArguments:
         },
     )
     save_steps: int = field(
-        default=10,
+        default=50,
         metadata={"help": "Save checkpoint "
                           "every X updates steps."})
     save_total_limit: int = field(
-        default=100,
+        default=20,
         metadata={
             "help": "Limit the total amount of checkpoints. "
                     "Deletes the older checkpoints."
@@ -125,7 +125,7 @@ class ScriptArguments:
         })
 
     with_self_instruct: Optional[bool] = field(
-        default=True, metadata={"help": "Whether to use self-instruct data."})
+        default=False, metadata={"help": "Whether to use self-instruct data."})
 
     baseline: Optional[bool] = field(
         default=False,
@@ -133,6 +133,11 @@ class ScriptArguments:
             "help": "Whether be in baseline "
                     "mode, i.e., only pretrain on raw data."
         })
+
+    only_finetune: Optional[bool] = field(
+        default=False,
+        metadata={"help": "Whether only finetune on "
+                          "self-instruct data."})
 
     def load(self, yaml_file: str):
         with open(yaml_file, 'r') as file:
