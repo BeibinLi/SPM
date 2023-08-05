@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import os
+import glob
 import torch
 from peft import LoraConfig, PeftModel
 from transformers import (
@@ -69,15 +70,6 @@ def create_and_prepare_model(args):
         trust_remote_code=True,
         cache_dir=script_args.cache_dir)
 
-    if args.load_dir:
-        print(colored("Loading from " + args.load_dir, "green"))
-        model = PeftModel.from_pretrained(model=base_model,
-                                          model_id=args.load_dir,
-                                          is_trainable=True)
-        del base_model
-    else:
-        model = base_model
-
     peft_config = LoraConfig(
         lora_alpha=script_args.lora_alpha,
         lora_dropout=script_args.lora_dropout,
@@ -85,6 +77,17 @@ def create_and_prepare_model(args):
         bias="none",
         task_type="CAUSAL_LM",
     )
+
+    if args.load_dir:
+        print(colored("Loading from " + args.load_dir, "green"))
+        model = PeftModel.from_pretrained(model=base_model,
+                                          model_id=args.load_dir,
+                                          is_trainable=True,
+                                          config=peft_config)
+        del base_model
+    else:
+        #model = PeftModel(model=base_model, peft_config=peft_config)
+        model = base_model
 
     tokenizer = AutoTokenizer.from_pretrained(script_args.model_name,
                                               trust_remote_code=True,
@@ -114,9 +117,6 @@ training_arguments = TrainingArguments(
     lr_scheduler_type=script_args.lr_scheduler_type,
     ddp_find_unused_parameters=False)
 
-model, peft_config, tokenizer = create_and_prepare_model(script_args)
-model.config.use_cache = False
-
 if script_args.only_finetune:
     procedure = ["finetune"]
 else:
@@ -124,6 +124,9 @@ else:
 
 # iterate multiple training stages. Usually 1 - 2 stages.
 for phase in procedure:
+    model, peft_config, tokenizer = create_and_prepare_model(script_args)
+    model.config.use_cache = False
+
     training_arguments.output_dir = (script_args.ckpt_path + exp_id + "_" +
                                      phase + "/")
 
@@ -156,3 +159,7 @@ for phase in procedure:
                     module = module.to(torch.bfloat16)
 
     trainer.train()
+    script_args.load_dir = max(glob.glob(
+        os.path.join(training_arguments.output_dir, "checkpoint-*")),
+                               key=os.path.getctime)
+    del model, trainer
