@@ -69,7 +69,7 @@ def create_and_prepare_model(args):
         device_map=device_map,
         trust_remote_code=True,
         cache_dir=script_args.cache_dir)
-    
+
     peft_config = LoraConfig(
         lora_alpha=script_args.lora_alpha,
         lora_dropout=script_args.lora_dropout,
@@ -159,7 +159,7 @@ for phase in procedure:
                     module = module.to(torch.bfloat16)
 
     trainer.train()
-    script_args.load_dir = latest_checkpoint = max(glob.glob(
+    script_args.load_dir = max(glob.glob(
         os.path.join(training_arguments.output_dir, "checkpoint-*")),
-                            key=os.path.getctime)
+                               key=os.path.getctime)
     del model, trainer
