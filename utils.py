@@ -12,7 +12,6 @@ from data_gen.paths import (
     pretrain_raw_data_path,
 )
 
-
 def display_files_recursively(
     folder_path: str,
     indent: str = "",
