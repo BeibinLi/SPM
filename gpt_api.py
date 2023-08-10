@@ -3,6 +3,8 @@ import hashlib
 import os
 import re
 import time
+import requests
+import json
 
 import diskcache
 import numpy as np
@@ -53,15 +55,24 @@ def cache_llm_infer_result(func):
         # remove the "self" or "cls" in the args
         key = f"{func.__name__}_{stem_and_hash(str(args[1:]) + str(kwargs))}"
 
+        # Do not use cache for local models.
+        use_cache = True
+        if "model" in kwargs and kwargs["model"] in ["tuned", "origin"]:
+            use_cache = False
+        if "origin" in args or "tuned" in args:
+            use_cache = False
+
         storage = cache_data.get(key, None)
-        if storage:
+        if storage and use_cache:
             return storage["result"]
 
         # Otherwise, call the function and save its result to the cache file
         result = func(*args, **kwargs)
 
         storage = {"result": result, "args": args[1:], "kwargs": kwargs}
-        cache_data.set(key, storage)
+
+        if use_cache:
+            cache_data.set(key, storage)
 
         return result
 
@@ -69,6 +80,9 @@ def cache_llm_infer_result(func):
 
 
 def handle_prev_message_history(agent_name, msg, prev_msgs):
+    if prev_msgs is None:
+        prev_msgs = []
+
     if "system" in [_agent_name for _agent_name, _message in prev_msgs]:
         messages = []
     else:
@@ -150,7 +164,33 @@ class AzureGPTClient():
 
         messages = handle_prev_message_history(agent_name, msg, prev_msgs)
 
-        if "gpt-4" in model:
+        if model in ["tuned", "origin"]:
+            # we are going to use our own model
+            url = 'http://localhost:5000/chat'
+            input_msg = f"### {agent_name}: {msg}"
+
+            data = {
+                "message": input_msg,
+                "model": model,
+                "n": num_response,
+                "temperature": temperature,
+                "top_p": top_p,
+                "messages": messages,
+                "max_tokens": 1000,
+                "secret": "API KEY"
+            }
+            headers = {"Content-Type": "application/json"}
+
+            response = requests.post(url,
+                                     headers=headers,
+                                     data=json.dumps(data))
+
+            # print(colored(response, "red"))
+            ans = response.json()["answers"]
+            # print("Bot:", colored(ans, "green"))
+            return ans
+
+        if "gpt-4" in model or "turbo" in model:
             response = openai.ChatCompletion.create(engine=model,
                                                     messages=messages,
                                                     temperature=temperature,
@@ -175,7 +215,7 @@ class AzureGPTClient():
                 for i in range(len(response["choices"]))
             ]
 
-        #print(colored("response:", "green"), response)
+        # print(colored("response:", "green"), response)
         #print(colored("ans:", "green"), answers)
 
         # pdb.set_trace()
