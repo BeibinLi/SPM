@@ -1,20 +1,20 @@
-import json
+from gpt_api import get_llm
 
-import requests
+api = get_llm()
 
-from termcolor import colored
+rst = api.reply("user",
+                "Hello",
+                num_response=1,
+                temperature=0.1,
+                top_p=0.3,
+                model="origin")
 
-url = 'http://gcrsandbox395:5000/question'
+print(rst)
 
-while True:
-    print("-" * 30)
-    question = input("Human: ")
-    question = question.strip()
-
-    data = {"question": "### Human: " + question}
-    headers = {"Content-Type": "application/json"}
-
-    response = requests.post(url, headers=headers, data=json.dumps(data))
-
-    ans = response.json()["answer"]
-    print("Bot:", colored(ans, "green"))
+rst = api.reply("user",
+                "Hello",
+                num_response=3,
+                temperature=0.5,
+                top_p=0.3,
+                model="tuned")
+print(rst)

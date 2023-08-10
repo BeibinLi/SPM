@@ -10,6 +10,15 @@ b70:
 inference:
 	python inference.py --dir results/005_finetune
 
+host:
+	python host.py --dir results/003_finetune
+
+manual_7b:
+	python inference.py --dir results/003_finetune --mode manual
+
+manual_70b:
+	python inference.py --dir results/005_finetune --mode manual
+
 
 format:
 	# yapf --in-place --style=google *.py
