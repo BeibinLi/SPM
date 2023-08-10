@@ -120,7 +120,8 @@ class AzureGPTClient():
               model="gpt-4",
               prev_msgs=None,
               temperature=0,
-              top_p=1):
+              top_p=1,
+              max_tokens=1000):
         while True:    # Run until succeed
             time_to_sleep = 5    # seconds between tries
             try:
@@ -131,7 +132,8 @@ class AzureGPTClient():
                                        model=model,
                                        prev_msgs=prev_msgs,
                                        temperature=temperature,
-                                       top_p=top_p)
+                                       top_p=top_p,
+                                       max_tokens=max_tokens)
             except openai.error.RateLimitError as e:
                 print(e)
                 time_to_sleep = int(
@@ -158,7 +160,8 @@ class AzureGPTClient():
                    model="gpt-4",
                    prev_msgs=None,
                    temperature=0,
-                   top_p=1):
+                   top_p=1,
+                   max_tokens=1000):
         if num_response > 1:
             assert temperature > 0 or top_p < 1
 
@@ -176,7 +179,7 @@ class AzureGPTClient():
                 "temperature": temperature,
                 "top_p": top_p,
                 "messages": messages,
-                "max_tokens": 1000,
+                "max_tokens": max_tokens,
                 "secret": "API KEY"
             }
             headers = {"Content-Type": "application/json"}
@@ -196,7 +199,8 @@ class AzureGPTClient():
                                                     temperature=temperature,
                                                     top_p=top_p,
                                                     stop=None,
-                                                    n=num_response)
+                                                    n=num_response,
+                                                    max_tokens=max_tokens)
             answers = [
                 response["choices"][i]["message"]["content"]
                 for i in range(len(response["choices"]))
@@ -205,10 +209,10 @@ class AzureGPTClient():
             response = openai.Completion.create(engine=model,
                                                 prompt=msg,
                                                 temperature=temperature,
-                                                max_tokens=1000,
                                                 top_p=top_p,
                                                 stop=stop,
-                                                n=num_response)
+                                                n=num_response,
+                                                max_tokens=max_tokens)
 
             answers = [
                 response["choices"][i]["text"]
