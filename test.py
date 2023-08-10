@@ -16,10 +16,6 @@ import argparse
 def get_args():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--data_path",
-                        type=str,
-                        default="data/auto_explore/",
-                        help="The path to save the auto-explore data.")
     parser.add_argument("--dir",
                         type=str,
                         required=True,
