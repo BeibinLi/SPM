@@ -12,6 +12,27 @@ from data_gen.paths import (
     pretrain_raw_data_path,
 )
 
+def list_files(directory: str, ignore_hidden: bool = True) -> list:
+    """
+    List all files in a directory (recursively).
+
+    Args:
+    - directory (str): The path to the directory to list files from.
+    - ignore_hidden (bool, optional): Whether to ignore hidden files.
+        Defaults to True.
+    
+    Returns:
+    - list of str: A list of file paths relative to the input directory.
+    """
+    for root, dirs, files in os.walk(directory):
+        if ignore_hidden:
+            dirs[:] = [d for d in dirs if not d.startswith('.')]
+            
+        for file in files:
+            if ignore_hidden and file.startswith("."):
+                continue
+            yield os.path.relpath(os.path.join(root, file), directory)
+
 
 def display_files_recursively(
     folder_path: str,
