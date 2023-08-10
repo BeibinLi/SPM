@@ -4,8 +4,10 @@ import os
 import io
 import subprocess
 import shlex
+import shutil
+from termcolor import colored
 
-data_path = "../Coffee_Roasting_Dataset/"
+dataset_path = "../Coffee_Roasting_Dataset/"
 
 def run_code(code: str) -> str:
     """
@@ -45,7 +47,10 @@ def inject_and_run(llm_output: str) -> str:
     - str: The output of the injected code.
     """
 
-    roll_back_log = []
+    temp_dir = tempfile.mkdtemp()
+    shutil.copytree(dataset_path, f"{temp_dir}/{dataset_path.split('/')[-1]}", dirs_exist_ok=True)
+    print(colored(f"Data copied to temporary directory: {temp_dir}", "green"))
+    temp_dir += "/"
 
     while llm_output.find("TARGET_FILE:") != -1:
         target_file_start = llm_output.find("TARGET_FILE:") + len("TARGET_FILE:")
@@ -59,15 +64,15 @@ def inject_and_run(llm_output: str) -> str:
         injection_snippet = llm_output[injection_snippet_start:injection_snippet_end]
         llm_output = llm_output[injection_snippet_end:]
 
-        target_file_path = data_path + target_file
+        target_file_path = temp_dir + target_file
         target_file_content = open(target_file_path, "r").read()
-
-        roll_back_log.append((target_file_path, target_file_content))
 
         target_file_content = target_file_content + "\n" + injection_snippet
 
         with open(target_file_path, "w") as f:
             f.write(target_file_content)
+    
+    print(colored("Injection done.", "green"))
     
     bash_start = llm_output.find("COMMAND:")
     bash_start = llm_output.find("```bash\n", bash_start) + len("```bash\n")
@@ -75,15 +80,12 @@ def inject_and_run(llm_output: str) -> str:
     bash = llm_output[bash_start:bash_end].strip()
 
     original_cwd = os.getcwd()
-    os.chdir(data_path)
+    os.chdir(temp_dir) # make sure all the code is runnable in the root of dataset directory
     result = subprocess.run(shlex.split(bash), capture_output=True)
     
     os.chdir(original_cwd)
-    # roll back
-    # TODO: cannot detect all other files that are modified by the injected code, e.g., database, images
-    for path, content in roll_back_log:
-        with open(path, "w") as f:
-            f.write(content)
+    
+    shutil.rmtree(temp_dir)
     
     return result.stdout.decode('utf-8')
 
