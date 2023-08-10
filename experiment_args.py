@@ -100,11 +100,11 @@ class ScriptArguments:
         },
     )
     save_steps: int = field(
-        default=50,
+        default=100,
         metadata={"help": "Save checkpoint "
                           "every X updates steps."})
     save_total_limit: int = field(
-        default=20,
+        default=50,
         metadata={
             "help": "Limit the total amount of checkpoints. "
                     "Deletes the older checkpoints."

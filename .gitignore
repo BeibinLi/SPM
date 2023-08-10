@@ -64,4 +64,5 @@ model/*
 test.txt
 Pipfile
 
-draft.md
+draft.mdpyt
+loss_curve.png
