@@ -7,8 +7,7 @@ import pickle
 import tiktoken
 
 from gpt_api import get_llm
-from utils import (get_exp_id, colored_string, find_all_substr,
-                   display_files_recursively)
+from utils import (colored_string, find_all_substr, display_files_recursively)
 
 import argparse
 from inject_and_run import inject_and_run
@@ -35,22 +34,28 @@ def get_args():
                         type=str,
                         default="gpt-35-turbo",
                         help="The model to use.")
-
+    parser.add_argument("--file_save_path",
+                        type=str,
+                        default="new_and_changed_files/",
+                        help="The path to save the new or changed files.")
     return parser.parse_args()
 
 
 class AutoExploreCopilot():
 
-    def __init__(self, root, temperature, top_p, max_token_length, model):
+    def __init__(self, root, temperature, top_p, max_token_length, model,
+                 file_save_path):
         self.root = os.path.abspath(root)
         self.temperature = temperature
         self.top_p = top_p
         self.max_token_length = max_token_length
         self.model = model
+        self.file_save_path = file_save_path
 
         self.api = get_llm()
 
-        start_prompt = open("data_gen/prompt_templates/explore_prompt_simple.md", "r").read()
+        start_prompt = open(
+            "data_gen/prompt_templates/explore_prompt_simple.md", "r").read()
         start_prompt = start_prompt.format(
             all_files=display_files_recursively(root),
             TASK="Plot the bean price of Excelsa between 2016 Aug and 2021 Jun")
@@ -63,7 +68,7 @@ class AutoExploreCopilot():
 
         for msg in self.msgs:
             print(colored_string(msg))
-        
+
         os.chdir(root)
 
     def get_cwd(self):
@@ -130,7 +135,8 @@ class AutoExploreCopilot():
             if not os.path.abspath(cwd).startswith(os.path.abspath(self.root)):
                 self.msgs.append(
                     ("user",
-                     f"Error: You cannot access files ({cwd}) outside the repo ({self.root})! You are now at {os.getcwd()}"))
+                     (f"Error: You cannot access files ({cwd}) outside"
+                      f"the repo ({self.root})! You are now at {os.getcwd()}")))
                 return
 
         try:
@@ -179,11 +185,10 @@ class AutoExploreCopilot():
             self.handle_command(cmd)
 
         if commands == []:
-            self.msgs.append((
-                "user",
-                "Warning: You didn't give me any command. Further explore the "
-                "code repo by sending me system commands: ls, cd, cat."
-            ))
+            self.msgs.append(
+                ("user",
+                 "Warning: You didn't give me any command. Further explore the "
+                 "code repo by sending me system commands: ls, cd, cat."))
 
         # Reset here to incorporate the last assistant messages
         if self.token_length > self.max_token_length:
@@ -203,10 +208,24 @@ class AutoExploreCopilot():
 
         for msg in self.msgs[unencoded_pos:]:
             print(colored_string(msg))
-        
+
         if "[SOLUTION]" in response:
-            print(inject_and_run(response))
-            exit(0)
+            result = inject_and_run(response)
+            if result["stderr"] != "":
+                self.msgs.append(("user", result["stderr"]))
+            else:
+                # save the result
+                os.makedirs(self.file_save_path, exist_ok=True)
+                print(result["stdout"])
+                for file_name, content in result["changed_files"].items():
+                    os.makedirs(self.file_save_path +
+                                os.path.dirname(file_name),
+                                exist_ok=True)
+                    with open(self.file_save_path + file_name, "wb") as f:
+                        f.write(content)
+                exit(0)
+
+        agent.act()
 
     def dump(self):
         ckpts = os.listdir(self.data_path)
@@ -231,10 +250,11 @@ class AutoExploreCopilot():
 
 if __name__ == "__main__":
     args = get_args()
-    agent = AutoExploreCopilot(root="../Coffee_Roasting_Dataset",
-                               temperature=args.temperature,
-                               top_p=args.top_p,
-                               max_token_length=args.max_token_length,
-                               model=args.model)
-    while True:
-        agent.act()
+    agent = AutoExploreCopilot(
+        root="../Coffee_Roasting_Dataset",
+        temperature=args.temperature,
+        top_p=args.top_p,
+        max_token_length=args.max_token_length,
+        model=args.model,
+        file_save_path=os.path.abspath(args.file_save_path) + "/")
+    agent.act()

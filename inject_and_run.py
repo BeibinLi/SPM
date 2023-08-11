@@ -6,10 +6,11 @@ import subprocess
 import shlex
 import shutil
 from termcolor import colored
-from utils import list_files
+from utils import (list_files, replace_absolute_with_relative)
 
 dataset_path = os.path.abspath("../Coffee_Roasting_Dataset/") + "/"
 # use absolute path to avoid problems with cwd
+
 
 def run_code(code: str) -> str:
     """
@@ -52,7 +53,8 @@ def inject_and_run(llm_output: str) -> dict:
     - dict:
         - "stdout": The output of the injected code.
         - "stderr": The error message of the injected code.
-        - "changed_files": A dict of changed files, key is relative file path, value is the content in bytes.
+        - "changed_files": A dict of changed files, key is relative file path,
+          value is the content in bytes.
     """
 
     # copy dataset to a temporary directory
@@ -98,8 +100,10 @@ def inject_and_run(llm_output: str) -> dict:
     # run
     original_cwd = os.getcwd()
     os.chdir(temp_dir)
-    # make sure all the code is runnable in the root of dataset directory
-    result = subprocess.run(shlex.split(bash), capture_output=True)
+    # ignore all the warnings
+    commands = shlex.split(bash)
+    commands.insert(1, "-W ignore")
+    result = subprocess.run(commands, capture_output=True)
 
     # find all changed files
     original_files = set(list_files(dataset_path))
@@ -122,8 +126,11 @@ def inject_and_run(llm_output: str) -> dict:
     print(changed_files)
 
     ret = {
-        "stdout": result.stdout.decode('utf-8'),
-        "stderr": result.stderr.decode('utf-8'),
+        "stdout":
+            result.stdout.decode('utf-8'),
+        "stderr":
+            replace_absolute_with_relative(result.stderr.decode('utf-8'),
+                                           temp_dir),
         "changed_files": {
             file: open(temp_dir + file, "rb").read() for file in changed_files
         }
@@ -149,4 +156,5 @@ COMMAND:
 python visualization/supplier_price.py --name='Farhunnisa Rajata'
 ```
 """
-    print(inject_and_run(llm_output))
+    result = inject_and_run(llm_output)
+    print(result)

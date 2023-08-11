@@ -74,8 +74,8 @@ class AutoExploreCopilot():
 
         self.api = get_llm()
 
-        start_prompt = open(
-            "data_gen/prompt_templates/explore_prompt.md", "r").read()
+        start_prompt = open("data_gen/prompt_templates/explore_prompt.md",
+                            "r").read()
         start_prompt = start_prompt.format(
             root=os.path.basename(root),
             root2=os.path.basename(root),
