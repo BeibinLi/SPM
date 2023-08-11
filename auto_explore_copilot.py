@@ -32,7 +32,6 @@ def get_args():
                         type=float,
                         default=0.3,
                         help="Top_p of language model.")
-    parser.parse_args()
     parser.add_argument(
         "--max_token_length",
         type=int,
@@ -51,7 +50,6 @@ class AutoExploreCopilot():
 
     def __init__(self, root, temperature, top_p, max_token_length, model,
                  data_path):
-        os.chdir(root)
 
         self.root = root
         self.temperature = temperature
@@ -76,7 +74,8 @@ class AutoExploreCopilot():
 
         self.api = get_llm()
 
-        start_prompt = open("data_gen/prompt_template.md", "r").read()
+        start_prompt = open(
+            "data_gen/prompt_templates/explore_prompt.md", "r").read()
         start_prompt = start_prompt.format(
             root=os.path.basename(root),
             root2=os.path.basename(root),
@@ -91,9 +90,11 @@ class AutoExploreCopilot():
         for msg in self.msgs:
             print(colored_string(msg))
 
+        os.chdir(root)
+
     def get_cwd(self):
         return os.getcwd().replace('\\', '/').replace(
-            root.replace(os.path.basename(root), ''), '')
+            self.root.replace(os.path.basename(self.root), ''), '')
 
     def extract_bash_commands(self, response, identifier="```bash"):
         commands = []
