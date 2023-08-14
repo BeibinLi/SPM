@@ -58,7 +58,7 @@ def inject_and_run(llm_output: str) -> dict:
     """
 
     # copy dataset to a temporary directory
-    temp_dir = tempfile.mkdtemp()
+    temp_dir = tempfile.mkdtemp(dir=os.path.abspath("."))
     shutil.copytree(dataset_path,
                     f"{temp_dir}/{dataset_path.split('/')[-1]}",
                     dirs_exist_ok=True)
@@ -140,7 +140,8 @@ def inject_and_run(llm_output: str) -> dict:
     os.chdir(original_cwd)
 
     # clean up the temporary directory
-    shutil.rmtree(temp_dir)
+    #shutil.rmtree(temp_dir) #shutil.rmtree() may not work properly on Windows
+    os.system('rmdir /S /Q "{}"'.format(temp_dir))
 
     return ret
 
@@ -157,4 +158,4 @@ python visualization/supplier_price.py --name='Farhunnisa Rajata'
 ```
 """
     result = inject_and_run(llm_output)
-    print(result)
+    print(result["stdout"], result["stderr"])
