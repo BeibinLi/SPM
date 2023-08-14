@@ -10,7 +10,7 @@ from gpt_api import get_llm
 from utils import (colored_string, find_all_substr, display_files_recursively)
 
 import argparse
-from inject_and_run import inject_and_run
+from auto_explore_dataset_wrapper import AutoExploreDatasetWrapper
 
 
 def get_args():
@@ -44,13 +44,14 @@ def get_args():
 class AutoExploreCopilot():
 
     def __init__(self, root, temperature, top_p, max_token_length, model,
-                 file_save_path, task):
+                 file_save_path, task, dataset_wrapper):
         self.root = os.path.abspath(root)
         self.temperature = temperature
         self.top_p = top_p
         self.max_token_length = max_token_length
         self.model = model
         self.file_save_path = file_save_path
+        self.dataset_wrapper = dataset_wrapper
 
         self.api = get_llm()
 
@@ -184,15 +185,37 @@ class AutoExploreCopilot():
 
         self.updated_short_mem = False
 
-        commands = self.extract_commands(response)
-        for cmd in commands:
-            self.handle_command(cmd)
+        if "[SOLUTION]" in response:
+            # Flush all un-printed messages
+            for msg in self.msgs[unencoded_pos:]:
+                print(colored_string(msg))
+            unencoded_pos = len(self.msgs)
+
+            # The agent replies with a solution, inject and run it
+            result = self.dataset_wrapper.inject_and_run(response)
+            if result["stderr"] != "":
+                self.msgs.append(("user", result["stderr"]))
+            else:
+                # save the result
+                os.makedirs(self.file_save_path, exist_ok=True)
+                for file_name, content in result["changed_files"].items():
+                    os.makedirs(self.file_save_path +
+                                os.path.dirname(file_name),
+                                exist_ok=True)
+                    with open(self.file_save_path + file_name, "wb") as f:
+                        f.write(content)
+
+                exit(0)
+        else:
+            commands = self.extract_commands(response)
+            for cmd in commands:
+                self.handle_command(cmd)
 
         if commands == []:
             self.msgs.append(
-                ("user",
-                 "Warning: You didn't give me any command. Further explore the "
-                 "code repo by sending me system commands: ls, cd, cat."))
+                ("user", "Warning: You didn't give me any command. "
+                 "Further explore the code repo by sending me system commands: "
+                 "ls, cd, cat."))
 
         # Reset here to incorporate the last assistant messages
         if self.token_length > self.max_token_length:
@@ -212,21 +235,6 @@ class AutoExploreCopilot():
 
         for msg in self.msgs[unencoded_pos:]:
             print(colored_string(msg))
-
-        if "[SOLUTION]" in response:
-            result = inject_and_run(response)
-            if result["stderr"] != "":
-                self.msgs.append(("user", result["stderr"]))
-            else:
-                # save the result
-                os.makedirs(self.file_save_path, exist_ok=True)
-                for file_name, content in result["changed_files"].items():
-                    os.makedirs(self.file_save_path +
-                                os.path.dirname(file_name),
-                                exist_ok=True)
-                    with open(self.file_save_path + file_name, "wb") as f:
-                        f.write(content)
-                exit(0)
 
         agent.act()
 
@@ -260,5 +268,6 @@ if __name__ == "__main__":
         max_token_length=args.max_token_length,
         model=args.model,
         file_save_path=os.path.abspath(args.file_save_path) + "/",
-        task="Plot the bean price of Excelsa between Jun 2021 and 2022 Aug.")
+        task="Plot the bean price of Excelsa between Jun 2021 and 2022 Aug.",
+        dataset_wrapper=AutoExploreDatasetWrapper("../Coffee_Roasting_Dataset"))
     agent.act()

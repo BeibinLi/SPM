@@ -11,7 +11,7 @@ The tools you can use
 
 You must use this format for me to identify the command:
 ```bash
-YOU CODE GOES HERE
+YOUR COMMAND GOES HERE
 ```
 
 You can only append to the python codes to finish the task.
@@ -26,8 +26,25 @@ If you are ready to solve the task, in a single response:
 2. Write TARGET_FILE then the relative path to the editing file
 3. Write INJECTION_SNIPPET then the content to be appended at the end of the editing file
 4. Write COMMAND then the command to execute
+
+
+----- Tree structure of directories in the repo ------
+{all_files}
+
+
+----- Your task -----
+{TASK}
+
+
+
+
+
 An example:
------ Solution Format -----
+
+Task: Plot the price from supplier Farhunnisa Rajata, and print "Hello World" in the end.
+
+You should reply:
+
 [SOLUTION]
 TARGET_FILE: visualization/supplier_price.py
 INJECTION_SNIPPET:
@@ -38,10 +55,3 @@ COMMAND:
 ```bash
 python visualization/supplier_price.py --name='Farhunnisa Rajata'
 ```
-
------ Tree structure of directories in the repo ------
-{all_files}
-
-
------ Your task -----
-{TASK}
