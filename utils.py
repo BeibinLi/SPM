@@ -2,6 +2,7 @@
 import os
 import json
 import random
+import re
 from termcolor import colored
 from datasets import load_dataset
 from datasets.arrow_dataset import Dataset
@@ -11,6 +12,53 @@ from data_gen.paths import (
     self_instruct_data_path,
     pretrain_raw_data_path,
 )
+
+
+def list_files(directory: str, ignore_hidden: bool = True) -> list:
+    """
+    List all files in a directory (recursively).
+
+    Args:
+    - directory (str): The path to the directory to list files from.
+    - ignore_hidden (bool, optional): Whether to ignore hidden files.
+        Defaults to True.
+
+    Returns:
+    - list of str: A list of file paths relative to the input directory.
+    """
+    for root, dirs, files in os.walk(directory):
+        if ignore_hidden:
+            dirs[:] = [d for d in dirs if not d.startswith('.')]
+
+        for file in files:
+            if ignore_hidden and file.startswith("."):
+                continue
+            yield os.path.relpath(os.path.join(root, file), directory)
+
+
+def replace_absolute_with_relative(text, root) -> str:
+    """
+    Replace all absolute file paths in the given text with their relative
+    path.
+
+    Args:
+    - text (str): The text to replace paths in.
+    - root (str): The root directory to use for relative paths.
+
+    Returns:
+    - str: The text with all absolute paths replaced with relative paths.
+    """
+    # Regular expression pattern to match absolute file paths.
+    # This pattern assumes that paths start with / followed by any non-space characters.
+    pattern = r'(/[^ \n]+)'
+
+    # Function to replace each found path with its relative counterpart.
+    def repl(match):
+        abs_path = match.group(1)
+        return os.path.relpath(abs_path, root)
+
+    # Replace all occurrences of the pattern in the text using repl function.
+    return re.sub(pattern, repl, text)
 
 
 def display_files_recursively(
