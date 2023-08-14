@@ -181,6 +181,11 @@ class AutoExploreCopilot():
                          "and you do not need to use echo to update it! "
                          "The file path is redirected to root."))
 
+        if cmd[0] not in ["cd", "ls", "cat", "echo"]:
+            self.msgs.append(
+                ("user", "Error: You can only run cd, ls, cat, echo commands."))
+            return
+
         try:
             if cmd[0] == "cd":
                 os.chdir(cmd[1])

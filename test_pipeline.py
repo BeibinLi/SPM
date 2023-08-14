@@ -44,7 +44,7 @@ def get_args():
 class AutoExploreCopilot():
 
     def __init__(self, root, temperature, top_p, max_token_length, model,
-                 file_save_path):
+                 file_save_path, task):
         self.root = os.path.abspath(root)
         self.temperature = temperature
         self.top_p = top_p
@@ -57,8 +57,7 @@ class AutoExploreCopilot():
         start_prompt = open(
             "data_gen/prompt_templates/explore_prompt_simple.md", "r").read()
         start_prompt = start_prompt.format(
-            all_files=display_files_recursively(root),
-            TASK="Plot the bean price of Excelsa between 2016 Aug and 2021 Jun")
+            all_files=display_files_recursively(root), TASK=task)
 
         self.msgs = [("system", start_prompt), ("user", "Lets start!")]
 
@@ -139,6 +138,11 @@ class AutoExploreCopilot():
                       f"the repo ({self.root})! You are now at {os.getcwd()}")))
                 return
 
+        if cmd[0] not in ["cd", "ls", "cat"]:
+            self.msgs.append(
+                ("user", "Error: You can only run cd, ls, cat commands."))
+            return
+
         try:
             if cmd[0] == "cd":
                 os.chdir(cmd[1])
@@ -216,7 +220,6 @@ class AutoExploreCopilot():
             else:
                 # save the result
                 os.makedirs(self.file_save_path, exist_ok=True)
-                print(result["stdout"])
                 for file_name, content in result["changed_files"].items():
                     os.makedirs(self.file_save_path +
                                 os.path.dirname(file_name),
@@ -256,5 +259,6 @@ if __name__ == "__main__":
         top_p=args.top_p,
         max_token_length=args.max_token_length,
         model=args.model,
-        file_save_path=os.path.abspath(args.file_save_path) + "/")
+        file_save_path=os.path.abspath(args.file_save_path) + "/",
+        task="Plot the bean price of Excelsa between Jun 2021 and 2022 Aug.")
     agent.act()
