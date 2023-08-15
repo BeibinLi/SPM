@@ -1,3 +1,8 @@
+test:
+	python inference.py --dir results/003_finetune --mode manual
+	# python inference.py --dir results/013_pretrain --mode manual
+
+
 b7:
 	accelerate launch train.py --max_steps 200 --model_name ~/llama/converted-llama-2-7b-chat/
 

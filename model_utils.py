@@ -6,6 +6,7 @@ import yaml
 from transformers import (AutoModelForCausalLM, AutoTokenizer,
                           BitsAndBytesConfig)
 from peft import PeftConfig, PeftModel
+from peft import get_peft_model
 
 
 def load_inference_model(
@@ -86,8 +87,30 @@ def load_latest_model(llm_model, experiment_dir):
         os.path.join(experiment_dir, "checkpoint-*")),
                             key=os.path.getctime)
     print(colored(f"Loading model from {latest_checkpoint}", "yellow"))
+
+    # model = llm_model
     config = PeftConfig.from_pretrained(latest_checkpoint)
-    model = PeftModel.from_pretrained(llm_model, latest_checkpoint)
+    # model = PeftModel.from_pretrained(model, latest_checkpoint,
+    # adapter_name="finetune")
+
+    if experiment_dir.find("finetune") >= 0:
+        print(colored("Also, loading the pretrained model!", "yellow"))
+        latest_checkpoint_pretrain = max(glob.glob(
+            os.path.join(experiment_dir.replace(
+                "finetune", "pretrain"), "checkpoint-*")) + glob.glob(
+                    os.path.join(experiment_dir.replace("finetune", "baseline"),
+                                 "checkpoint-*")),
+                                         key=os.path.getctime)
+        config2 = PeftConfig.from_pretrained(latest_checkpoint_pretrain)
+
+    #     model = PeftModel.from_pretrained(model, latest_checkpoint_pretrain,
+    #  adapter_name="pretrain")
+    # import pdb
+    # pdb.set_trace()
+
+    model = get_peft_model(llm_model, config, adapter_name="finetune")
+    model = get_peft_model(llm_model, config2, adapter_name="pretrain")
+
     return config, model
 
 

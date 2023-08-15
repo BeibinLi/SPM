@@ -17,6 +17,8 @@ import os
 import glob
 import torch
 from peft import LoraConfig, PeftModel
+from peft import PromptTuningInit, PromptTuningConfig, TaskType
+
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -76,6 +78,14 @@ def create_and_prepare_model(args):
         r=script_args.lora_r,
         bias="none",
         task_type="CAUSAL_LM",
+    )
+
+    peft_config = PromptTuningConfig(
+        task_type=TaskType.CAUSAL_LM,
+        prompt_tuning_init=PromptTuningInit.TEXT,
+        num_virtual_tokens=8,
+        prompt_tuning_init_text="[Coding Agent]",
+        tokenizer_name_or_path=script_args.model_name,
     )
 
     if args.load_dir:
