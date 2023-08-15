@@ -8,7 +8,8 @@ import subprocess
 import tiktoken
 
 from gpt_api import get_llm
-from utils import (colored_string, find_all_substr, display_files_recursively)
+from utils import (colored_string, find_all_substr, display_files_recursively,
+                   trunc_cat, get_file_name)
 
 import argparse
 from auto_explore_dataset_wrapper import AutoExploreDatasetWrapper
@@ -46,7 +47,8 @@ class AutoExploreCopilot():
 
     def __init__(self, root, temperature, top_p, max_token_length, model,
                  file_save_path, task, dataset_wrapper):
-        self.root = os.path.abspath(root)
+        self.root = os.path.abspath(root).replace('\\', '/')
+        self.root_dir_name = self.root.replace(os.path.basename(self.root), '')
         self.temperature = temperature
         self.top_p = top_p
         self.max_token_length = max_token_length
@@ -63,18 +65,34 @@ class AutoExploreCopilot():
 
         self.msgs = [("system", start_prompt), ("user", "Lets start!")]
 
-        self.encoder = tiktoken.encoding_for_model("gpt-4")
-        self.token_length = sum(
-            [len(self.encoder.encode(msg[1])) for msg in self.msgs])
-
-        for msg in self.msgs:
-            print(colored_string(msg))
+        self.flush_msgs()
 
         os.chdir(root)
 
     def get_cwd(self):
-        return os.getcwd().replace('\\', '/').replace(
-            self.root.replace(os.path.basename(self.root), ''), '')
+        return os.getcwd().replace('\\', '/').replace(self.root_dir_name, '')
+
+    def flush_msgs(self):
+        if not hasattr(self, "last_flushed_msg"):
+            self.last_flushed_msg = 0
+            self.encoder = tiktoken.encoding_for_model("gpt-4")
+            self.token_length = 0
+
+        for msg in self.msgs[self.last_flushed_msg:]:
+            print(colored_string(msg))
+            self.token_length += len(self.encoder.encode(msg[1]))
+
+        self.last_flushed_msg = len(self.msgs)
+
+        # Reset here to incorporate the last assistant messages
+        if self.token_length > self.max_token_length:
+            self.dump()
+            self.__init__(self.root, self.temperature, self.top_p,
+                          self.max_token_length, self.model, self.data_path)
+            self.msgs.append(
+                ("user",
+                 "You have reached the maximum token length. Now restarted."))
+            return
 
     def extract_bash_commands(self, response, identifier="```bash"):
         commands = []
@@ -120,11 +138,12 @@ class AutoExploreCopilot():
     def handle_command(self, cmd):
         # Test outside repo
         if cmd[0] in ["cd", "cat"]:
-            cmd[-1] = cmd[-1].strip()
-            path = os.path.dirname(cmd[-1]) if "." in os.path.basename(
-                cmd[-1]) else cmd[-1]
+            file = get_file_name(cmd)
+            path = os.path.dirname(file) if "." in os.path.basename(
+                file) else file
             if path == "":
                 path = "."
+
             original_cwd = os.getcwd()
             try:
                 os.chdir(path)
@@ -157,9 +176,8 @@ class AutoExploreCopilot():
                 elif cmd[0] == "cat":
                     self.read_count += 1
                     if self.read_count == 1:
-                        self.msgs.append(
-                            ("user",
-                             "The content of " + cmd[1] + " is:\n" + ret))
+                        self.msgs.append(("user", "The content of " + cmd[1] +
+                                          " is:\n" + trunc_cat(cmd[1], ret)))
                     else:
                         self.msgs.append(
                             ("user",
@@ -183,18 +201,17 @@ class AutoExploreCopilot():
 
         self.msgs.append(("assistant", response))
 
-        unencoded_pos = len(self.msgs) - 1
-
         self.updated_short_mem = False
 
         if "[SOLUTION]" in response:
-            # Flush all un-printed messages
-            for msg in self.msgs[unencoded_pos:]:
-                print(colored_string(msg))
-            unencoded_pos = len(self.msgs)
+            self.flush_msgs()
 
             # The agent replies with a solution, inject and run it
             result = self.dataset_wrapper.inject_and_run(response)
+
+            if result["stdout"] != "":
+                self.msgs.append(("user", "Stdout: " + result["stdout"]))
+
             if result["stderr"] != "":
                 self.msgs.append(("user", result["stderr"]))
             else:
@@ -208,10 +225,10 @@ class AutoExploreCopilot():
                         f.write(content)
 
                 exit(0)
-        else:
-            commands = self.extract_commands(response)
-            for cmd in commands:
-                self.handle_command(cmd)
+
+        commands = self.extract_commands(response)
+        for cmd in commands:
+            self.handle_command(cmd)
 
         if commands == []:
             self.msgs.append(
@@ -219,24 +236,7 @@ class AutoExploreCopilot():
                  "Further explore the code repo by sending me system commands: "
                  "ls, cd, cat."))
 
-        # Reset here to incorporate the last assistant messages
-        if self.token_length > self.max_token_length:
-            self.dump()
-            self.__init__(self.root, self.temperature, self.top_p,
-                          self.max_token_length, self.model, self.data_path)
-            self.msgs.append(
-                ("user",
-                 "You have reached the maximum token length. Now restarted."))
-            self.token_length += len(self.encoder.encode(self.msgs[-1][1]))
-            return
-
-        self.token_length += sum([
-            len(self.encoder.encode(msg[1]))
-            for msg in self.msgs[unencoded_pos:]
-        ])
-
-        for msg in self.msgs[unencoded_pos:]:
-            print(colored_string(msg))
+        self.flush_msgs()
 
         agent.act()
 

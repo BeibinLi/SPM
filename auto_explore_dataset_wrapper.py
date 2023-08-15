@@ -77,6 +77,9 @@ class AutoExploreDatasetWrapper:
             key is relative file path,
             value is the content in bytes.
         """
+        if "COMMAND" not in llm_output:
+            print(colored("Command not found in response.", "yellow"))
+            return
 
         # copy dataset to a temporary directory in the working directory
         temp_dir = tempfile.mkdtemp(dir=self.working_dir).replace("\\",
@@ -142,6 +145,8 @@ class AutoExploreDatasetWrapper:
         common_files = current_files.intersection(original_files)
 
         for file in common_files:
+            file = file.replace("\\", "/")
+
             original_file_path = self.dataset_path + file
             current_file_path = temp_dir + file
 
