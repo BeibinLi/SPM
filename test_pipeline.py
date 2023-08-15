@@ -3,6 +3,7 @@ import io
 import json
 import os
 import pickle
+import subprocess
 
 import tiktoken
 
@@ -149,7 +150,8 @@ class AutoExploreCopilot():
                 os.chdir(cmd[1])
                 self.msgs.append(("user", "Now at: " + self.get_cwd()))
             else:
-                ret = os.popen(" ".join(cmd)).read()
+                ret = subprocess.run(cmd, encoding="utf-8",
+                                     capture_output=True).stdout
                 if cmd[0] == "ls":
                     self.msgs.append(("user", "The result of ls is:\n" + ret))
                 elif cmd[0] == "cat":
@@ -268,6 +270,10 @@ if __name__ == "__main__":
         max_token_length=args.max_token_length,
         model=args.model,
         file_save_path=os.path.abspath(args.file_save_path) + "/",
-        task="Plot the bean price of Excelsa between Jun 2021 and 2022 Aug.",
+    #task="Plot the bean price of Excelsa between Jun 2021 and 2022 Aug.",
+    #task="Plot the number of suppliers on a map by countries, "
+    # "with a circle representing the number. "
+    # "Only plot those countries with no less than 5 suppliers.",
+        task="Who is responsible for the cafe in Beijing?",
         dataset_wrapper=AutoExploreDatasetWrapper("../Coffee_Roasting_Dataset"))
     agent.act()

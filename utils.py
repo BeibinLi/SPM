@@ -64,7 +64,7 @@ def replace_absolute_with_relative(text, root) -> str:
 def display_files_recursively(
     folder_path: str,
     indent: str = "",
-    file_suffixes: list = [".py", ".cpp", ".cs", ".md", ".txt"],
+    file_suffixes: list = [".py", ".cpp", ".cs", ".md", ".txt", ".csv"],
 ) -> str:
     """Recursively lists files with specific suffixes from a given directory
       and its subdirectories.
