@@ -13,6 +13,7 @@ from utils import (colored_string, find_all_substr, display_files_recursively,
 
 import argparse
 from auto_explore_dataset_wrapper import AutoExploreDatasetWrapper
+from termcolor import colored
 
 
 def get_args():
@@ -34,7 +35,7 @@ def get_args():
         " chat will be reset.")
     parser.add_argument("--model",
                         type=str,
-                        default="gpt-35-turbo",
+                        default="origin",
                         help="The model to use.")
     parser.add_argument("--file_save_path",
                         type=str,
@@ -199,6 +200,8 @@ class AutoExploreCopilot():
                                   prev_msgs=msgs_with_short_mem,
                                   model=self.model)[0]
 
+        print(colored(response, "red"))
+
         self.msgs.append(("assistant", response))
 
         self.updated_short_mem = False
@@ -270,10 +273,6 @@ if __name__ == "__main__":
         max_token_length=args.max_token_length,
         model=args.model,
         file_save_path=os.path.abspath(args.file_save_path) + "/",
-    #task="Plot the bean price of Excelsa between Jun 2021 and 2022 Aug.",
-    #task="Plot the number of suppliers on a map by countries, "
-    # "with a circle representing the number. "
-    # "Only plot those countries with no less than 5 suppliers.",
-        task="Who is responsible for the cafe in Beijing?",
+        task="Plot the bean price of Excelsa between Jun 2021 and 2022 Aug.",
         dataset_wrapper=AutoExploreDatasetWrapper("../Coffee_Roasting_Dataset"))
     agent.act()
