@@ -64,7 +64,7 @@ def replace_absolute_with_relative(text, root) -> str:
 def display_files_recursively(
     folder_path: str,
     indent: str = "",
-    file_suffixes: list = [".py", ".cpp", ".cs", ".md", ".txt"],
+    file_suffixes: list = [".py", ".cpp", ".cs", ".md", ".txt", ".csv"],
 ) -> str:
     """Recursively lists files with specific suffixes from a given directory
       and its subdirectories.
@@ -316,3 +316,49 @@ def save_data(data: dict,
 
     dump(train_data, train_path)
     dump(test_data, test_path)
+
+
+def trunc_cat(file_name: str, content: str, max_line: int = 10) -> str:
+    """
+    Truncate the content of a file for `cat` command if it is too long,
+    only when the file is a csv file.
+
+    Args:
+    - file_name (str): The name of the file.
+    - content (str): The content of the file.
+    - max_line (int): The maximum number of lines to display.
+
+    Returns:
+    - str: The truncated content.
+    """
+    if not file_name.endswith(".csv"):
+        return content
+
+    lines = content.split("\n")
+    if len(lines) <= max_line:
+        return content
+    else:
+        return ("\n".join(lines[:max_line]) + "\n...\nLarge csv file, "
+                f"only display first {max_line} lines.\n")
+
+
+def get_file_name(command: list) -> str:
+    """
+    Extract file name from the command.
+
+    Args:
+    - command (list): The command splitted into a list.
+
+    Returns:
+    - str: The name of the file.
+    """
+    if command[0] == "ls":
+        return command[1]
+    elif command[0] == "cat":
+        return command[1]
+    elif command[0] == "cd":
+        return command[1]
+    elif command[0] == "echo":
+        return command[-1]
+    else:
+        raise NotImplementedError(f"Does not support command: {command[0]}")
