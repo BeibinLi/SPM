@@ -328,3 +328,9 @@ def get_llm() -> object:
     openai.api_key = api_key
     api = AzureGPTClient()
     return api
+
+
+if __name__ == "__main__":
+    api = get_llm()
+    rst = api.reply(agent_name="user", msg="Hello")
+    print(rst)
