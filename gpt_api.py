@@ -13,10 +13,10 @@ from nltk.stem import PorterStemmer
 from termcolor import colored
 
 api_type = "azure"
-api_base = "https://msrcore.openai.azure.com/"
-#api_base = "https://gcrgpt4aoai4.openai.azure.com/"
+# api_base = "https://msrcore.openai.azure.com/"
+api_base = os.getenv("PROXY_OPENAI_ENDPOINT")
 api_version = "2023-03-15-preview"
-api_key = os.getenv("CORE_AZURE_KEY").strip().rstrip()
+api_key = os.getenv("PROXY_OPENAI_KEY").strip().rstrip()
 #api_key = os.getenv("CORE_AZURE_KEY_GPT_4").strip().rstrip()
 
 ps = PorterStemmer()
@@ -292,3 +292,9 @@ def get_llm() -> object:
     openai.api_key = api_key
     api = AzureGPTClient()
     return api
+
+
+if __name__ == "__main__":
+    api = get_llm()
+    rst = api.reply(agent_name="user", msg="Hello")
+    print(rst)
