@@ -34,7 +34,7 @@ def get_args():
         " chat will be reset.")
     parser.add_argument("--model",
                         type=str,
-                        default="gpt-4",
+                        default="gpt-35-turbo",
                         help="The model to use.")
     parser.add_argument("--file_save_path",
                         type=str,
@@ -148,6 +148,8 @@ class AutoExploreCopilot():
         else:
             commands = extract_command_blocks(response)
         for cmd in commands:
+            # TODO: catch exception here. If a bash block failed.
+            # Then, just stop
             command_output = self.sandbox.run_command(cmd)
 
             self.msgs.append(("user", command_output))

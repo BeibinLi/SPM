@@ -13,6 +13,8 @@ class AutoExploreSandbox:
     def __init__(
         self,
         dataset_path: str,
+        password: str = "",
+        private_files: list = [],
     ):
         """
         Wraps the dataset folder.
@@ -29,6 +31,9 @@ class AutoExploreSandbox:
         # Copy dataset to a temporary directory in the working directory
         self.sandbox_dir = tempfile.mkdtemp(dir=self.working_dir).replace(
             "\\", "/") + "/"
+
+        self.password = password
+        self.private_files = private_files
 
         # Ignore hidden files and directories
         def ignore(directory, filenames):
@@ -54,7 +59,22 @@ class AutoExploreSandbox:
         else:
             os.system('rm -rf "{}"'.format(self.sandbox_dir))
 
-    def run_command(self, cmd: [list, str]) -> str:
+    def safety_check(self, cmd: [list, str], password: str) -> str:
+        """
+        Return "SAFE" iff the cmd is safe to run.
+
+
+        Otherwise, return why it is not safe to run.
+        """
+        if password == self.password:
+            # Check some other unsafeness, such as "rm -rf"
+            raise NotImplementedError
+            return "SAFE"
+
+        raise NotImplementedError
+        return "Danger"
+
+    def run_command(self, cmd: [list, str], password: str) -> str:
         """Wrapper function for self.run_command().
         Run a bash command in the dataset sandbox.
 
@@ -69,6 +89,10 @@ class AutoExploreSandbox:
         - str: the execution result of the given command. If any errors
         occurred, then just return the error message.
         """
+        is_safe = self.safety_check(cmd, password)
+        if is_safe != "SAFE":
+            return "Sorry, your command is not safe to run! Because:\n" + is_safe
+
         # Restore to the checkpointed cwd
         _cwd = os.getcwd()
         os.chdir(self.cwd)
