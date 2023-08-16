@@ -26,10 +26,25 @@ class AutoExploreDatasetWrapper:
         self.working_dir = os.path.abspath(".").replace("\\", "/")
         self.dataset_path = os.path.abspath(dataset_path).replace("\\",
                                                                   "/") + "/"
+        # copy dataset to a temporary directory in the working directory
+        self.temp_dir = tempfile.mkdtemp(dir=self.working_dir).replace(
+            "\\", "/") + "/"
+
+        # ignore hidden files and directories
+        def ignore(dir, filenames):
+            return [fn for fn in filenames if fn.startswith('.')]
+
+        shutil.copytree(self.dataset_path,
+                        self.temp_dir,
+                        ignore=ignore,
+                        dirs_exist_ok=True)
+        print(
+            colored(f"Data copied to temporary directory: {self.temp_dir}",
+                    "green"))
 
     def run_code(self, code: str) -> str:
         """
-        Run the given code and return the output.
+        (Deprecated) Run the given code and return the output.
 
         Args:
         - code (str): A complete python code.
@@ -57,6 +72,39 @@ class AutoExploreDatasetWrapper:
 
         return captured_output
 
+    def find_changed_files(self) -> dict:
+        """
+        Find all changed files in the wrapped dataset.
+
+        Returns:
+        - dict: filename -> content in bytes
+        """
+        original_files = set(list_files(self.dataset_path))
+        current_files = set(list_files(self.temp_dir))
+        changed_files = list(current_files - original_files)
+
+        common_files = current_files.intersection(original_files)
+
+        for file in common_files:
+            file = file.replace("\\", "/")
+
+            original_file_path = self.dataset_path + file
+            current_file_path = self.temp_dir + file
+
+            original_file_content = open(original_file_path, "rb").read()
+            current_file_content = open(current_file_path, "rb").read()
+
+            if original_file_content != current_file_content:
+                changed_files.append(file)
+
+        print(colored("List of changed files:", "yellow"))
+        print(changed_files)
+
+        return {
+            file: open(self.temp_dir + file, "rb").read()
+            for file in changed_files
+        }
+
     def inject_and_run(self, llm_output: str) -> dict:
         """
         Given the output of LLM, retrieve the target source code and the injection
@@ -79,22 +127,7 @@ class AutoExploreDatasetWrapper:
         """
         if "COMMAND" not in llm_output:
             print(colored("Command not found in response.", "yellow"))
-            return
-
-        # copy dataset to a temporary directory in the working directory
-        temp_dir = tempfile.mkdtemp(dir=self.working_dir).replace("\\",
-                                                                  "/") + "/"
-
-        # ignore hidden files and directories
-        def ignore(dir, filenames):
-            return [fn for fn in filenames if fn.startswith('.')]
-
-        shutil.copytree(self.dataset_path,
-                        temp_dir,
-                        ignore=ignore,
-                        dirs_exist_ok=True)
-        print(
-            colored(f"Data copied to temporary directory: {temp_dir}", "green"))
+            return {"stdout": "", "stderr": "", "changed_files": {}}
 
         # inject
         while llm_output.find("TARGET_FILE:") != -1:
@@ -113,7 +146,7 @@ class AutoExploreDatasetWrapper:
                 injection_snippet_start:injection_snippet_end]
             llm_output = llm_output[injection_snippet_end:]
 
-            target_file_path = temp_dir + target_file
+            target_file_path = self.temp_dir + target_file
             target_file_content = open(target_file_path, "r").read()
 
             target_file_content = target_file_content + "\n" + injection_snippet
@@ -131,44 +164,20 @@ class AutoExploreDatasetWrapper:
 
         # run
         original_cwd = os.getcwd()
-        os.chdir(temp_dir)
+        os.chdir(self.temp_dir)
         # ignore all the warnings
         commands = shlex.split(bash)
         commands.insert(1, "-W ignore")
         result = subprocess.run(commands, capture_output=True)
 
-        # find all changed files
-        original_files = set(list_files(self.dataset_path))
-        current_files = set(list_files(temp_dir))
-        changed_files = list(current_files - original_files)
-
-        common_files = current_files.intersection(original_files)
-
-        for file in common_files:
-            file = file.replace("\\", "/")
-
-            original_file_path = self.dataset_path + file
-            current_file_path = temp_dir + file
-
-            original_file_content = open(original_file_path, "rb").read()
-            current_file_content = open(current_file_path, "rb").read()
-
-            if original_file_content != current_file_content:
-                changed_files.append(file)
-
-        print(colored("List of changed files:", "yellow"))
-        print(changed_files)
-
         ret = {
             "stdout":
-                result.stdout.decode('utf-8'),
+                result.stdout.decode("utf-8"),
             "stderr":
-                replace_absolute_with_relative(result.stderr.decode('utf-8'),
-                                               temp_dir),
-            "changed_files": {
-                file: open(temp_dir + file, "rb").read()
-                for file in changed_files
-            }
+                replace_absolute_with_relative(result.stderr.decode("utf-8"),
+                                               self.temp_dir),
+            "changed_files":
+                self.find_changed_files(),
         }
 
         # restore the original cwd
@@ -176,7 +185,7 @@ class AutoExploreDatasetWrapper:
 
         # clean up the temporary directory
         #shutil.rmtree(temp_dir) #shutil.rmtree() may not work properly on Windows
-        os.system('rmdir /S /Q "{}"'.format(temp_dir))
+        os.system('rmdir /S /Q "{}"'.format(self.temp_dir))
 
         return ret
 

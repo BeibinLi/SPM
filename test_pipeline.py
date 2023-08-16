@@ -225,6 +225,11 @@ class AutoExploreCopilot():
                         f.write(content)
 
                 exit(0)
+        elif "```python" in response:
+            self.msgs.append(
+                ("user",
+                 "Warning: If you want to run python code as a solution, "
+                 "you must follow the [SOLUTION] format."))
 
         commands = self.extract_commands(response)
         for cmd in commands:
