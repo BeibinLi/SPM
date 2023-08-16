@@ -7,7 +7,7 @@ You can send me system commands to explore the repo:
 1. Read files by `cat`. You can only read one file at a time to avoid exceeding memory and space limits.
 2. List all files by `ls`.
 3. Change directory by `cd`.
-4. Output to a file by `echo`.
+4. Output or append to a file by `echo`. Keep the output content minimal necessary.
 5. Execute a python code by `python`.
 6. Halt interaction by `exit`. You should exit if you finish the task.
 

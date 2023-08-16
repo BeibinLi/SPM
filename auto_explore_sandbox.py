@@ -3,8 +3,8 @@ import os
 import subprocess
 import shutil
 from termcolor import colored
-from utils import (list_files, replace_absolute_with_relative, get_target_dir)
-from utils import (trunc_cat, get_file_name)
+from utils import (list_files, replace_absolute_with_relative, get_target_dir,
+                   trunc_cat, get_file_name)
 
 
 class AutoExploreSandbox:
@@ -118,7 +118,7 @@ class AutoExploreSandbox:
                 os.chdir(cmd[1])
                 return "Success: Now at " + self._get_relative_cwd()
             else:
-                result = subprocess.run(cmd, capture_output=True)
+                result = subprocess.run(cmd, shell=True, capture_output=True)
                 rstdout = result.stdout.decode('utf-8')
                 rstderr = replace_absolute_with_relative(
                     result.stderr.decode('utf-8'), self.sandbox_dir)

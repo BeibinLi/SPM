@@ -108,14 +108,28 @@ class AutoExploreCopilot():
             return
 
     def act(self):
-        msgs_with_short_mem = self.msgs[:-1]
+        """
+        Wrapper function to interact with the language model for one step
+        and call the possible next act().
+        """
 
+        ret = self._act()
+
+        self.flush_msgs()
+
+        if ret == "Continue":
+            self.act()
+
+    def _act(self):
+        """
+        Inner function for an act.
+        """
         response = self.api.reply(agent_name=self.msgs[-1][0],
                                   msg=self.msgs[-1][1],
                                   num_response=1,
                                   temperature=self.temperature,
                                   top_p=self.top_p,
-                                  prev_msgs=msgs_with_short_mem,
+                                  prev_msgs=self.msgs[:-1],
                                   model=self.model)[0]
 
         self.msgs.append(("assistant", response))
@@ -135,6 +149,7 @@ class AutoExploreCopilot():
                                 exist_ok=True)
                     with open(self.file_save_path + file_name, "wb") as f:
                         f.write(content)
+                return "Exit"
 
         if commands == []:
             self.msgs.append(
@@ -142,9 +157,7 @@ class AutoExploreCopilot():
                  "Further explore the repo by sending me system commands: "
                  "ls, cd, cat, echo, python, exit."))
 
-        self.flush_msgs()
-
-        agent.act()
+        return "Continue"
 
     def dump(self):
         ckpts = os.listdir(self.data_path)

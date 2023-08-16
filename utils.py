@@ -3,11 +3,10 @@ import os
 import json
 import random
 import re
-import io
-import csv
 from termcolor import colored
 from datasets import load_dataset
 from datasets.arrow_dataset import Dataset
+import shlex
 from data_gen.paths import (
     pretrain_data_path,
     finetune_data_path,
@@ -400,6 +399,8 @@ def parse_echo(command: list) -> list:
         the filename
     and that the redirection symbol will only appear once at the end of the
         command.
+    The `"` characters are added to the message to be echoed to ensure that
+        the message is encapsulated. Only run in Linux.
     """
     assert command[0] == "echo", "The command is not an echo command."
     for i in range(len(command)):
@@ -462,35 +463,32 @@ def extract_commands(response: str) -> list:
     Parse a LLM output to a list of commands, where
     each command is represented in a list of arguments (strs).
 
-
-    TODO: debug: the csv.reader might not give correct results.
-    For instance, `echo hello    world > output.txt`
-
-
     Args:
     - response (str): LLM's response.
 
     Returns:
     - list: a 2D list of commands.
     """
-    #response = response.replace("'", '"')
     command_blocks = extract_command_blocks(response)
 
     parsed_commands = []
 
+    keyw = ["echo", "cat", "cd", "python", "ls", "exit"]
+
+    last_keyw_pos = 0
     for command_block in command_blocks:
-        f = io.StringIO(command_block)
-        reader = csv.reader(f,
-                            delimiter=' ',
-                            quotechar='"',
-                            skipinitialspace=True)
-        for row in reader:
-            if row == []:
-                continue
-            if row[0] == "echo":
-                parsed_commands.append(parse_echo(row))
-            else:
-                parsed_commands.append(row)
+        split = shlex.split(command_block)
+        for i in range(len(split)):
+            if split[i] in keyw:
+                parsed_commands.append(split[last_keyw_pos:i])
+                last_keyw_pos = i
+        parsed_commands.append(split[last_keyw_pos:])
+
+    parsed_commands = [cmd for cmd in parsed_commands if cmd != []]
+
+    for i in range(len(parsed_commands)):
+        if parsed_commands[i][0] == "echo":
+            parsed_commands[i] = parse_echo(parsed_commands[i])
 
     return parsed_commands
 
