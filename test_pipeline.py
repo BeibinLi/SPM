@@ -125,32 +125,41 @@ class AutoExploreCopilot():
 
         self.updated_short_mem = False
 
-        if "[SOLUTION]" in response:
-            self.flush_msgs()
+        # if "[SOLUTION]" in response:
+        #     self.flush_msgs()
 
-            # The agent replies with a solution, inject and run it
-            result = self.sandbox.inject_and_run(response)
-            # pdb.set_trace()
-            if result["stdout"] != "":
-                self.msgs.append(("user", "Stdout: " + result["stdout"]))
+        #     # The agent replies with a solution, inject and run it
+        #     result = self.sandbox.inject_and_run(response)
+        #     # pdb.set_trace()
+        #     if result["stdout"] != "":
+        #         self.msgs.append(("user", "Stdout: " + result["stdout"]))
 
-            if result["stderr"] != "":
-                self.msgs.append(("user", result["stderr"]))
-            else:
+        #     if result["stderr"] != "":
+        #         self.msgs.append(("user", result["stderr"]))
+        #     else:
+        #         # Success! save the result
+        #         os.makedirs(self.file_save_path, exist_ok=True)
+        #         for file_name, content in result["changed_files"].items():
+        #             os.makedirs(self.file_save_path +
+        #                         os.path.dirname(file_name),
+        #                         exist_ok=True)
+        #             with open(self.file_save_path + file_name, "wb") as f:
+        #                 f.write(content)
+        #     self.msgs.append(("user", result["information"]))
+
+        commands = extract_commands(response)
+        for cmd in commands:
+            command_output = self.sandbox.run_command(cmd)
+            if cmd[0] == "exit":
                 # Success! save the result
                 os.makedirs(self.file_save_path, exist_ok=True)
-                for file_name, content in result["changed_files"].items():
+                for file_name, content in self.sandbox.changed_files.items():
                     os.makedirs(self.file_save_path +
                                 os.path.dirname(file_name),
                                 exist_ok=True)
                     with open(self.file_save_path + file_name, "wb") as f:
                         f.write(content)
-                return    # end of act()
-            self.msgs.append(("user", result["information"]))
-
-        commands = extract_commands(response)
-        for cmd in commands:
-            command_output = self.sandbox.run_command(cmd)
+                # return # end of act
             self.msgs.append(("user", command_output))
 
         if commands == []:

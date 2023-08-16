@@ -4,7 +4,6 @@ import tempfile
 import os
 import io
 import subprocess
-import shlex
 import shutil
 from termcolor import colored
 from utils import (list_files, replace_absolute_with_relative)
@@ -90,117 +89,52 @@ class AutoExploreSandbox:
                     f"Error: You cannot access files ({cwd}) outside the repo "
                     f"({self.sandbox_dir})! You are now at {os.getcwd()}")
 
-        if cmd[0] not in ["cd", "ls", "cat", "python"]:
+        if cmd[0] not in ["cd", "ls", "cat", "python", "exit"]:
             return "Error: You can only run cd, ls, cat, python commands."
+
+        if cmd[0] == "exit":
+            return "Success: Bye!"
 
         try:
             if cmd[0] == "cd":
                 os.chdir(cmd[1])
                 return "Success: Now at " + self.relative_cwd()
             else:
-                ret = subprocess.run(cmd, encoding="utf-8",
-                                     capture_output=True).stdout
+                result = subprocess.run(cmd,
+                                        encoding="utf-8",
+                                        capture_output=True)
+                ret = result.stdout
                 if cmd[0] == "ls":
                     return "Success: The result of ls is:\n" + ret
                 elif cmd[0] == "cat":
                     return "Success: The content of " + cmd[
                         1] + " is:\n" + trunc_cat(cmd[1], ret)
                 elif cmd[0] == "python":
-                    return "Success: The output of python is:\n" + ret
+                    ret = {
+                        "stdout":
+                            result.stdout.decode('utf-8'),
+                        "stderr":
+                            replace_absolute_with_relative(
+                                result.stderr.decode('utf-8'),
+                                self.sandbox_dir),
+                        "information":
+                            f"""You are now at the folder {self.relative_cwd()}"""
+                    }
+
+                    pdb.set_trace()
+
+                    return "Success: The output of python is:\n" + str(ret)
         except Exception as e:
             return "Error: " + str(e)
 
         # pdb.set_trace()
         raise NotImplementedError    # we should never reach here
 
-    def relative_cwd(self):
-        "Return the relative path to the sandbox's root directory."
-        # return os.getcwd().replace('\\', '/').replace(self.sandbox_dir, '')
-        return os.path.relpath(os.getcwd().replace('\\', '/'),
-                               self.sandbox_dir).replace('\\', '/')
-
-    def inject_and_run(self, llm_output: str) -> dict:
-        """
-        Given the output of LLM, retrieve the target source code and the
-        injection snippet. Inject, run, and return the output.
-
-        Args:
-        - llm_output (str): The output of LLM, should be in natural language.
-            - TARGET_FILE identifies the file to be appended with
-            the injection snippet.
-            - INJECTION_SNIPPET identifies the code to be injected.
-            - COMMAND identifies the command to be run.
-
-        Returns:
-        - dict:
-            - "stdout": The output of the injected code.
-            - "stderr": The error message of the injected code.
-            - "changed_files": A dict of changed files,
-            key is relative file path,
-            value is the content in bytes.
-        """
-        if "COMMAND" not in llm_output:
-            print(colored("Command not found in response.", "yellow"))
-            return {
-                "stdout":
-                    "",
-                "stderr":
-                    "",
-                "changed_files": {},
-                "information":
-                    f"""You are now at the folder {self.relative_cwd()}"""
-            }
-
-        # Step 2: inject the new code into the sandbox
-        while llm_output.find("TARGET_FILE:") != -1:
-            target_file_start = llm_output.find("TARGET_FILE:") + len(
-                "TARGET_FILE:")
-            target_file_end = llm_output.find("\n", target_file_start)
-            target_file = llm_output[target_file_start:target_file_end].strip()
-            llm_output = llm_output[target_file_end:]
-
-            injection_snippet_start = llm_output.find("INJECTION_SNIPPET:")
-            injection_snippet_start = llm_output.find(
-                "```python\n", injection_snippet_start) + len("```python\n")
-            injection_snippet_end = llm_output.find("```",
-                                                    injection_snippet_start)
-            injection_snippet = llm_output[
-                injection_snippet_start:injection_snippet_end]
-            llm_output = llm_output[injection_snippet_end:]
-
-            # Read existing content
-            target_file_path = os.path.join(self.sandbox_dir, target_file)
-            try:
-                target_file_content = open(target_file_path, "r").read()
-            except Exception as e:
-                print(colored(f"Error {e}", "red"))
-                target_file_content = ""
-
-            # Write the new content
-            target_file_content = target_file_content + "\n" + injection_snippet
-            with open(target_file_path, "w") as f:
-                f.write(target_file_content)
-
-        print(colored("Injection done.", "green"))
-
-        # extract commands
-        bash_start = llm_output.find("COMMAND:")
-        bash_start = llm_output.find("```bash\n", bash_start) + len("```bash\n")
-        bash_end = llm_output.find("```", bash_start)
-        bash = llm_output[bash_start:bash_end].strip()
-
-        # run
-        # os.chdir(self.sandbox_dir)
-        # ignore all the warnings
-        commands = shlex.split(bash)
-        commands.insert(1, "-W ignore")
-        pdb.set_trace()
-        result = subprocess.run(commands, capture_output=True)
-
-        # find all changed files
+    @property
+    def changed_files(self) -> dict:
         original_files = set(list_files(self.dataset_path))
         current_files = set(list_files(self.sandbox_dir))
-        changed_files = list(current_files - original_files)
+        _changed_files = list(current_files - original_files)
 
         common_files = current_files.intersection(original_files)
 
@@ -214,26 +148,133 @@ class AutoExploreSandbox:
             current_file_content = open(current_file_path, "rb").read()
 
             if original_file_content != current_file_content:
-                changed_files.append(file)
+                _changed_files.append(file)
 
         print(colored("List of changed files:", "yellow"))
-        print(changed_files)
+        print(_changed_files)
+        return _changed_files
 
-        ret = {
-            "stdout":
-                result.stdout.decode('utf-8'),
-            "stderr":
-                replace_absolute_with_relative(result.stderr.decode('utf-8'),
-                                               self.sandbox_dir),
-            "changed_files": {
-                file: open(self.sandbox_dir + file, "rb").read()
-                for file in changed_files
-            },
-            "information":
-                f"""You are now at the folder {self.relative_cwd()}"""
-        }
+    def relative_cwd(self):
+        "Return the relative path to the sandbox's root directory."
+        # return os.getcwd().replace('\\', '/').replace(self.sandbox_dir, '')
+        return os.path.relpath(os.getcwd().replace('\\', '/'),
+                               self.sandbox_dir).replace('\\', '/')
 
-        return ret
+    # def inject_and_run(self, llm_output: str) -> dict:
+    #     """
+    #     Given the output of LLM, retrieve the target source code and the
+    #     injection snippet. Inject, run, and return the output.
+
+    #     Args:
+    #     - llm_output (str): The output of LLM, should be in natural language.
+    #         - TARGET_FILE identifies the file to be appended with
+    #         the injection snippet.
+    #         - INJECTION_SNIPPET identifies the code to be injected.
+    #         - COMMAND identifies the command to be run.
+
+    #     Returns:
+    #     - dict:
+    #         - "stdout": The output of the injected code.
+    #         - "stderr": The error message of the injected code.
+    #         - "changed_files": A dict of changed files,
+    #         key is relative file path,
+    #         value is the content in bytes.
+    #     """
+    #     if "COMMAND" not in llm_output:
+    #         print(colored("Command not found in response.", "yellow"))
+    #         return {
+    #             "stdout":
+    #                 "",
+    #             "stderr":
+    #                 "",
+    #             "changed_files": {},
+    #             "information":
+    #                 f"""You are now at the folder {self.relative_cwd()}"""
+    #         }
+
+    #     # Step 2: inject the new code into the sandbox
+    #     while llm_output.find("TARGET_FILE:") != -1:
+    #         target_file_start = llm_output.find("TARGET_FILE:") + len(
+    #             "TARGET_FILE:")
+    #         target_file_end = llm_output.find("\n", target_file_start)
+    #         target_file = llm_output[target_file_start:target_file_end].strip()
+    #         llm_output = llm_output[target_file_end:]
+
+    #         injection_snippet_start = llm_output.find("INJECTION_SNIPPET:")
+    #         injection_snippet_start = llm_output.find(
+    #             "```python\n", injection_snippet_start) + len("```python\n")
+    #         injection_snippet_end = llm_output.find("```",
+    #                                                 injection_snippet_start)
+    #         injection_snippet = llm_output[
+    #             injection_snippet_start:injection_snippet_end]
+    #         llm_output = llm_output[injection_snippet_end:]
+
+    #         # Read existing content
+    #         target_file_path = os.path.join(self.sandbox_dir, target_file)
+    #         try:
+    #             target_file_content = open(target_file_path, "r").read()
+    #         except Exception as e:
+    #             print(colored(f"Error {e}", "red"))
+    #             target_file_content = ""
+
+    #         # Write the new content
+    #         target_file_content = target_file_content + "\n" + injection_snippet
+    #         with open(target_file_path, "w") as f:
+    #             f.write(target_file_content)
+
+    #     print(colored("Injection done.", "green"))
+
+    #     # extract commands
+    #     bash_start = llm_output.find("COMMAND:")
+    #     bash_start = llm_output.find("```bash\n", bash_start) + len("```bash\n")
+    #     bash_end = llm_output.find("```", bash_start)
+    #     bash = llm_output[bash_start:bash_end].strip()
+
+    #     # run
+    #     # os.chdir(self.sandbox_dir)
+    #     # ignore all the warnings
+    #     commands = shlex.split(bash)
+    #     commands.insert(1, "-W ignore")
+    #     # pdb.set_trace()
+    #     result = subprocess.run(commands, capture_output=True)
+
+    #     # find all changed files
+    #     original_files = set(list_files(self.dataset_path))
+    #     current_files = set(list_files(self.sandbox_dir))
+    #     changed_files = list(current_files - original_files)
+
+    #     common_files = current_files.intersection(original_files)
+
+    #     for file in common_files:
+    #         file = file.replace("\\", "/")
+
+    #         original_file_path = self.dataset_path + file
+    #         current_file_path = self.sandbox_dir + file
+
+    #         original_file_content = open(original_file_path, "rb").read()
+    #         current_file_content = open(current_file_path, "rb").read()
+
+    #         if original_file_content != current_file_content:
+    #             changed_files.append(file)
+
+    #     print(colored("List of changed files:", "yellow"))
+    #     print(changed_files)
+
+    #     ret = {
+    #         "stdout":
+    #             result.stdout.decode('utf-8'),
+    #         "stderr":
+    #             replace_absolute_with_relative(result.stderr.decode('utf-8'),
+    #                                            self.sandbox_dir),
+    #         "changed_files": {
+    #             file: open(self.sandbox_dir + file, "rb").read()
+    #             for file in changed_files
+    #         },
+    #         "information":
+    #             f"""You are now at the folder {self.relative_cwd()}"""
+    #     }
+
+    #     return ret
 
 
 ###
