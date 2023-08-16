@@ -48,9 +48,16 @@ INJECTION_SNIPPET:
 ```python
 print("Hello world!")
 ```
+
+TARGET_FILE: visualization/sell_price.py
+INJECTION_SNIPPET:
+```python
+print("How are you")
+``````
+
 COMMAND:
 ```bash
-python visualization/supplier_price.py --name='Farhunnisa Rajata'
+python visualization/main.py --name='Farhunnisa Rajata'
 ```
 
 
