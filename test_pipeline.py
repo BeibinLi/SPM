@@ -4,11 +4,10 @@ import pickle
 import tiktoken
 
 from gpt_api import get_llm
-from utils import (colored_string, display_files_recursively)
+from utils import (colored_string, display_files_recursively, extract_commands)
 
 import argparse
-from auto_explore_sandbox import AutoExploreSandbox, extract_commands
-from termcolor import colored
+from auto_explore_sandbox import AutoExploreSandbox
 
 
 def get_args():
@@ -119,54 +118,29 @@ class AutoExploreCopilot():
                                   prev_msgs=msgs_with_short_mem,
                                   model=self.model)[0]
 
-        print(colored(response, "red"))
-
         self.msgs.append(("assistant", response))
-
-        self.updated_short_mem = False
-
-        # if "[SOLUTION]" in response:
-        #     self.flush_msgs()
-
-        #     # The agent replies with a solution, inject and run it
-        #     result = self.sandbox.inject_and_run(response)
-        #     # pdb.set_trace()
-        #     if result["stdout"] != "":
-        #         self.msgs.append(("user", "Stdout: " + result["stdout"]))
-
-        #     if result["stderr"] != "":
-        #         self.msgs.append(("user", result["stderr"]))
-        #     else:
-        #         # Success! save the result
-        #         os.makedirs(self.file_save_path, exist_ok=True)
-        #         for file_name, content in result["changed_files"].items():
-        #             os.makedirs(self.file_save_path +
-        #                         os.path.dirname(file_name),
-        #                         exist_ok=True)
-        #             with open(self.file_save_path + file_name, "wb") as f:
-        #                 f.write(content)
-        #     self.msgs.append(("user", result["information"]))
 
         commands = extract_commands(response)
         for cmd in commands:
             command_output = self.sandbox.run_command(cmd)
+            self.msgs.append(("user", command_output))
+
             if cmd[0] == "exit":
                 # Success! save the result
                 os.makedirs(self.file_save_path, exist_ok=True)
-                for file_name, content in self.sandbox.changed_files.items():
+                for file_name, content in self.sandbox.get_changed_files(
+                ).items():
                     os.makedirs(self.file_save_path +
                                 os.path.dirname(file_name),
                                 exist_ok=True)
                     with open(self.file_save_path + file_name, "wb") as f:
                         f.write(content)
-                # return # end of act
-            self.msgs.append(("user", command_output))
 
         if commands == []:
             self.msgs.append(
                 ("user", "Warning: You didn't give me any command. "
-                 "Further explore the code repo by sending me system commands: "
-                 "ls, cd, cat."))
+                 "Further explore the repo by sending me system commands: "
+                 "ls, cd, cat, echo, python, exit."))
 
         self.flush_msgs()
 
