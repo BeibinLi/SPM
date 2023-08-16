@@ -4,7 +4,8 @@ import pickle
 import tiktoken
 
 from gpt_api import get_llm
-from utils import (colored_string, display_files_recursively, extract_commands)
+from utils import (colored_string, display_files_recursively,
+                   extract_command_blocks, extract_commands)
 
 import argparse
 from auto_explore_sandbox import AutoExploreSandbox
@@ -37,15 +38,21 @@ def get_args():
                         help="The model to use.")
     parser.add_argument("--file_save_path",
                         type=str,
-                        default="../new_and_changed_files/",
+                        default="new_and_changed_files/",
                         help="The path to save the new or changed files.")
+
+    parser.add_argument(
+        "--split_command",
+        type=bool,
+        default=False,
+        help="Whether to split the command into multiple lines.")
     return parser.parse_args()
 
 
 class AutoExploreCopilot():
 
     def __init__(self, root, temperature, top_p, max_token_length, model,
-                 file_save_path):
+                 file_save_path, split_command):
         self.root = os.path.abspath(root).replace('\\', '/')
         self.root_dir_name = self.root.replace(os.path.basename(self.root), '')
         self.temperature = temperature
@@ -53,6 +60,8 @@ class AutoExploreCopilot():
         self.max_token_length = max_token_length
         self.model = model
         self.file_save_path = file_save_path
+        self.split_command = split_command
+
         self.api = get_llm()
         self.msgs = []    # TODO: handle multi-round user interactions.
 
@@ -134,12 +143,19 @@ class AutoExploreCopilot():
 
         self.msgs.append(("assistant", response))
 
-        commands = extract_commands(response)
+        if self.split_command:
+            commands = extract_commands(response)
+        else:
+            commands = extract_command_blocks(response)
         for cmd in commands:
             command_output = self.sandbox.run_command(cmd)
+
             self.msgs.append(("user", command_output))
 
-            if cmd[0] == "exit":
+            # if "exit" command is in cmd.
+            is_exit = type(cmd) is list and cmd[0] == "exit"
+            is_exit |= type(cmd) is str and "exit" in cmd.split("\n")
+            if is_exit:
                 # Success! save the result
                 os.makedirs(self.file_save_path, exist_ok=True)
                 for file_name, content in self.sandbox.get_changed_files(
@@ -188,6 +204,7 @@ if __name__ == "__main__":
         top_p=args.top_p,
         max_token_length=args.max_token_length,
         model=args.model,
-        file_save_path=os.path.abspath(args.file_save_path) + "/")
+        file_save_path=os.path.abspath(args.file_save_path) + "/",
+        split_command=args.split_command)
     agent.answer(
         "Plot the bean price of Excelsa between Jun 2021 and 2022 Aug.")

@@ -2,6 +2,7 @@ import tempfile
 import os
 import subprocess
 import shutil
+import pdb
 from termcolor import colored
 from utils import (list_files, replace_absolute_with_relative, get_target_dir,
                    trunc_cat, get_file_name)
@@ -46,11 +47,14 @@ class AutoExploreSandbox:
 
     def __del__(self):
         # Clean up the temporary directory
-        # shutil.rmtree(self.sandbox_dir)
-        # #shutil.rmtree() may not work properly on Windows
-        os.system('rmdir /S /Q "{}"'.format(self.sandbox_dir))
+        # If it is windows, run 'rmdir'
+        # otherwise, run rm -rf
+        if os.name == "nt":
+            os.system('rmdir /S /Q "{}"'.format(self.sandbox_dir))
+        else:
+            os.system('rm -rf "{}"'.format(self.sandbox_dir))
 
-    def run_command(self, cmd: list) -> str:
+    def run_command(self, cmd: [list, str]) -> str:
         """Wrapper function for self.run_command().
         Run a bash command in the dataset sandbox.
 
@@ -58,7 +62,8 @@ class AutoExploreSandbox:
         cd, ls, cat, echo, python.
 
         Args:
-        - cmd (list): a single command splitted into arguments
+        - cmd (list or str): a single command splitted into arguments or
+             a string of the command.
 
         Returns:
         - str: the execution result of the given command. If any errors
@@ -68,13 +73,58 @@ class AutoExploreSandbox:
         _cwd = os.getcwd()
         os.chdir(self.cwd)
 
-        ret = self._run_command(cmd)
+        if type(cmd) is list:
+            ret = self._run_command(cmd)
+        elif type(cmd) is str:
+            ret = self._run_raw_command(cmd)
 
         # Checkpoint cwd
         self.cwd = os.getcwd().replace("\\", "/") + "/"
         os.chdir(_cwd)
 
         return ret
+
+    def _run_raw_command(self, cmd: str) -> str:
+        """
+        Args:
+        - cmd (str): a command block, which could contain several lines of
+            commands.
+
+        Returns:
+        - str: the execution result of the given command. If any errors
+        occurred, then just return the error message.
+        """
+
+        # Run the command
+        rst_msg = ""
+        try:
+            wrapped_cmd = cmd + "\n\npwd\n"
+            result = subprocess.run(wrapped_cmd,
+                                    shell=True,
+                                    capture_output=True)
+            stdout = result.stdout.decode('utf-8')
+
+            error = result.stderr.decode('utf-8')
+            if len(error):
+                rst_msg += "Error encountered:\n" + error + "\n\n"
+                os.chdir(self.sandbox_dir)
+                rst_msg += ("Now, you are at the root: " +
+                            self._get_relative_cwd() + "\n\n")
+
+            # Remove empty line
+            output_lines = stdout.split("\n")
+            while len(output_lines) and output_lines[-1] == "":
+                output_lines.pop()
+
+            if len(output_lines) == 0:
+                return "Your bash code run smoothly without giving any outputs"
+
+            os.chdir(output_lines[-1].strip().rstrip())
+        except Exception as e:
+            print(e)
+            pdb.set_trace()
+
+        return "\n".join(output_lines[:-1])
 
     def _run_command(self, cmd: list) -> str:
         """Inner function for self.run_command().
