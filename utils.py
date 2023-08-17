@@ -6,7 +6,7 @@ import re
 from termcolor import colored
 from datasets import load_dataset
 from datasets.arrow_dataset import Dataset
-import shlex
+import bashlex
 from data_gen.paths import (
     pretrain_data_path,
     finetune_data_path,
@@ -477,7 +477,8 @@ def extract_commands(response: str) -> list:
 
     last_keyw_pos = 0
     for command_block in command_blocks:
-        split = shlex.split(command_block)
+        split = list(bashlex.split(command_block))
+        # split = shlex.split(command_block)
         for i in range(len(split)):
             if split[i] in keyw:
                 parsed_commands.append(split[last_keyw_pos:i])

@@ -3,6 +3,9 @@ import os
 import subprocess
 import shutil
 import pdb
+import random
+import string
+from hashlib import sha256
 from termcolor import colored
 from utils import (list_files, replace_absolute_with_relative, get_target_dir,
                    trunc_cat, get_file_name)
@@ -32,7 +35,10 @@ class AutoExploreSandbox:
         self.sandbox_dir = tempfile.mkdtemp(dir=self.working_dir).replace(
             "\\", "/") + "/"
 
-        self.password = password
+        # Store the hashed password for identity verification
+        self._sandbox_id = ''.join(
+            random.choices(string.ascii_uppercase + string.digits, k=10))
+        self._hashed_password = self._hash_password(password)
         self.private_files = private_files
 
         # Ignore hidden files and directories
@@ -59,20 +65,22 @@ class AutoExploreSandbox:
         else:
             os.system('rm -rf "{}"'.format(self.sandbox_dir))
 
+    def _hash_password(self, password: str) -> str:
+        return sha256(password.encode('utf-8') + self._sandbox_id).hexdigest()
+
     def safety_check(self, cmd: [list, str], password: str) -> str:
         """
         Return "SAFE" iff the cmd is safe to run.
 
 
-        Otherwise, return why it is not safe to run.
+        Otherwise, return "DANGER" and why it is not safe to run.
         """
-        if password == self.password:
-            # Check some other unsafeness, such as "rm -rf"
-            raise NotImplementedError
-            return "SAFE"
+        # First check if password is correct
+        if self._hash_password(password) != self._hashed_password:
+            return "DANGER: Wrong password!"
 
-        raise NotImplementedError
-        return "Danger"
+        # Then check if the target file is private
+        return "SAFE"
 
     def run_command(self, cmd: [list, str], password: str) -> str:
         """Wrapper function for self.run_command().

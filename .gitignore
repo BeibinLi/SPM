@@ -72,3 +72,4 @@ new_and_changed_files/*
 
 tmp*/**
 test_extract_cmd.py
+test_subprocess_run.py
