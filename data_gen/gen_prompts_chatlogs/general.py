@@ -163,6 +163,7 @@ if __name__ == "__main__":
             with open(prompt_output_path + file, "r") as handle:
                 prompts = handle.read()
             agent = CuriousAgent(api=get_llm(),
+                                 model="gpt-4",
                                  system_msg=prompts,
                                  formatter=None,
                                  temperature=1,

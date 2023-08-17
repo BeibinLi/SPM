@@ -11,6 +11,7 @@ class CuriousAgent:
 
     def __init__(self,
                  api,
+                 model: str,
                  system_msg: str,
                  formatter: callable = None,
                  temperature=0.1,
@@ -18,6 +19,7 @@ class CuriousAgent:
                  num_response=1,
                  max_token_length=None):
         self.api = api
+        self.model = model
         self.system_msg = system_msg
         self.msgs = [("system", system_msg)]
         self.details = []
@@ -44,7 +46,7 @@ class CuriousAgent:
                                    temperature=self.temperature,
                                    top_p=self.top_p,
                                    prev_msgs=self.msgs,
-                                   model="gpt-4-32k")
+                                   model=self.model)
 
         self.details.append(responses)
 

@@ -418,6 +418,22 @@ def extract_command_blocks(response, identifier="```bash"):
 
 
 def split_command(command_block: str) -> list:
+    """
+    Split a command block into a list of arguments.
+
+    Args:
+    - command_block (str): A command block.
+
+    Returns:
+    - list: A list of arguments.
+
+    Example:
+    Given the command block:
+        echo "Hello, World!"
+        cat file.txt
+    The function will return:
+        ['echo', '"Hello, World!"', 'cat', 'file.txt']
+    """
     indices = []
     quote = None
 
@@ -441,8 +457,8 @@ def split_command(command_block: str) -> list:
                 indices.append((pos, i))
         i += 1
 
-    L = 10
     # Replace quoted texts with random strings
+    L = 10
     replacement_dict = {}
     for index in reversed(indices):
         text = command_block[index[0]:index[1] + 1]
@@ -509,6 +525,10 @@ def extract_commands(response: str) -> list:
             continue
         if cmd[0] == "echo":
             cmd = parse_echo(cmd)
+        elif cmd[0] == "python":
+            # Ignore warnings
+            cmd.insert(1, '-W')
+            cmd.insert(2, 'ignore')
         ret.append(cmd)
 
     return ret
@@ -516,9 +536,9 @@ def extract_commands(response: str) -> list:
 
 def parse_echo(command: list) -> list:
     """
-    Parses an `echo` command string into its constituent parts.
+    Parses an `echo` command list into 5 parts.
 
-    The function breaks down the echo command into its main components,
+    The function groups the echo command arguments into its main components,
     specifically handling redirection using the '>' symbol.
 
     Args:
@@ -526,17 +546,13 @@ def parse_echo(command: list) -> list:
         by whitespace.
 
     Returns:
-    - list: A list of parsed components. If the command has a redirection
-        (using '>'), the returned list will contain the `echo` command, the
-        message to be echoed, the redirection symbol, and the file to which
-        the message will be written. If there is no redirection, it will return
-        just the `echo` command and the message.
+    - list: A list of parsed components.
 
     Example:
     Given the command list:
     ['echo', 'Hello', 'World', '>', 'output.txt']
     The function will return:
-    ['echo', '"Hello World"', '>', 'output.txt']
+    ['echo', '-e', '"Hello World"', '>', 'output.txt']
 
     Note:
     The function assumes that the redirection symbol '>' is always followed by

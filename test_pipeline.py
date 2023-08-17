@@ -69,7 +69,8 @@ class AutoExploreCopilot():
     def answer(self, question):
         # 1. Setup memory and chat
         start_prompt = open(
-            "data_gen/prompt_templates/explore_prompt_simple.md", "r").read()
+            "data_gen/prompt_templates/auto_explore/explore_prompt_simple.md",
+            "r").read()
         start_prompt = start_prompt.format(all_files=display_files_recursively(
             self.root),
                                            TASK=question)
