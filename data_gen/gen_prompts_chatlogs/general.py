@@ -1,4 +1,4 @@
-from utils import find_all_substr
+from utils import (find_all_substr, slice_text)
 from data_gen.paths import (prompt_output_path, raw_data_path,
                             chatlog_output_path, prompt_template_path)
 from curious_agent import CuriousAgent
@@ -9,6 +9,8 @@ import ast
 from tqdm import tqdm
 from collections import defaultdict
 import tiktoken
+
+from termcolor import colored
 
 num_response = 2
 num_interaction = 5
@@ -37,6 +39,8 @@ def save_prompt(prompt, task):
 def dfs(path):
     file_list = os.listdir(path)
     for file in file_list:
+        if file.startswith("."):
+            continue
         new_path = path + file
         if os.path.isdir(new_path):
             dfs(new_path + "/")
@@ -60,10 +64,13 @@ def enumerate_file_tuples(file_names, content, pos, task):
             if content[pos_ed] == "}":
                 break
 
-        new_content = content[:pos[-1]] + files[
-            file_names[i]] + content[pos_ed + 1:]
+        slices = slice_text(files[file_names[i]])
 
-        enumerate_file_tuples(file_names[i + 1:], new_content, pos[:-1], task)
+        for slice in slices:
+            new_content = content[:pos[-1]] + slice + content[pos_ed + 1:]
+
+            enumerate_file_tuples(file_names[i + 1:], new_content, pos[:-1],
+                                  task)
 
 
 def replace_content(file_names, task, prompt_template, identifier, suffix):
@@ -76,7 +83,8 @@ def replace_content(file_names, task, prompt_template, identifier, suffix):
     for file_name in file_names:
         if file_name.endswith(suffix):
             filtered_fn.append(file_name)
-    enumerate_file_tuples(filtered_fn, prompt_template, pos, task[:-len(".md")])
+    enumerate_file_tuples(filtered_fn, prompt_template, pos,
+                          task[:-len(suffix)])
 
 
 def extract_clip(code, clip_type):
@@ -119,6 +127,7 @@ def gen_data(data_type):
     file_names = list(files.keys())
 
     for (task, prompt_template) in tasks.items():
+        print(colored(f"Generating {task}...", "green"))
         # All {content} {content%x} replacement
         # TODO: {prev_generated_QA} in question.md (all hybrid prompt templates)
         replace_content(file_names, task, prompt_template, "{content", ".md")

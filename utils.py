@@ -8,6 +8,7 @@ from datasets import load_dataset
 from datasets.arrow_dataset import Dataset
 import shlex
 import string
+import tiktoken
 from data_gen.paths import (
     pretrain_data_path,
     finetune_data_path,
@@ -590,3 +591,18 @@ def get_target_dir(cmd: list) -> str:
     os.chdir(original_cwd)
 
     return target_dir
+
+
+def slice_text(text: str,
+               slicing_gap: int = 800,
+               slicing_len: int = 1000) -> list:
+    encoder = tiktoken.encoding_for_model("gpt-4")
+
+    ret = []
+    encoded = encoder.encode(text)
+    i = 0
+    while i < len(encoded):
+        ret.append(encoder.decode(encoded[i:i + slicing_len]))
+        i += slicing_gap
+
+    return ret
