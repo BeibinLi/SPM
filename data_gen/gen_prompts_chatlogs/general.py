@@ -14,7 +14,7 @@ from termcolor import colored
 
 num_response = 2
 num_interaction = 5
-max_token_length = 10000
+max_token_length = 8192 // 2
 encoder = tiktoken.encoding_for_model("gpt-4")
 
 tasks = {}
