@@ -13,11 +13,13 @@ from nltk.stem import PorterStemmer
 from termcolor import colored
 
 api_type = "azure"
-api_base = "https://msrcore.openai.azure.com/"
+#api_base = "https://msrcore.openai.azure.com/"
 #api_base = "https://gcrgpt4aoai4.openai.azure.com/"
+api_base = os.getenv("PROXY_OPENAI_ENDPOINT")
 api_version = "2023-03-15-preview"
-api_key = os.getenv("CORE_AZURE_KEY").strip().rstrip()
+#api_key = os.getenv("CORE_AZURE_KEY").strip().rstrip()
 #api_key = os.getenv("CORE_AZURE_KEY_GPT_4").strip().rstrip()
+api_key = os.getenv("PROXY_OPENAI_KEY").strip().rstrip()
 
 ps = PorterStemmer()
 
@@ -80,6 +82,40 @@ def cache_llm_infer_result(func):
 
 
 def handle_prev_message_history(agent_name, msg, prev_msgs):
+    """
+    Prepare and handle the message history, ensuring the presence of a system message.
+
+    This function takes the current agent's name, message, and the previous messages
+    history. It ensures that if there's no system message in the previous messages,
+    one is added. Then, it appends the current message to the history.
+
+    Parameters:
+    - agent_name (str): The name of the current agent sending the message.
+    - msg (str): The content of the current message.
+    - prev_msgs (list of tuple): A list of previous messages, where each message is
+                                 represented as a tuple (agent_name, content).
+
+    Returns:
+    - list: A list of messages (in dictionary format) with the format:
+            {
+                "role": agent_name,
+                "content": message_content
+            }
+
+    Note:
+    The function ensures that a system message with content "You are an AI assistant
+    that writes Python code to answer questions." is present at the beginning of the
+    history if not already present.
+
+    Example:
+    Given agent_name="User", msg="Hello", and prev_msgs=[("system", "system_msg"),
+    ("User", "Hi")], the function will return:
+    [
+        {"role": "system", "content": "system_msg"},
+        {"role": "User", "content": "Hi"},
+        {"role": "User", "content": "Hello"}
+    ]
+    """
     if prev_msgs is None:
         prev_msgs = []
 
@@ -178,7 +214,7 @@ class AzureGPTClient():
                 "n": num_response,
                 "temperature": temperature,
                 "top_p": top_p,
-                "messages": messages,
+                "messages": prev_msgs,
                 "max_tokens": max_tokens,
                 "secret": "API KEY"
             }

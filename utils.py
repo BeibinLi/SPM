@@ -6,6 +6,7 @@ import re
 from termcolor import colored
 from datasets import load_dataset
 from datasets.arrow_dataset import Dataset
+import shlex
 from data_gen.paths import (
     pretrain_data_path,
     finetune_data_path,
@@ -353,12 +354,172 @@ def get_file_name(command: list) -> str:
     - str: The name of the file.
     """
     if command[0] == "ls":
-        return command[1]
+        if len(command) > 1:
+            return command[1]
+        else:
+            return "."
     elif command[0] == "cat":
         return command[1]
     elif command[0] == "cd":
         return command[1]
     elif command[0] == "echo":
         return command[-1]
+    elif command[0] == "python":
+        return command[1]
     else:
         raise NotImplementedError(f"Does not support command: {command[0]}")
+
+
+def parse_echo(command: list) -> list:
+    """
+    Parses an `echo` command string into its constituent parts.
+
+    The function breaks down the echo command into its main components,
+    specifically handling redirection using the '>' symbol.
+
+    Args:
+    - command (list): A list of strings representing the `echo` command split
+        by whitespace.
+
+    Returns:
+    - list: A list of parsed components. If the command has a redirection
+        (using '>'), the returned list will contain the `echo` command, the
+        message to be echoed, the redirection symbol, and the file to which
+        the message will be written. If there is no redirection, it will return
+        just the `echo` command and the message.
+
+    Example:
+    Given the command list:
+    ['echo', 'Hello', 'World', '>', 'output.txt']
+    The function will return:
+    ['echo', '"Hello World"', '>', 'output.txt']
+
+    Note:
+    The function assumes that the redirection symbol '>' is always followed by
+        the filename
+    and that the redirection symbol will only appear once at the end of the
+        command.
+    The `"` characters are added to the message to be echoed to ensure that
+        the message is encapsulated. Only run in Linux.
+    """
+    assert command[0] == "echo", "The command is not an echo command."
+    for i in range(len(command)):
+        if command[i].strip().startswith(">"):
+            assert i == len(command) - 2
+            return [
+                "echo", '"' + " ".join(command[1:i]) + '"', command[i].strip(),
+                command[i + 1]
+            ]
+    return ["echo", '"' + " ".join(command[1:]) + '"']
+
+
+def extract_command_blocks(response, identifier="```bash"):
+    """
+    Extracts command blocks encapsulated by markdown code blocks from a given
+    response string.
+
+    Parameters:
+    - response (str): The input string containing the bash commands enclosed in
+        markdown code blocks.
+    - identifier (str, optional): The identifier used to recognize the start
+        of the bash commands block. Defaults to "```bash", which can also be
+        "```python"
+
+    Returns:
+    - list: A list of strings, containing the extracted commands.
+         Each command is a separate string in the list.
+
+    Example:
+    Given the response string:
+    '''
+    Some text here.
+    ```bash
+    echo "Hello, World!"
+    ls
+    ```
+    Another text.
+    ```bash
+    pwd
+    ```
+    '''
+    The function will return:
+    ['echo "Hello, World!"\nls', 'pwd']
+
+    Note:
+    The function assumes that the end of a bash commands block is marked
+    by "```".
+    """
+    commands = []
+    positions = find_all_substr(response, identifier)
+    for pos in positions:
+        st = pos + len(identifier)
+        p = response[st:].find("```") + st
+        commands.append(response[st:p].strip())
+    return commands
+
+
+def extract_commands(response: str) -> list:
+    """
+    Parse a LLM output to a list of commands, where
+    each command is represented in a list of arguments (strs).
+
+    Args:
+    - response (str): LLM's response.
+
+    Returns:
+    - list: a 2D list of commands.
+    """
+    command_blocks = extract_command_blocks(response)
+
+    parsed_commands = []
+
+    keyw = ["echo", "cat", "cd", "python", "ls", "exit"]
+
+    last_keyw_pos = 0
+    for command_block in command_blocks:
+        split = shlex.split(command_block)
+        for i in range(len(split)):
+            if split[i] in keyw:
+                parsed_commands.append(split[last_keyw_pos:i])
+                last_keyw_pos = i
+        parsed_commands.append(split[last_keyw_pos:])
+
+    parsed_commands = [cmd for cmd in parsed_commands if cmd != []]
+
+    for i in range(len(parsed_commands)):
+        if parsed_commands[i][0] == "echo":
+            parsed_commands[i] = parse_echo(parsed_commands[i])
+
+    return parsed_commands
+
+
+def get_target_dir(cmd: list) -> str:
+    """
+    Get the directory of the target file/dir from a command.
+
+    Args:
+    - cmd (list): a single command splitted into a list of arguments.
+
+    Returns:
+    - str: The directory of the target file/dir.
+    """
+    # Get the file
+    file = get_file_name(cmd)
+    path = os.path.dirname(file) if "." in os.path.basename(file) else file
+    if path == "":
+        path = "."
+
+    # Backup the cwd
+    original_cwd = os.getcwd()
+
+    try:
+        os.chdir(path)
+    except Exception as e:
+        return "Error: " + str(e)
+
+    target_dir = os.getcwd().replace('\\', '/') + "/"
+
+    # Restore the cwd
+    os.chdir(original_cwd)
+
+    return target_dir

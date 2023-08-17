@@ -62,7 +62,7 @@ if __name__ == "__main__":
                 # Reload the model and config
                 config, model = load_latest_model(model, args.dir)
             else:
-                ans = answer(question, tokenizer, model)
+                ans = answer(question, tokenizer, model)[0]
                 print("Bot:", colored(ans, "green"))
     else:
         test_dataset = get_spm_dataset(phase="finetune",
@@ -73,7 +73,7 @@ if __name__ == "__main__":
             input, std = text.split(
                 "### Assistant:") if "### Assistant:" in text else (text, "")
             input, std = input.strip(), std.strip()
-            output = answer(input, tokenizer, model)
+            output = answer(input, tokenizer, model)[0]
 
             print("-" * 30)
             print("Input:", input)
@@ -81,5 +81,5 @@ if __name__ == "__main__":
             print("Standard output:", colored(std, "blue"))
 
             if args.dataset == "finetune" and output[:5] != std[:5]:
-                output = answer(input, tokenizer, model, rectifier=std[:5])
+                output = answer(input, tokenizer, model, rectifier=std[:5])[0]
                 print("Rectified output:", std[:5], colored(output, "yellow"))

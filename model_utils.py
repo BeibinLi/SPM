@@ -114,9 +114,8 @@ def answer(question,
     Returns:
         str: Generated answer from the model.
     """
-
-    if len(messages):
-        print(colored("TODO!!! Messages are not handled in Llama!", "red"))
+    memory_str = [f"### {agent}: {msg}" for agent, msg in messages]
+    memory_str = "\n".join(memory_str)
 
     # TODO: a nicer way to format the prompt
     if question.find("###") < 0:
@@ -127,6 +126,10 @@ def answer(question,
         prompt += f"### Assistant: {rectifier}"
     else:
         prompt += f"{rectifier}"
+
+    prompt = memory_str + "\n" + prompt
+
+    print(prompt)
 
     batch = tokenizer(prompt,
                       padding=True,
@@ -154,8 +157,5 @@ def answer(question,
         ans = generated_text.split("### Assistant:")[-1].replace(rectifier,
                                                                  "").strip()
         answers.append(ans)
-
-    if num_return_sequences == 1:
-        return answers[0]
 
     return answers
