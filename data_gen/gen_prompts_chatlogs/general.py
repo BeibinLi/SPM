@@ -28,7 +28,7 @@ def save_prompt(prompt, task):
     global total_data_count
     file_name = task + "_" + str(total_data_count[task]) + ".txt"
     path = prompt_output_path + file_name
-    with open(path, 'w') as handle:
+    with open(path, 'w', encoding="utf-8") as handle:
         handle.write(prompt)
     total_data_count[task] += 1
     prompt_files.append(file_name)
@@ -41,7 +41,7 @@ def dfs(path):
         if os.path.isdir(new_path):
             dfs(new_path + "/")
         else:
-            with open(new_path, mode="r") as handle:
+            with open(new_path, mode="r", encoding="utf-8") as handle:
                 content = handle.read()
                 if content.replace(" ", "").replace(
                         "\n", "") != "":    # remove empty files
@@ -142,7 +142,8 @@ if __name__ == "__main__":
         with open(prompt_template_path + file, mode="r") as handle:
             tasks[file] = handle.read()
 
-    for data_type in ["IFS_code", "IFS_document"]:
+    #for data_type in ["IFS_code", "IFS_document"]:
+    for data_type in ["./"]:
         files = {}
         gen_data(data_type)
 

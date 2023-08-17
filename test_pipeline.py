@@ -44,7 +44,7 @@ def get_args():
     parser.add_argument(
         "--split_command",
         type=bool,
-        default=False,
+        default=True,
         help="Whether to split the command into multiple lines.")
     return parser.parse_args()
 
@@ -52,7 +52,7 @@ def get_args():
 class AutoExploreCopilot():
 
     def __init__(self, root, temperature, top_p, max_token_length, model,
-                 file_save_path, split_command):
+                 file_save_path, split_command, password):
         self.root = os.path.abspath(root).replace('\\', '/')
         self.root_dir_name = self.root.replace(os.path.basename(self.root), '')
         self.temperature = temperature
@@ -61,6 +61,7 @@ class AutoExploreCopilot():
         self.model = model
         self.file_save_path = file_save_path
         self.split_command = split_command
+        self.password = password
 
         self.api = get_llm()
         self.msgs = []    # TODO: handle multi-round user interactions.
@@ -77,7 +78,7 @@ class AutoExploreCopilot():
         self.flush_msgs()
 
         # 2. Create sandbox environment
-        self.sandbox = AutoExploreSandbox(self.root)
+        self.sandbox = AutoExploreSandbox(self.root, self.password)
 
         # 3. Act
         self.act()
@@ -147,10 +148,11 @@ class AutoExploreCopilot():
             commands = extract_commands(response)
         else:
             commands = extract_command_blocks(response)
+
         for cmd in commands:
             # TODO: catch exception here. If a bash block failed.
             # Then, just stop
-            command_output = self.sandbox.run_command(cmd)
+            command_output = self.sandbox.run_command(cmd, self.password)
 
             self.msgs.append(("user", command_output))
 
@@ -158,6 +160,7 @@ class AutoExploreCopilot():
             is_exit = type(cmd) is list and cmd[0] == "exit"
             is_exit |= type(cmd) is str and "exit" in cmd.split("\n")
             if is_exit:
+                self.flush_msgs()
                 # Success! save the result
                 os.makedirs(self.file_save_path, exist_ok=True)
                 for file_name, content in self.sandbox.get_changed_files(
@@ -207,6 +210,7 @@ if __name__ == "__main__":
         max_token_length=args.max_token_length,
         model=args.model,
         file_save_path=os.path.abspath(args.file_save_path) + "/",
-        split_command=args.split_command)
+        split_command=args.split_command,
+        password="zrl")
     agent.answer(
         "Plot the bean price of Excelsa between Jun 2021 and 2022 Aug.")

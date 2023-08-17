@@ -6,7 +6,8 @@ import re
 from termcolor import colored
 from datasets import load_dataset
 from datasets.arrow_dataset import Dataset
-import bashlex
+import shlex
+import string
 from data_gen.paths import (
     pretrain_data_path,
     finetune_data_path,
@@ -370,49 +371,6 @@ def get_file_name(command: list) -> str:
         raise NotImplementedError(f"Does not support command: {command[0]}")
 
 
-def parse_echo(command: list) -> list:
-    """
-    Parses an `echo` command string into its constituent parts.
-
-    The function breaks down the echo command into its main components,
-    specifically handling redirection using the '>' symbol.
-
-    Args:
-    - command (list): A list of strings representing the `echo` command split
-        by whitespace.
-
-    Returns:
-    - list: A list of parsed components. If the command has a redirection
-        (using '>'), the returned list will contain the `echo` command, the
-        message to be echoed, the redirection symbol, and the file to which
-        the message will be written. If there is no redirection, it will return
-        just the `echo` command and the message.
-
-    Example:
-    Given the command list:
-    ['echo', 'Hello', 'World', '>', 'output.txt']
-    The function will return:
-    ['echo', '"Hello World"', '>', 'output.txt']
-
-    Note:
-    The function assumes that the redirection symbol '>' is always followed by
-        the filename
-    and that the redirection symbol will only appear once at the end of the
-        command.
-    The `"` characters are added to the message to be echoed to ensure that
-        the message is encapsulated. Only run in Linux.
-    """
-    assert command[0] == "echo", "The command is not an echo command."
-    for i in range(len(command)):
-        if command[i].strip().startswith(">"):
-            assert i == len(command) - 2
-            return [
-                "echo", '"' + " ".join(command[1:i]) + '"', command[i].strip(),
-                command[i + 1]
-            ]
-    return ["echo", '"' + " ".join(command[1:]) + '"']
-
-
 def extract_command_blocks(response, identifier="```bash"):
     """
     Extracts command blocks encapsulated by markdown code blocks from a given
@@ -458,6 +416,65 @@ def extract_command_blocks(response, identifier="```bash"):
     return commands
 
 
+def split_command(command_block: str) -> list:
+    indices = []
+    quote = None
+
+    # Find all quoted texts
+    i = 0
+    while i < len(command_block):
+        if command_block[i] in ["'", '"']:
+            if i > 0 and command_block[i - 1] == "\\":
+                # \' = '(single character) if outside quote
+                # \' = \' if inside quote
+                # \" = "(single character) any time
+                if (command_block[i] == '"'
+                        or (command_block[i] == "'" and quote is None)):
+                    command_block = command_block[:i - 1] + command_block[i:]
+                    continue
+            if quote is None:
+                quote = command_block[i]
+                pos = i
+            elif quote == command_block[i]:
+                quote = None
+                indices.append((pos, i))
+        i += 1
+
+    L = 10
+    # Replace quoted texts with random strings
+    replacement_dict = {}
+    for index in reversed(indices):
+        text = command_block[index[0]:index[1] + 1]
+        while True:
+            replacement = ''.join(
+                random.choices(string.ascii_letters + string.digits, k=L))
+
+            if replacement in replacement_dict.values():
+                continue
+
+            if replacement in (command_block[:index[0]] + "@" +
+                               command_block[index[1] + 1:]):
+                continue
+
+            break
+        replacement_dict[replacement] = text[1:-1].replace('\n', '\\n')
+        command_block = (command_block[:index[0]] + replacement +
+                         command_block[index[1] + 1:])
+
+    # Split the command
+    split = shlex.split(command_block)
+
+    # Restore the quoted texts
+    for i in range(len(split)):
+        for j in range(len(split[i]) - L, -1, -1):
+            substr = split[i][j:j + L]
+            if substr in replacement_dict.keys():
+                split[i] = split[i][:j] + replacement_dict[substr] + split[i][
+                    j + L:]
+
+    return split
+
+
 def extract_commands(response: str) -> list:
     """
     Parse a LLM output to a list of commands, where
@@ -477,21 +494,70 @@ def extract_commands(response: str) -> list:
 
     last_keyw_pos = 0
     for command_block in command_blocks:
-        split = list(bashlex.split(command_block))
-        # split = shlex.split(command_block)
+        split = split_command(command_block)
         for i in range(len(split)):
             if split[i] in keyw:
                 parsed_commands.append(split[last_keyw_pos:i])
                 last_keyw_pos = i
         parsed_commands.append(split[last_keyw_pos:])
 
-    parsed_commands = [cmd for cmd in parsed_commands if cmd != []]
+    ret = []
 
-    for i in range(len(parsed_commands)):
-        if parsed_commands[i][0] == "echo":
-            parsed_commands[i] = parse_echo(parsed_commands[i])
+    for cmd in parsed_commands:
+        if cmd == []:
+            continue
+        if cmd[0] == "echo":
+            cmd = parse_echo(cmd)
+        ret.append(cmd)
 
-    return parsed_commands
+    return ret
+
+
+def parse_echo(command: list) -> list:
+    """
+    Parses an `echo` command string into its constituent parts.
+
+    The function breaks down the echo command into its main components,
+    specifically handling redirection using the '>' symbol.
+
+    Args:
+    - command (list): A list of strings representing the `echo` command split
+        by whitespace.
+
+    Returns:
+    - list: A list of parsed components. If the command has a redirection
+        (using '>'), the returned list will contain the `echo` command, the
+        message to be echoed, the redirection symbol, and the file to which
+        the message will be written. If there is no redirection, it will return
+        just the `echo` command and the message.
+
+    Example:
+    Given the command list:
+    ['echo', 'Hello', 'World', '>', 'output.txt']
+    The function will return:
+    ['echo', '"Hello World"', '>', 'output.txt']
+
+    Note:
+    The function assumes that the redirection symbol '>' is always followed by
+        the filename
+    and that the redirection symbol will only appear once at the end of the
+        command.
+    The `"` characters are added to the message to be echoed to ensure that
+        the message is encapsulated. Only run in Linux.
+    """
+    assert command[0] == "echo", "The command is not an echo command."
+
+    if command[1] == '-e':
+        command = command[:1] + command[2:]
+
+    for i in range(len(command)):
+        if command[i].strip().startswith(">"):
+            assert i == len(command) - 2
+            return [
+                "echo", "-e", " ".join(command[1:i]), command[i].strip(),
+                command[-1]
+            ]
+    return ["echo", "-e", " ".join(command[1:])]
 
 
 def get_target_dir(cmd: list) -> str:

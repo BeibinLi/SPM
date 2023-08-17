@@ -1,4 +1,4 @@
-raw_data_path = "../raw_data/"
+raw_data_path = "../Coffee_Roasting_Dataset/data/"
 uri_raw_data_path = raw_data_path + "URI/"
 self_instruct_raw_data_path = (
     raw_data_path +

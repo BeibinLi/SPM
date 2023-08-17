@@ -16,7 +16,7 @@ class AutoExploreSandbox:
     def __init__(
         self,
         dataset_path: str,
-        password: str = "",
+        password: str,
         private_files: list = [],
     ):
         """
@@ -57,7 +57,7 @@ class AutoExploreSandbox:
         self.cwd = self.sandbox_dir
 
     def __del__(self):
-        # Clean up the temporary directory
+        # Upon deletion, clean up the temporary directory
         # If it is windows, run 'rmdir'
         # otherwise, run rm -rf
         if os.name == "nt":
@@ -66,7 +66,7 @@ class AutoExploreSandbox:
             os.system('rm -rf "{}"'.format(self.sandbox_dir))
 
     def _hash_password(self, password: str) -> str:
-        return sha256(password.encode('utf-8') + self._sandbox_id).hexdigest()
+        return sha256((password + self._sandbox_id).encode("utf-8")).hexdigest()
 
     def safety_check(self, cmd: [list, str], password: str) -> str:
         """
@@ -177,7 +177,7 @@ class AutoExploreSandbox:
             return "Error: You can only use cd, ls, cat, echo, python, and exit."
 
         # Test if echo outputs to a file
-        if cmd[0] == "echo" and len(cmd) != 4:
+        if cmd[0] == "echo" and len(cmd) == 3:
             return "Warning: echo command without output file, ignored."
 
         if cmd[0] == "exit":
@@ -199,6 +199,15 @@ class AutoExploreSandbox:
             if cmd[0] == "cd":
                 os.chdir(cmd[1])
                 return "Success: Now at " + self._get_relative_cwd()
+            elif cmd[0] == "echo":
+                if cmd[-2] == ">":
+                    subprocess.run(cmd[:-2], stdout=open(cmd[-1], 'w'))
+                elif cmd[-2] == ">>":
+                    subprocess.run(cmd[:-2], stdout=open(cmd[-1], 'a'))
+                else:
+                    raise Exception(
+                        f"Error: echo {cmd[-2]} command not supported.")
+                return f"Success: echo to {cmd[-1]} done."
             else:
                 result = subprocess.run(cmd, shell=True, capture_output=True)
                 rstdout = result.stdout.decode('utf-8')
