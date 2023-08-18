@@ -40,19 +40,13 @@ def get_args():
                         type=str,
                         default="new_and_changed_files/",
                         help="The path to save the new or changed files.")
-
-    parser.add_argument(
-        "--split_command",
-        type=bool,
-        default=True,
-        help="Whether to split the command into multiple lines.")
     return parser.parse_args()
 
 
 class AutoExploreCopilot():
 
     def __init__(self, root, temperature, top_p, max_token_length, model,
-                 file_save_path, split_command, password):
+                 file_save_path, password):
         self.root = os.path.abspath(root).replace('\\', '/')
         self.root_dir_name = self.root.replace(os.path.basename(self.root), '')
         self.temperature = temperature
@@ -60,7 +54,6 @@ class AutoExploreCopilot():
         self.max_token_length = max_token_length
         self.model = model
         self.file_save_path = file_save_path
-        self.split_command = split_command
         self.password = password
 
         self.api = get_llm()
@@ -145,14 +138,10 @@ class AutoExploreCopilot():
 
         self.msgs.append(("assistant", response))
 
-        if self.split_command:
-            commands = extract_commands(response)
-        else:
-            commands = extract_command_blocks(response)
+        commands = extract_commands(response)
 
         for cmd in commands:
             is_exit = type(cmd) is list and cmd[0] == "exit"
-            #is_exit |= type(cmd) is str and "exit" in cmd.split("\n")
             if is_exit:
                 if len(commands) > 1:
                     self.msgs.append(("user", "Error: There are other commands. You could only use exit standalone in a single response."))
@@ -212,7 +201,6 @@ if __name__ == "__main__":
         max_token_length=args.max_token_length,
         model=args.model,
         file_save_path=os.path.abspath(args.file_save_path) + "/",
-        split_command=args.split_command,
         password="zrl")
     agent.answer(
         "Plot the bean price of Excelsa between Jun 2021 and 2022 Aug.")

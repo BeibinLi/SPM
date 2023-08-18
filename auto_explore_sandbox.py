@@ -105,58 +105,18 @@ class AutoExploreSandbox:
         _cwd = os.getcwd()
         os.chdir(self.cwd)
 
-        if type(cmd) is list:
+        safety_check_result = self.safety_check(cmd, password)
+
+        if safety_check_result != "SAFE":
+            ret = safety_check_result
+        else:
             ret = self._run_command(cmd)
-        elif type(cmd) is str:
-            ret = self._run_raw_command(cmd)
 
         # Checkpoint cwd
         self.cwd = os.getcwd().replace("\\", "/") + "/"
         os.chdir(_cwd)
 
         return ret
-
-    def _run_raw_command(self, cmd: str) -> str:
-        """
-        Args:
-        - cmd (str): a command block, which could contain several lines of
-            commands.
-
-        Returns:
-        - str: the execution result of the given command. If any errors
-        occurred, then just return the error message.
-        """
-
-        # Run the command
-        rst_msg = ""
-        try:
-            wrapped_cmd = cmd + "\n\npwd\n"
-            result = subprocess.run(wrapped_cmd,
-                                    shell=True,
-                                    capture_output=True)
-            stdout = result.stdout.decode('utf-8')
-
-            error = result.stderr.decode('utf-8')
-            if len(error):
-                rst_msg += "Error encountered:\n" + error + "\n\n"
-                os.chdir(self.sandbox_dir)
-                rst_msg += ("Now, you are at the root: " +
-                            self._get_relative_cwd() + "\n\n")
-
-            # Remove empty line
-            output_lines = stdout.split("\n")
-            while len(output_lines) and output_lines[-1] == "":
-                output_lines.pop()
-
-            if len(output_lines) == 0:
-                return "Your bash code run smoothly without giving any outputs"
-
-            os.chdir(output_lines[-1].strip().rstrip())
-        except Exception as e:
-            print(e)
-            pdb.set_trace()
-
-        return "\n".join(output_lines[:-1])
 
     def _run_command(self, cmd: list) -> str:
         """Inner function for self.run_command().
@@ -196,15 +156,6 @@ class AutoExploreSandbox:
             if cmd[0] == "cd":
                 os.chdir(cmd[1])
                 return "Success: Now at " + self._get_relative_cwd()
-            # elif cmd[0] == "echo":
-            #     if cmd[-2] == ">":
-            #         subprocess.run(cmd[:-2], stdout=open(cmd[-1], 'w'))
-            #     elif cmd[-2] == ">>":
-            #         subprocess.run(cmd[:-2], stdout=open(cmd[-1], 'a'))
-            #     else:
-            #         raise Exception(
-            #             f"Error: echo {cmd[-2]} command not supported.")
-            #     return f"Success: echo to {cmd[-1]} done."
             else:
                 result = subprocess.run(' '.join(cmd), shell=True, capture_output=True)
                 rstdout = result.stdout.decode('utf-8')
