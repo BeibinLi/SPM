@@ -7,7 +7,7 @@ import string
 from hashlib import sha256
 from termcolor import colored
 from utils import (list_files, get_target_dirs, hide_root, trunc_cat,
-                   SUPPORTED_CMDS)
+                   get_file_names, SUPPORTED_CMDS)
 
 SAFE_MESSAGE = "SAFE"
 
@@ -69,12 +69,16 @@ class AutoExploreSandbox:
     def _hash_password(self, password: str) -> str:
         return sha256((password + self._sandbox_id).encode("utf-8")).hexdigest()
 
-    def safety_check(self, cmd: [list, str], password: str) -> str:
+    def safety_check(self, cmd: list, password: str) -> str:
         """
         Return "SAFE" iff the cmd is safe to run.
+        Otherwise, return error message.
 
+        Args:
+        - cmd (list): a single command splitted into a list of arguments.
+        - password (str): the password for identity verification.
 
-        Otherwise, return "DANGER" and why it is not safe to run.
+        Returns:
         """
         # First check if password is correct
         if self._hash_password(password) != self._hashed_password:
@@ -99,10 +103,14 @@ class AutoExploreSandbox:
                 )
 
         # Check if the target file is private
+        files = get_file_names(cmd)
+        for file in files:
+            if file in self.private_files:
+                return f"Error: You cannot access a private file {file}!"
 
         return SAFE_MESSAGE
 
-    def run_command(self, cmd: [list, str], password: str) -> str:
+    def run_command(self, cmd: list, password: str) -> str:
         """Wrapper function for self._run_command().
         Run a bash command in the dataset sandbox.
 
@@ -111,8 +119,8 @@ class AutoExploreSandbox:
         "exit" is handled outside of this function.
 
         Args:
-        - cmd (list or str): a single command splitted into arguments or
-             a string of the command.
+        - cmd (list): a single command splitted into a list of arguments.
+        - password (str): the password for identity verification.
 
         Returns:
         - str: the execution result of the given command. If any errors
@@ -140,11 +148,11 @@ class AutoExploreSandbox:
         Run a bash command in the dataset sandbox.
 
         The supported tools are:
-        "cd", "ls", "cat", "echo", "python", "pip"
+        "cd", "ls", "cat", "echo", "python", "pip".
         "exit" is handled outside of this function.
 
         Args:
-        - cmd (list): a single command splitted into a list of arguments
+        - cmd (list): a single command splitted into a list of arguments.
 
         Returns:
         - str: the execution result of the given command. If any errors
@@ -174,11 +182,11 @@ class AutoExploreSandbox:
         Generate the response for the result of a command.
 
         Args:
-        - cmd (list): a single command splitted into a list of arguments
-        - result (subprocess.CompletedProcess): the result of the command
+        - cmd (list): a single command splitted into a list of arguments.
+        - result (subprocess.CompletedProcess): the result of the command.
 
         Returns:
-        - str: the response for the result of the command
+        - str: the response for the result of the command.
         """
         rstdout = result.stdout.decode('utf-8')
         rstderr = hide_root(result.stderr.decode('utf-8'), self.sandbox_dir)
@@ -187,7 +195,7 @@ class AutoExploreSandbox:
             return "Success: The result of ls is:\n" + rstdout
         elif cmd[0] == "cat":
             return (f"Success: The content of {cmd[1]} is:\n" +
-                    trunc_cat(cmd[1], rstdout))
+                    trunc_cat(rstdout))
         elif cmd[0] == "echo":
             return f"Success: echoed to {cmd[-1]}"
         elif cmd[0] == "python":

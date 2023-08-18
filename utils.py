@@ -316,28 +316,38 @@ def save_data(data: dict,
     dump(test_data, test_path)
 
 
-def trunc_cat(file_name: str, content: str, max_line: int = 10) -> str:
+def trunc_cat(content: str, max_line: int = 10, max_token: int = 1000) -> str:
     """
-    Truncate the content of a file for `cat` command if it is too long,
-    only when the file is a csv file.
+    Truncate the content of a file for `cat` command if it is too long.
+    Truncate to `max_line` lines or `max_token` tokens, whichever is smaller.
 
     Args:
     - file_name (str): The name of the file.
     - content (str): The content of the file.
     - max_line (int): The maximum number of lines to display.
+    - max_token (int): The maximum number of tokens to display.
 
     Returns:
     - str: The truncated content.
     """
-    if not file_name.endswith(".csv"):
-        return content
+    truncated = False
 
     lines = content.split("\n")
-    if len(lines) <= max_line:
-        return content
-    else:
-        return ("\n".join(lines[:max_line]) + "\n...\nLarge csv file, "
-                f"only display first {max_line} lines.\n")
+    if len(lines) > max_line:
+        content = "\n".join(lines[:max_line])
+        truncated = True
+
+    encoder = tiktoken.encoding_for_model("gpt-4")
+    encoded = encoder.encode(content)
+    if len(encoded) > max_token:
+        content = encoder.decode(content[:max_token])
+        truncated = True
+
+    if truncated:
+        content += ("\n...\nLarge file, only display first "
+                    f"{max_line} lines and {max_token} tokens.\n")
+
+    return content
 
 
 def get_file_names(command: list) -> list:
@@ -365,8 +375,10 @@ def get_file_names(command: list) -> list:
     elif command[0] == "echo":
         return [command[-1]]
     elif command[0] == "python":
-        _cmd = [x for x in command if x[0] != '-']
-        return [_cmd[1]]
+        if command[2] == "-c":
+            return ["."]
+        else:
+            return [command[2]]
     elif command[0] == "pip":
         return ["."]
     else:
@@ -480,6 +492,19 @@ def split_command(command_block: str) -> list:
         replacement_dict[replacement] = text
         command_block = (command_block[:index[0]] + replacement +
                          command_block[index[1] + 1:])
+
+    # Replace escaped spaces with a random string
+    while True:
+        replacement = ''.join(
+            random.choices(string.ascii_letters + string.digits, k=L))
+        if replacement not in command_block:
+            num_escaped_space = command_block.count("\\ ")
+            _command_block = command_block.replace("\\ ", replacement)
+            # Check if replacement creates unwanted substrings
+            if _command_block.count(replacement) == num_escaped_space:
+                break
+    command_block = command_block.replace("\\ ", replacement)
+    replacement_dict[replacement] = "\\ "
 
     # Split the command
     split = shlex.split(command_block)

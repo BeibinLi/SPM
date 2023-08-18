@@ -140,8 +140,7 @@ class AutoExploreCopilot():
         commands = extract_commands(response)
 
         for cmd in commands:
-            is_exit = type(cmd) is list and cmd[0] == "exit"
-            if is_exit:
+            if cmd[0] == "exit":
                 if len(commands) > 1:
                     self.msgs.append((
                         "user", "Error: There are other commands. "
@@ -205,4 +204,5 @@ if __name__ == "__main__":
         password="zrl")
     agent.answer(
     #"Plot the bean price of Excelsa between Jun 2021 and 2022 Aug."
-        "Plot employee salary by country in a map.")
+    #"Plot employee salary by country in a map."
+        "Who is the proprietor of the cafe in Shanghai?")
