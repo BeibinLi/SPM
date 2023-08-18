@@ -2,7 +2,6 @@
 import os
 import json
 import random
-import re
 from termcolor import colored
 from datasets import load_dataset
 from datasets.arrow_dataset import Dataset
@@ -15,6 +14,9 @@ from data_gen.paths import (
     self_instruct_data_path,
     pretrain_raw_data_path,
 )
+
+# exit should always be the last
+SUPPORTED_CMDS = ["cd", "ls", "cat", "echo", "python", "pip", "exit"]
 
 
 def list_files(directory: str, ignore_hidden: bool = True) -> list:
@@ -338,35 +340,40 @@ def trunc_cat(file_name: str, content: str, max_line: int = 10) -> str:
                 f"only display first {max_line} lines.\n")
 
 
-def get_file_name(command: list) -> str:
+def get_file_names(command: list) -> list:
     """
-    Extract file name from the command.
+    Extract file names from the command.
 
     Args:
     - command (list): The command splitted into a list.
 
     Returns:
-    - str: The name of the file.
+    - list: A list of file names.
     """
     if command[0] == "ls":
         if len(command) > 1:
-            return command[1]
+            return [command[1]]
         else:
-            return "."
+            return ["."]
     elif command[0] == "cat":
-        return command[1]
+        ret = [command[1]]
+        if ">" in command or ">>" in command:
+            ret.append(command[-1])
+        return ret
     elif command[0] == "cd":
-        return command[1]
+        return [command[1]]
     elif command[0] == "echo":
-        return command[-1]
+        return [command[-1]]
     elif command[0] == "python":
         _cmd = [x for x in command if x[0] != '-']
-        return _cmd[1]
+        return [_cmd[1]]
+    elif command[0] == "pip":
+        return ["."]
     else:
         raise NotImplementedError(f"Does not support command: {command[0]}")
 
 
-def extract_command_blocks(response, identifier="```bash"):
+def extract_command_blocks(response, identifier="```bash") -> list:
     """
     Extracts command blocks encapsulated by markdown code blocks from a given
     response string.
@@ -503,13 +510,11 @@ def extract_commands(response: str) -> list:
 
     parsed_commands = []
 
-    keyw = ["echo", "cat", "cd", "python", "ls", "exit"]
-
     last_keyw_pos = 0
     for command_block in command_blocks:
         split = split_command(command_block)
         for i in range(len(split)):
-            if split[i] in keyw:
+            if split[i] in SUPPORTED_CMDS:
                 parsed_commands.append(split[last_keyw_pos:i])
                 last_keyw_pos = i
         parsed_commands.append(split[last_keyw_pos:])
@@ -566,13 +571,12 @@ def parse_echo(command: list) -> list:
         if command[i].strip().startswith(">"):
             assert i == len(command) - 2
             return [
-                "echo", " ".join(command[1:i]), command[i].strip(),
-                command[-1]
+                "echo", " ".join(command[1:i]), command[i].strip(), command[-1]
             ]
     return ["echo", " ".join(command[1:])]
 
 
-def get_target_dir(cmd: list) -> str:
+def get_target_dirs(cmd: list) -> list:
     """
     Get the directory of the target file/dir from a command.
 
@@ -580,28 +584,32 @@ def get_target_dir(cmd: list) -> str:
     - cmd (list): a single command splitted into a list of arguments.
 
     Returns:
-    - str: The directory of the target file/dir.
+    - list: A list of the directories of the target file/dirs.
+            If error occurs, return a list of error messages.
     """
-    # Get the file
-    file = get_file_name(cmd)
-    path = os.path.dirname(file) if "." in os.path.basename(file) else file
-    if path == "":
-        path = "."
+    # Get the files
+    files = get_file_names(cmd)
+    target_dirs = []
 
-    # Backup the cwd
-    original_cwd = os.getcwd()
+    for file in files:
+        path = os.path.dirname(file) if "." in os.path.basename(file) else file
+        if path == "":
+            path = "."
 
-    try:
-        os.chdir(path)
-    except Exception as e:
-        return "Error: " + str(e)
+        # Backup the cwd
+        original_cwd = os.getcwd()
 
-    target_dir = os.getcwd().replace('\\', '/') + "/"
+        try:
+            os.chdir(path)
+        except Exception as e:
+            return ["Error: " + str(e)]
 
-    # Restore the cwd
-    os.chdir(original_cwd)
+        target_dirs.append(os.getcwd().replace('\\', '/') + "/")
 
-    return target_dir
+        # Restore the cwd
+        os.chdir(original_cwd)
+
+    return target_dirs
 
 
 def slice_text(text: str,

@@ -9,7 +9,8 @@ You can send me system commands to explore the repo:
 3. Change directory by `cd`.
 4. Output or append to a file by `echo`. Keep the output content minimal necessary.
 5. Execute a python code by `python`.
-6. Halt interaction by `exit`. You should exit if you finish the task. You can only send `exit` in a standalone response.
+6. Install python package by `pip`.
+7. Halt interaction by `exit`. You should exit if you finish the task. You can only send `exit` in a standalone response.
 
 You must use this format for me to identify the command:
 ```bash
@@ -18,7 +19,7 @@ YOUR COMMAND GOES HERE
 
 Note that:
 1. Initially, you are at the root of the repo. Using these commands, your target is to get detailed knowledge of each document, functionality and class.
-2. You cannot use any tools or linux commands other than ls, cd, cat, echo, python, exit.
+2. You cannot use any tools or linux commands other than ls, cd, cat, echo, python, pip, exit.
 
 
 ----- Your task -----

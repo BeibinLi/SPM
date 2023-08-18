@@ -2,13 +2,14 @@ import tempfile
 import os
 import subprocess
 import shutil
-import pdb
 import random
 import string
 from hashlib import sha256
 from termcolor import colored
-from utils import (list_files, hide_root, get_target_dir,
-                   trunc_cat, get_file_name)
+from utils import (list_files, get_target_dirs, hide_root, trunc_cat,
+                   SUPPORTED_CMDS)
+
+SAFE_MESSAGE = "SAFE"
 
 
 class AutoExploreSandbox:
@@ -77,17 +78,37 @@ class AutoExploreSandbox:
         """
         # First check if password is correct
         if self._hash_password(password) != self._hashed_password:
-            return "DANGER: Wrong password!"
+            return "Error: Wrong password!"
 
-        # Then check if the target file is private
-        return "SAFE"
+        # Restrict command type
+        if cmd[0] == "exit":
+            raise NotImplementedError(
+                "exit should be handled outside of run_command().")
+        if cmd[0] not in SUPPORTED_CMDS:
+            return f"Error: You can only use {', '.join(SUPPORTED_CMDS[:-1])}."
+
+        # Test if the target file/dir is inside the sandbox
+        target_dirs = get_target_dirs(cmd)
+        for target_dir in target_dirs:
+            if "Error" in target_dir:
+                return target_dir
+            if not target_dir.startswith(self.sandbox_dir):
+                return (
+                    f"Error: You cannot access file {target_dir} "
+                    f"outside the repo! You are now at {self._get_relative_cwd()}"
+                )
+
+        # Check if the target file is private
+
+        return SAFE_MESSAGE
 
     def run_command(self, cmd: [list, str], password: str) -> str:
-        """Wrapper function for self.run_command().
+        """Wrapper function for self._run_command().
         Run a bash command in the dataset sandbox.
 
         The supported tools are:
-        cd, ls, cat, echo, python.
+        "cd", "ls", "cat", "echo", "python", "pip"
+        "exit" is handled outside of this function.
 
         Args:
         - cmd (list or str): a single command splitted into arguments or
@@ -97,17 +118,13 @@ class AutoExploreSandbox:
         - str: the execution result of the given command. If any errors
         occurred, then just return the error message.
         """
-        is_safe = self.safety_check(cmd, password)
-        if is_safe != "SAFE":
-            return "Sorry, your command is not safe to run! Because:\n" + is_safe
-
         # Restore to the checkpointed cwd
         _cwd = os.getcwd()
         os.chdir(self.cwd)
 
         safety_check_result = self.safety_check(cmd, password)
 
-        if safety_check_result != "SAFE":
+        if safety_check_result != SAFE_MESSAGE:
             ret = safety_check_result
         else:
             ret = self._run_command(cmd)
@@ -123,7 +140,8 @@ class AutoExploreSandbox:
         Run a bash command in the dataset sandbox.
 
         The supported tools are:
-        cd, ls, cat, echo, python.
+        "cd", "ls", "cat", "echo", "python", "pip"
+        "exit" is handled outside of this function.
 
         Args:
         - cmd (list): a single command splitted into a list of arguments
@@ -132,47 +150,58 @@ class AutoExploreSandbox:
         - str: the execution result of the given command. If any errors
         occurred, then just return the error message.
         """
-        # Restrict command type
-        if cmd[0] not in ["cd", "ls", "cat", "echo", "python"]:
-            return "Error: You can only use cd, ls, cat, echo, python."
 
-        # Test if echo outputs to a file
+        # Check if echo outputs to a file
         if cmd[0] == "echo" and len(cmd) == 3:
             return "Warning: echo command without output file, ignored."
 
-        # Test if the target file/dir is inside the sandbox
-        target_dir = get_target_dir(cmd)
-        if target_dir.startswith("Error:"):
-            return target_dir
-
-        if not target_dir.startswith(self.sandbox_dir):
-            return (
-                f"Error: You cannot access files ({get_file_name(cmd)}) "
-                f"outside the repo! You are now at {self._get_relative_cwd()}"
-            )
-            
         # Run the command
         try:
             if cmd[0] == "cd":
+                # cd cannot be handled by subprocess
                 os.chdir(cmd[1])
                 return "Success: Now at " + self._get_relative_cwd()
             else:
-                result = subprocess.run(' '.join(cmd), shell=True, capture_output=True)
-                rstdout = result.stdout.decode('utf-8')
-                rstderr = hide_root(
-                    result.stderr.decode('utf-8'), self.sandbox_dir)
-                if cmd[0] == "ls":
-                    return "Success: The result of ls is:\n" + rstdout
-                elif cmd[0] == "cat":
-                    return (f"Success: The content of {cmd[1]} is:\n" +
-                            trunc_cat(cmd[1], rstdout))
-                elif cmd[0] == "python":
-                    if rstderr != "":
-                        return f"Error: {rstderr}"
-                    else:
-                        return f"Success: The output of python is:\n{rstdout}"
+                result = subprocess.run(' '.join(cmd),
+                                        shell=True,
+                                        capture_output=True)
+                return self.respond_cmd(cmd, result)
         except Exception as e:
             return "Error: " + str(e)
+
+    def respond_cmd(self, cmd: list, result) -> str:
+        """
+        Generate the response for the result of a command.
+
+        Args:
+        - cmd (list): a single command splitted into a list of arguments
+        - result (subprocess.CompletedProcess): the result of the command
+
+        Returns:
+        - str: the response for the result of the command
+        """
+        rstdout = result.stdout.decode('utf-8')
+        rstderr = hide_root(result.stderr.decode('utf-8'), self.sandbox_dir)
+
+        if cmd[0] == "ls":
+            return "Success: The result of ls is:\n" + rstdout
+        elif cmd[0] == "cat":
+            return (f"Success: The content of {cmd[1]} is:\n" +
+                    trunc_cat(cmd[1], rstdout))
+        elif cmd[0] == "echo":
+            return f"Success: echoed to {cmd[-1]}"
+        elif cmd[0] == "python":
+            if rstderr != "":
+                return f"Error: {rstderr}"
+            else:
+                return f"Success: The output of python is:\n{rstdout}"
+        elif cmd[0] == "pip":
+            if rstderr != "":
+                return f"Error: {rstderr}"
+            else:
+                return "Success: pip succeeded"
+        else:
+            raise NotImplementedError(f"Does not support command: {cmd[0]}")
 
     def get_changed_files(self) -> dict:
         """
