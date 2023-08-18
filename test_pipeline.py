@@ -4,8 +4,7 @@ import pickle
 import tiktoken
 
 from gpt_api import get_llm
-from utils import (colored_string, display_files_recursively,
-                   extract_command_blocks, extract_commands)
+from utils import (colored_string, display_files_recursively, extract_commands)
 
 import argparse
 from auto_explore_sandbox import AutoExploreSandbox
@@ -144,7 +143,10 @@ class AutoExploreCopilot():
             is_exit = type(cmd) is list and cmd[0] == "exit"
             if is_exit:
                 if len(commands) > 1:
-                    self.msgs.append(("user", "Error: There are other commands. You could only use exit standalone in a single response."))
+                    self.msgs.append((
+                        "user", "Error: There are other commands. "
+                        "You could only use exit standalone in a single response."
+                    ))
                 else:
                     self.flush_msgs()
                     # Success! save the result
@@ -161,7 +163,6 @@ class AutoExploreCopilot():
                 command_output = self.sandbox.run_command(cmd, self.password)
 
                 self.msgs.append(("user", command_output))
-            
 
         if commands == []:
             self.msgs.append(
@@ -203,5 +204,5 @@ if __name__ == "__main__":
         file_save_path=os.path.abspath(args.file_save_path) + "/",
         password="zrl")
     agent.answer(
-        #"Plot the bean price of Excelsa between Jun 2021 and 2022 Aug."
+    #"Plot the bean price of Excelsa between Jun 2021 and 2022 Aug."
         "Plot employee salary by country in a map.")
