@@ -432,8 +432,7 @@ def split_command(command_block: str) -> list:
     quote = None
 
     # Find all quoted texts
-    i = 0
-    while i < len(command_block):
+    for i in range(len(command_block)):
         if command_block[i] in ["'", '"']:
             if i > 0 and command_block[i - 1] == "\\":
                 # \' = '(single character) if outside quote
@@ -441,7 +440,7 @@ def split_command(command_block: str) -> list:
                 # \" = "(single character) any time
                 if (command_block[i] == '"'
                         or (command_block[i] == "'" and quote is None)):
-                    i += 1
+                    #i += 1
                     continue
             if quote is None:
                 quote = command_block[i]
@@ -449,10 +448,10 @@ def split_command(command_block: str) -> list:
             elif quote == command_block[i]:
                 quote = None
                 indices.append((pos, i))
-            elif command_block[i] == '"':
-                command_block = command_block[:i] + '\\' + command_block[i:]
-                i += 1
-        i += 1
+            # elif command_block[i] == '"':
+            #     command_block = command_block[:i] + '\\' + command_block[i:]
+            #     i += 1
+        #i += 1
 
     # Replace quoted texts with random strings
     L = 10

@@ -203,4 +203,5 @@ if __name__ == "__main__":
         file_save_path=os.path.abspath(args.file_save_path) + "/",
         password="zrl")
     agent.answer(
-        "Plot the bean price of Excelsa between Jun 2021 and 2022 Aug.")
+        #"Plot the bean price of Excelsa between Jun 2021 and 2022 Aug."
+        "Plot employee salary by country in a map.")
