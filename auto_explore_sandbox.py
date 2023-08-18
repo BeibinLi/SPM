@@ -163,7 +163,7 @@ class AutoExploreSandbox:
         Run a bash command in the dataset sandbox.
 
         The supported tools are:
-        cd, ls, cat, echo, python, exit.
+        cd, ls, cat, echo, python.
 
         Args:
         - cmd (list): a single command splitted into a list of arguments
@@ -173,43 +173,40 @@ class AutoExploreSandbox:
         occurred, then just return the error message.
         """
         # Restrict command type
-        if cmd[0] not in ["cd", "ls", "cat", "echo", "python", "exit"]:
-            return "Error: You can only use cd, ls, cat, echo, python, and exit."
+        if cmd[0] not in ["cd", "ls", "cat", "echo", "python"]:
+            return "Error: You can only use cd, ls, cat, echo, python."
 
         # Test if echo outputs to a file
         if cmd[0] == "echo" and len(cmd) == 3:
             return "Warning: echo command without output file, ignored."
 
-        if cmd[0] == "exit":
-            return "Success: Bye!"
-        else:
-            # Test if the target file/dir is inside the sandbox
-            target_dir = get_target_dir(cmd)
-            if target_dir.startswith("Error:"):
-                return target_dir
+        # Test if the target file/dir is inside the sandbox
+        target_dir = get_target_dir(cmd)
+        if target_dir.startswith("Error:"):
+            return target_dir
 
-            if not target_dir.startswith(self.sandbox_dir):
-                return (
-                    f"Error: You cannot access files ({get_file_name(cmd)}) "
-                    f"outside the repo! You are now at {self._get_relative_cwd()}"
-                )
+        if not target_dir.startswith(self.sandbox_dir):
+            return (
+                f"Error: You cannot access files ({get_file_name(cmd)}) "
+                f"outside the repo! You are now at {self._get_relative_cwd()}"
+            )
             
         # Run the command
         try:
             if cmd[0] == "cd":
                 os.chdir(cmd[1])
                 return "Success: Now at " + self._get_relative_cwd()
-            elif cmd[0] == "echo":
-                if cmd[-2] == ">":
-                    subprocess.run(cmd[:-2], stdout=open(cmd[-1], 'w'))
-                elif cmd[-2] == ">>":
-                    subprocess.run(cmd[:-2], stdout=open(cmd[-1], 'a'))
-                else:
-                    raise Exception(
-                        f"Error: echo {cmd[-2]} command not supported.")
-                return f"Success: echo to {cmd[-1]} done."
+            # elif cmd[0] == "echo":
+            #     if cmd[-2] == ">":
+            #         subprocess.run(cmd[:-2], stdout=open(cmd[-1], 'w'))
+            #     elif cmd[-2] == ">>":
+            #         subprocess.run(cmd[:-2], stdout=open(cmd[-1], 'a'))
+            #     else:
+            #         raise Exception(
+            #             f"Error: echo {cmd[-2]} command not supported.")
+            #     return f"Success: echo to {cmd[-1]} done."
             else:
-                result = subprocess.run(cmd, capture_output=True)
+                result = subprocess.run(' '.join(cmd), shell=True, capture_output=True)
                 rstdout = result.stdout.decode('utf-8')
                 rstderr = hide_root(
                     result.stderr.decode('utf-8'), self.sandbox_dir)

@@ -432,7 +432,8 @@ def split_command(command_block: str) -> list:
     quote = None
 
     # Find all quoted texts
-    for i in range(len(command_block)):
+    i = 0
+    while i < len(command_block):
         if command_block[i] in ["'", '"']:
             if i > 0 and command_block[i - 1] == "\\":
                 # \' = '(single character) if outside quote
@@ -440,7 +441,7 @@ def split_command(command_block: str) -> list:
                 # \" = "(single character) any time
                 if (command_block[i] == '"'
                         or (command_block[i] == "'" and quote is None)):
-                    #command_block = command_block[:i - 1] + command_block[i:]
+                    i += 1
                     continue
             if quote is None:
                 quote = command_block[i]
@@ -448,6 +449,10 @@ def split_command(command_block: str) -> list:
             elif quote == command_block[i]:
                 quote = None
                 indices.append((pos, i))
+            elif command_block[i] == '"':
+                command_block = command_block[:i] + '\\' + command_block[i:]
+                i += 1
+        i += 1
 
     # Replace quoted texts with random strings
     L = 10
@@ -466,7 +471,7 @@ def split_command(command_block: str) -> list:
                 continue
 
             break
-        replacement_dict[replacement] = text[1:-1].replace('\n', '\\n')
+        replacement_dict[replacement] = text
         command_block = (command_block[:index[0]] + replacement +
                          command_block[index[1] + 1:])
 
@@ -562,10 +567,10 @@ def parse_echo(command: list) -> list:
         if command[i].strip().startswith(">"):
             assert i == len(command) - 2
             return [
-                "echo", "-e", " ".join(command[1:i]), command[i].strip(),
+                "echo", " ".join(command[1:i]), command[i].strip(),
                 command[-1]
             ]
-    return ["echo", "-e", " ".join(command[1:])]
+    return ["echo", " ".join(command[1:])]
 
 
 def get_target_dir(cmd: list) -> str:

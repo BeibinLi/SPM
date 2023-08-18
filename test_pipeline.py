@@ -151,27 +151,28 @@ class AutoExploreCopilot():
             commands = extract_command_blocks(response)
 
         for cmd in commands:
-            # TODO: catch exception here. If a bash block failed.
-            # Then, just stop
-            command_output = self.sandbox.run_command(cmd, self.password)
-
-            self.msgs.append(("user", command_output))
-
-            # if "exit" command is in cmd.
             is_exit = type(cmd) is list and cmd[0] == "exit"
-            is_exit |= type(cmd) is str and "exit" in cmd.split("\n")
+            #is_exit |= type(cmd) is str and "exit" in cmd.split("\n")
             if is_exit:
-                self.flush_msgs()
-                # Success! save the result
-                os.makedirs(self.file_save_path, exist_ok=True)
-                for file_name, content in self.sandbox.get_changed_files(
-                ).items():
-                    os.makedirs(self.file_save_path +
-                                os.path.dirname(file_name),
-                                exist_ok=True)
-                    with open(self.file_save_path + file_name, "wb") as f:
-                        f.write(content)
-                return "Exit"
+                if len(commands) > 1:
+                    self.msgs.append(("user", "Error: There are other commands. You could only use exit standalone in a single response."))
+                else:
+                    self.flush_msgs()
+                    # Success! save the result
+                    os.makedirs(self.file_save_path, exist_ok=True)
+                    for file_name, content in self.sandbox.get_changed_files(
+                    ).items():
+                        os.makedirs(self.file_save_path +
+                                    os.path.dirname(file_name),
+                                    exist_ok=True)
+                        with open(self.file_save_path + file_name, "wb") as f:
+                            f.write(content)
+                    return "Exit"
+            else:
+                command_output = self.sandbox.run_command(cmd, self.password)
+
+                self.msgs.append(("user", command_output))
+            
 
         if commands == []:
             self.msgs.append(
