@@ -39,29 +39,22 @@ def list_files(directory: str, ignore_hidden: bool = True) -> list:
             yield os.path.relpath(os.path.join(root, file), directory)
 
 
-def replace_absolute_with_relative(text, root) -> str:
+def hide_root(text, root) -> str:
     """
-    Replace all absolute file paths in the given text with their relative
-    path.
+    Hide all root paths in a text.
 
     Args:
     - text (str): The text to replace paths in.
-    - root (str): The root directory to use for relative paths.
+    - root (str): The root path.
 
     Returns:
-    - str: The text with all absolute paths replaced with relative paths.
+    - str: The text with all root paths hidden.
     """
     # Regular expression pattern to match absolute file paths.
     # This pattern assumes that paths start with / followed by any non-space characters.
-    pattern = r'(/[^ \n]+)'
-
-    # Function to replace each found path with its relative counterpart.
-    def repl(match):
-        abs_path = match.group(1)
-        return os.path.relpath(abs_path, root)
-
-    # Replace all occurrences of the pattern in the text using repl function.
-    return re.sub(pattern, repl, text)
+    text = text.replace(root, "")
+    text = text.replace(root[:-1], ".")
+    return text
 
 
 def display_files_recursively(
@@ -367,7 +360,8 @@ def get_file_name(command: list) -> str:
     elif command[0] == "echo":
         return command[-1]
     elif command[0] == "python":
-        return command[1]
+        _cmd = [x for x in command if x[0] != '-']
+        return _cmd[1]
     else:
         raise NotImplementedError(f"Does not support command: {command[0]}")
 
@@ -438,8 +432,7 @@ def split_command(command_block: str) -> list:
     quote = None
 
     # Find all quoted texts
-    i = 0
-    while i < len(command_block):
+    for i in range(len(command_block)):
         if command_block[i] in ["'", '"']:
             if i > 0 and command_block[i - 1] == "\\":
                 # \' = '(single character) if outside quote
@@ -447,7 +440,7 @@ def split_command(command_block: str) -> list:
                 # \" = "(single character) any time
                 if (command_block[i] == '"'
                         or (command_block[i] == "'" and quote is None)):
-                    command_block = command_block[:i - 1] + command_block[i:]
+                    #command_block = command_block[:i - 1] + command_block[i:]
                     continue
             if quote is None:
                 quote = command_block[i]
@@ -455,7 +448,6 @@ def split_command(command_block: str) -> list:
             elif quote == command_block[i]:
                 quote = None
                 indices.append((pos, i))
-        i += 1
 
     # Replace quoted texts with random strings
     L = 10
@@ -527,8 +519,7 @@ def extract_commands(response: str) -> list:
             cmd = parse_echo(cmd)
         elif cmd[0] == "python":
             # Ignore warnings
-            cmd.insert(1, '-W')
-            cmd.insert(2, 'ignore')
+            cmd.insert(1, "-W ignore")
         ret.append(cmd)
 
     return ret

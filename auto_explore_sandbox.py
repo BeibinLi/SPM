@@ -7,7 +7,7 @@ import random
 import string
 from hashlib import sha256
 from termcolor import colored
-from utils import (list_files, replace_absolute_with_relative, get_target_dir,
+from utils import (list_files, hide_root, get_target_dir,
                    trunc_cat, get_file_name)
 
 
@@ -193,7 +193,7 @@ class AutoExploreSandbox:
                     f"Error: You cannot access files ({get_file_name(cmd)}) "
                     f"outside the repo! You are now at {self._get_relative_cwd()}"
                 )
-
+            
         # Run the command
         try:
             if cmd[0] == "cd":
@@ -209,9 +209,9 @@ class AutoExploreSandbox:
                         f"Error: echo {cmd[-2]} command not supported.")
                 return f"Success: echo to {cmd[-1]} done."
             else:
-                result = subprocess.run(cmd, shell=True, capture_output=True)
+                result = subprocess.run(cmd, capture_output=True)
                 rstdout = result.stdout.decode('utf-8')
-                rstderr = replace_absolute_with_relative(
+                rstderr = hide_root(
                     result.stderr.decode('utf-8'), self.sandbox_dir)
                 if cmd[0] == "ls":
                     return "Success: The result of ls is:\n" + rstdout
