@@ -16,7 +16,17 @@ from data_gen.paths import (
 )
 
 # exit should always be the last
-SUPPORTED_CMDS = ["cd", "ls", "cat", "echo", "python", "pip", "exit"]
+SUPPORTED_CMDS = ["cd", "ls", "cat", "head", "echo", "python", "pip", "exit"]
+
+# Common programming language suffixes
+CODE_SUFFIXES = (".py", ".c", ".cpp", ".cxx", ".cc", ".h", ".hpp", ".hxx",
+                 ".cs", ".java", ".go")
+
+# Common data file suffixes
+DATA_SUFFIXES = (".csv", ".tsv", ".json")
+
+# Common text file suffixes
+TEXT_SUFFIXES = (".txt", ".md")
 
 
 def list_files(directory: str, ignore_hidden: bool = True) -> list:
@@ -316,38 +326,66 @@ def save_data(data: dict,
     dump(test_data, test_path)
 
 
-def trunc_cat(content: str, max_line: int = 10, max_token: int = 1000) -> str:
+def trunc_text(file: str, content: str) -> str:
     """
-    Truncate the content of a file for `cat` command if it is too long.
-    Truncate to `max_line` lines or `max_token` tokens, whichever is smaller.
+    Truncate the content of a file for `cat`, `head`, `tail` command if it is too long.
+    It will truncate to a maximum line and a maximum token, depending on the file type.
 
     Args:
     - file_name (str): The name of the file.
     - content (str): The content of the file.
-    - max_line (int): The maximum number of lines to display.
-    - max_token (int): The maximum number of tokens to display.
 
     Returns:
     - str: The truncated content.
     """
-    truncated = False
 
-    lines = content.split("\n")
-    if len(lines) > max_line:
-        content = "\n".join(lines[:max_line])
-        truncated = True
+    # Define truncate function
+    def _trunc_text(content: str, max_line: int, max_token: int) -> str:
+        """
+        Truncate the content of a file for `cat`, `head`, `tail` command
+        if it is too long.
+        Truncate to `max_line` lines or `max_token` tokens, whichever is smaller.
 
-    encoder = tiktoken.encoding_for_model("gpt-4")
-    encoded = encoder.encode(content)
-    if len(encoded) > max_token:
-        content = encoder.decode(content[:max_token])
-        truncated = True
+        Args:
+        - file_name (str): The name of the file.
+        - content (str): The content of the file.
+        - max_line (int): The maximum number of lines to display.
+        - max_token (int): The maximum number of tokens to display.
 
-    if truncated:
-        content += ("\n...\nLarge file, only display first "
-                    f"{max_line} lines and {max_token} tokens.\n")
+        Returns:
+        - str: The truncated content.
+        """
+        truncated = False
 
-    return content
+        lines = content.split("\n")
+        if len(lines) > max_line:
+            content = "\n".join(lines[:max_line])
+            truncated = True
+
+        encoder = tiktoken.encoding_for_model("gpt-4")
+        encoded = encoder.encode(content)
+        if len(encoded) > max_token:
+            content = encoder.decode(encoded[:max_token])
+            truncated = True
+
+        if truncated:
+            content += ("\n...\nLarge file, only display first "
+                        f"{max_line} lines and {max_token} tokens.\n")
+
+        return content
+
+    if file[-1] in ['"', "'"]:
+        file = file[1:-1]
+
+    # Truncate the content depending on file type
+    if file.endswith(CODE_SUFFIXES):
+        return _trunc_text(content, 1000, 1000)
+    elif file.endswith(DATA_SUFFIXES):
+        return _trunc_text(content, 5, 500)
+    elif file.endswith(TEXT_SUFFIXES):
+        return _trunc_text(content, 100, 1000)
+    else:
+        return _trunc_text(content, 10, 1000)
 
 
 def get_file_names(command: list) -> list:
@@ -370,6 +408,8 @@ def get_file_names(command: list) -> list:
         if ">" in command or ">>" in command:
             ret.append(command[-1])
         return ret
+    elif command[0] == "head":
+        return [command[3]]
     elif command[0] == "cd":
         return [command[1]]
     elif command[0] == "echo":
@@ -378,7 +418,9 @@ def get_file_names(command: list) -> list:
         if command[2] == "-c":
             return ["."]
         else:
-            return [command[2]]
+            for x in command:
+                if x.endswith(".py"):
+                    return [x]
     elif command[0] == "pip":
         return ["."]
     else:

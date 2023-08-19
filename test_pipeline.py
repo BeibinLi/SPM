@@ -4,7 +4,8 @@ import pickle
 import tiktoken
 
 from gpt_api import get_llm
-from utils import (colored_string, display_files_recursively, extract_commands)
+from utils import (colored_string, display_files_recursively, extract_commands,
+                   SUPPORTED_CMDS)
 
 import argparse
 from auto_explore_sandbox import AutoExploreSandbox
@@ -167,7 +168,7 @@ class AutoExploreCopilot():
             self.msgs.append(
                 ("user", "Warning: You didn't give me any command. "
                  "Further explore the repo by sending me system commands: "
-                 "ls, cd, cat, echo, python, exit."))
+                 f"{', '.join(SUPPORTED_CMDS)}."))
 
         return "Continue"
 
@@ -205,4 +206,6 @@ if __name__ == "__main__":
     agent.answer(
     #"Plot the bean price of Excelsa between Jun 2021 and 2022 Aug."
     #"Plot employee salary by country in a map."
-        "Who is the proprietor of the cafe in Shanghai?")
+    #"Who is the proprietor of the cafe in Shanghai?"
+    #"What is the culture statement of Opti Coffee?"
+        "Tell me details of Employee Appreciation Events.")

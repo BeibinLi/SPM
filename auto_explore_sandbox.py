@@ -6,7 +6,7 @@ import random
 import string
 from hashlib import sha256
 from termcolor import colored
-from utils import (list_files, get_target_dirs, hide_root, trunc_cat,
+from utils import (list_files, get_target_dirs, hide_root, trunc_text,
                    get_file_names, SUPPORTED_CMDS)
 
 SAFE_MESSAGE = "SAFE"
@@ -115,7 +115,7 @@ class AutoExploreSandbox:
         Run a bash command in the dataset sandbox.
 
         The supported tools are:
-        "cd", "ls", "cat", "echo", "python", "pip"
+        "cd", "ls", "cat", "head", "tail", "echo", "python", "pip"
         "exit" is handled outside of this function.
 
         Args:
@@ -148,7 +148,7 @@ class AutoExploreSandbox:
         Run a bash command in the dataset sandbox.
 
         The supported tools are:
-        "cd", "ls", "cat", "echo", "python", "pip".
+        "cd", "ls", "cat", "head", "tail", "echo", "python", "pip".
         "exit" is handled outside of this function.
 
         Args:
@@ -193,9 +193,10 @@ class AutoExploreSandbox:
 
         if cmd[0] == "ls":
             return "Success: The result of ls is:\n" + rstdout
-        elif cmd[0] == "cat":
-            return (f"Success: The content of {cmd[1]} is:\n" +
-                    trunc_cat(rstdout))
+        elif cmd[0] in ["cat", "head", "tail"]:
+            fn = get_file_names(cmd)[0]
+            return (f"Success: The content of {fn} is:\n" +
+                    trunc_text(fn, rstdout))
         elif cmd[0] == "echo":
             return f"Success: echoed to {cmd[-1]}"
         elif cmd[0] == "python":
