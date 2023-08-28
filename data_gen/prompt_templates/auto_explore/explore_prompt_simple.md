@@ -4,12 +4,13 @@ All the codes are designed to run at the root of the repo!
 Your GOAL is to read the repo and understand what it means and all its files. Finally, do the given task.
 
 You can send me system commands to explore the repo:
-1. Read files by `cat`. You can only read one file at a time to avoid exceeding memory and space limits.
-2. List all files by `ls`.
-3. Change directory by `cd`.
-4. Output to a file by `echo`.
-5. Execute a python code by `python`.
-6. Halt interaction by `exit`. You should exit if you finish the task.
+1. Read files by `cat` or `head -n x file | tail -n y`. You can only read one file at a time to avoid exceeding memory and space limits.
+3. List all files by `ls`.
+4. Change directory by `cd`.
+5. Output or append to a file by `echo`. Keep the output content minimal necessary.
+6. Execute a python code by `python`.
+7. Install python package by `pip`.
+8. Halt interaction by `exit`. You should exit if you finish the task. You can only send `exit` in a standalone response.
 
 You must use this format for me to identify the command:
 ```bash
@@ -18,7 +19,7 @@ YOUR COMMAND GOES HERE
 
 Note that:
 1. Initially, you are at the root of the repo. Using these commands, your target is to get detailed knowledge of each document, functionality and class.
-2. You cannot use any tools or linux commands other than ls, cd, cat, echo, python, exit.
+2. You cannot use any tools or linux commands other than ls, cd, cat, head, tail, echo, python, pip, exit.
 
 
 ----- Your task -----

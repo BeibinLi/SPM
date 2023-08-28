@@ -4,7 +4,8 @@ import pickle
 import tiktoken
 
 from gpt_api import get_llm
-from utils import (colored_string, display_files_recursively, extract_commands)
+from utils import (colored_string, display_files_recursively, extract_commands,
+                   SUPPORTED_CMDS)
 
 import argparse
 from auto_explore_sandbox import AutoExploreSandbox
@@ -33,11 +34,11 @@ def get_args():
         " chat will be reset.")
     parser.add_argument("--model",
                         type=str,
-                        default="gpt-4",
+                        default="gpt-35-turbo",
                         help="The model to use.")
     parser.add_argument("--file_save_path",
                         type=str,
-                        default="../new_and_changed_files/",
+                        default="new_and_changed_files/",
                         help="The path to save the new or changed files.")
     return parser.parse_args()
 
@@ -45,7 +46,7 @@ def get_args():
 class AutoExploreCopilot():
 
     def __init__(self, root, temperature, top_p, max_token_length, model,
-                 file_save_path):
+                 file_save_path, password):
         self.root = os.path.abspath(root).replace('\\', '/')
         self.root_dir_name = self.root.replace(os.path.basename(self.root), '')
         self.temperature = temperature
@@ -53,13 +54,16 @@ class AutoExploreCopilot():
         self.max_token_length = max_token_length
         self.model = model
         self.file_save_path = file_save_path
+        self.password = password
+
         self.api = get_llm()
         self.msgs = []    # TODO: handle multi-round user interactions.
 
     def answer(self, question):
         # 1. Setup memory and chat
         start_prompt = open(
-            "data_gen/prompt_templates/explore_prompt_simple.md", "r").read()
+            "data_gen/prompt_templates/auto_explore/explore_prompt_simple.md",
+            "r").read()
         start_prompt = start_prompt.format(all_files=display_files_recursively(
             self.root),
                                            TASK=question)
@@ -68,7 +72,7 @@ class AutoExploreCopilot():
         self.flush_msgs()
 
         # 2. Create sandbox environment
-        self.sandbox = AutoExploreSandbox(self.root)
+        self.sandbox = AutoExploreSandbox(self.root, self.password)
 
         # 3. Act
         self.act()
@@ -108,43 +112,65 @@ class AutoExploreCopilot():
             return
 
     def act(self):
-        msgs_with_short_mem = self.msgs[:-1]
+        """
+        Wrapper function to interact with the language model for one step
+        and call the possible next act().
+        """
 
+        ret = self._act()
+
+        self.flush_msgs()
+
+        if ret == "Continue":
+            self.act()
+
+    def _act(self):
+        """
+        Inner function for an act.
+        """
         response = self.api.reply(agent_name=self.msgs[-1][0],
                                   msg=self.msgs[-1][1],
                                   num_response=1,
                                   temperature=self.temperature,
                                   top_p=self.top_p,
-                                  prev_msgs=msgs_with_short_mem,
+                                  prev_msgs=self.msgs[:-1],
                                   model=self.model)[0]
 
         self.msgs.append(("assistant", response))
 
         commands = extract_commands(response)
-        for cmd in commands:
-            command_output = self.sandbox.run_command(cmd)
-            self.msgs.append(("user", command_output))
 
+        for cmd in commands:
             if cmd[0] == "exit":
-                # Success! save the result
-                os.makedirs(self.file_save_path, exist_ok=True)
-                for file_name, content in self.sandbox.get_changed_files(
-                ).items():
-                    os.makedirs(self.file_save_path +
-                                os.path.dirname(file_name),
-                                exist_ok=True)
-                    with open(self.file_save_path + file_name, "wb") as f:
-                        f.write(content)
+                if len(commands) > 1:
+                    self.msgs.append((
+                        "user", "Error: There are other commands. "
+                        "You could only use exit standalone in a single response."
+                    ))
+                else:
+                    self.flush_msgs()
+                    # Success! save the result
+                    os.makedirs(self.file_save_path, exist_ok=True)
+                    for file_name, content in self.sandbox.get_changed_files(
+                    ).items():
+                        os.makedirs(self.file_save_path +
+                                    os.path.dirname(file_name),
+                                    exist_ok=True)
+                        with open(self.file_save_path + file_name, "wb") as f:
+                            f.write(content)
+                    return "Exit"
+            else:
+                command_output = self.sandbox.run_command(cmd, self.password)
+
+                self.msgs.append(("user", command_output))
 
         if commands == []:
             self.msgs.append(
                 ("user", "Warning: You didn't give me any command. "
                  "Further explore the repo by sending me system commands: "
-                 "ls, cd, cat, echo, python, exit."))
+                 f"{', '.join(SUPPORTED_CMDS)}."))
 
-        self.flush_msgs()
-
-        agent.act()
+        return "Continue"
 
     def dump(self):
         ckpts = os.listdir(self.data_path)
@@ -175,6 +201,11 @@ if __name__ == "__main__":
         top_p=args.top_p,
         max_token_length=args.max_token_length,
         model=args.model,
-        file_save_path=os.path.abspath(args.file_save_path) + "/")
+        file_save_path=os.path.abspath(args.file_save_path) + "/",
+        password="zrl")
     agent.answer(
-        "Plot the bean price of Excelsa between Jun 2021 and 2022 Aug.")
+    #"Plot the bean price of Excelsa between Jun 2021 and 2022 Aug."
+    #"Plot employee salary by country in a map."
+    #"Who is the proprietor of the cafe in Shanghai?"
+    #"What is the culture statement of Opti Coffee?"
+        "Tell me details of Employee Appreciation Events.")

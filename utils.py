@@ -2,18 +2,31 @@
 import os
 import json
 import random
-import re
-import io
-import csv
 from termcolor import colored
 from datasets import load_dataset
 from datasets.arrow_dataset import Dataset
+import shlex
+import string
+import tiktoken
 from data_gen.paths import (
     pretrain_data_path,
     finetune_data_path,
     self_instruct_data_path,
     pretrain_raw_data_path,
 )
+
+# exit should always be the last
+SUPPORTED_CMDS = ["cd", "ls", "cat", "head", "echo", "python", "pip", "exit"]
+
+# Common programming language suffixes
+CODE_SUFFIXES = (".py", ".c", ".cpp", ".cxx", ".cc", ".h", ".hpp", ".hxx",
+                 ".cs", ".java", ".go")
+
+# Common data file suffixes
+DATA_SUFFIXES = (".csv", ".tsv", ".json")
+
+# Common text file suffixes
+TEXT_SUFFIXES = (".txt", ".md")
 
 
 def list_files(directory: str, ignore_hidden: bool = True) -> list:
@@ -38,29 +51,22 @@ def list_files(directory: str, ignore_hidden: bool = True) -> list:
             yield os.path.relpath(os.path.join(root, file), directory)
 
 
-def replace_absolute_with_relative(text, root) -> str:
+def hide_root(text, root) -> str:
     """
-    Replace all absolute file paths in the given text with their relative
-    path.
+    Hide all root paths in a text.
 
     Args:
     - text (str): The text to replace paths in.
-    - root (str): The root directory to use for relative paths.
+    - root (str): The root path.
 
     Returns:
-    - str: The text with all absolute paths replaced with relative paths.
+    - str: The text with all root paths hidden.
     """
     # Regular expression pattern to match absolute file paths.
     # This pattern assumes that paths start with / followed by any non-space characters.
-    pattern = r'(/[^ \n]+)'
-
-    # Function to replace each found path with its relative counterpart.
-    def repl(match):
-        abs_path = match.group(1)
-        return os.path.relpath(abs_path, root)
-
-    # Replace all occurrences of the pattern in the text using repl function.
-    return re.sub(pattern, repl, text)
+    text = text.replace(root, "")
+    text = text.replace(root[:-1], ".")
+    return text
 
 
 def display_files_recursively(
@@ -320,99 +326,108 @@ def save_data(data: dict,
     dump(test_data, test_path)
 
 
-def trunc_cat(file_name: str, content: str, max_line: int = 10) -> str:
+def trunc_text(file: str, content: str) -> str:
     """
-    Truncate the content of a file for `cat` command if it is too long,
-    only when the file is a csv file.
+    Truncate the content of a file for `cat`, `head`, `tail` command if it is too long.
+    It will truncate to a maximum line and a maximum token, depending on the file type.
 
     Args:
     - file_name (str): The name of the file.
     - content (str): The content of the file.
-    - max_line (int): The maximum number of lines to display.
 
     Returns:
     - str: The truncated content.
     """
-    if not file_name.endswith(".csv"):
+
+    # Define truncate function
+    def _trunc_text(content: str, max_line: int, max_token: int) -> str:
+        """
+        Truncate the content of a file for `cat`, `head`, `tail` command
+        if it is too long.
+        Truncate to `max_line` lines or `max_token` tokens, whichever is smaller.
+
+        Args:
+        - file_name (str): The name of the file.
+        - content (str): The content of the file.
+        - max_line (int): The maximum number of lines to display.
+        - max_token (int): The maximum number of tokens to display.
+
+        Returns:
+        - str: The truncated content.
+        """
+        truncated = False
+
+        lines = content.split("\n")
+        if len(lines) > max_line:
+            content = "\n".join(lines[:max_line])
+            truncated = True
+
+        encoder = tiktoken.encoding_for_model("gpt-4")
+        encoded = encoder.encode(content)
+        if len(encoded) > max_token:
+            content = encoder.decode(encoded[:max_token])
+            truncated = True
+
+        if truncated:
+            content += ("\n...\nLarge file, only display first "
+                        f"{max_line} lines and {max_token} tokens.\n")
+
         return content
 
-    lines = content.split("\n")
-    if len(lines) <= max_line:
-        return content
+    if file[-1] in ['"', "'"]:
+        file = file[1:-1]
+
+    # Truncate the content depending on file type
+    if file.endswith(CODE_SUFFIXES):
+        return _trunc_text(content, 1000, 1000)
+    elif file.endswith(DATA_SUFFIXES):
+        return _trunc_text(content, 5, 500)
+    elif file.endswith(TEXT_SUFFIXES):
+        return _trunc_text(content, 100, 1000)
     else:
-        return ("\n".join(lines[:max_line]) + "\n...\nLarge csv file, "
-                f"only display first {max_line} lines.\n")
+        return _trunc_text(content, 10, 1000)
 
 
-def get_file_name(command: list) -> str:
+def get_file_names(command: list) -> list:
     """
-    Extract file name from the command.
+    Extract file names from the command.
 
     Args:
     - command (list): The command splitted into a list.
 
     Returns:
-    - str: The name of the file.
+    - list: A list of file names.
     """
     if command[0] == "ls":
         if len(command) > 1:
-            return command[1]
+            return [command[1]]
         else:
-            return "."
+            return ["."]
     elif command[0] == "cat":
-        return command[1]
+        ret = [command[1]]
+        if ">" in command or ">>" in command:
+            ret.append(command[-1])
+        return ret
+    elif command[0] == "head":
+        return [command[3]]
     elif command[0] == "cd":
-        return command[1]
+        return [command[1]]
     elif command[0] == "echo":
-        return command[-1]
+        return [command[-1]]
     elif command[0] == "python":
-        return command[1]
+        if command[2] == "-c":
+            return ["."]
+        else:
+            for x in command:
+                if x.endswith(".py"):
+                    return [x]
+    elif command[0] == "pip":
+        return ["."]
     else:
         raise NotImplementedError(f"Does not support command: {command[0]}")
 
 
-def parse_echo(command: list) -> list:
-    """
-    Parses an `echo` command string into its constituent parts.
-
-    The function breaks down the echo command into its main components,
-    specifically handling redirection using the '>' symbol.
-
-    Args:
-    - command (list): A list of strings representing the `echo` command split
-        by whitespace.
-
-    Returns:
-    - list: A list of parsed components. If the command has a redirection
-        (using '>'), the returned list will contain the `echo` command, the
-        message to be echoed, the redirection symbol, and the file to which
-        the message will be written. If there is no redirection, it will return
-        just the `echo` command and the message.
-
-    Example:
-    Given the command list:
-    ['echo', 'Hello', 'World', '>', 'output.txt']
-    The function will return:
-    ['echo', '"Hello World"', '>', 'output.txt']
-
-    Note:
-    The function assumes that the redirection symbol '>' is always followed by
-        the filename
-    and that the redirection symbol will only appear once at the end of the
-        command.
-    """
-    assert command[0] == "echo", "The command is not an echo command."
-    for i in range(len(command)):
-        if command[i].strip().startswith(">"):
-            assert i == len(command) - 2
-            return [
-                "echo", '"' + " ".join(command[1:i]) + '"', command[i].strip(),
-                command[i + 1]
-            ]
-    return ["echo", '"' + " ".join(command[1:]) + '"']
-
-
-def extract_command_blocks(response, identifier="```bash"):
+def extract_command_blocks(response, identifier="```bash") -> list:
     """
     Extracts command blocks encapsulated by markdown code blocks from a given
     response string.
@@ -457,15 +472,100 @@ def extract_command_blocks(response, identifier="```bash"):
     return commands
 
 
+def split_command(command_block: str) -> list:
+    """
+    Split a command block into a list of arguments.
+
+    Args:
+    - command_block (str): A command block.
+
+    Returns:
+    - list: A list of arguments.
+
+    Example:
+    Given the command block:
+        echo "Hello, World!"
+        cat file.txt
+    The function will return:
+        ['echo', '"Hello, World!"', 'cat', 'file.txt']
+    """
+    indices = []
+    quote = None
+
+    # Find all quoted texts
+    for i in range(len(command_block)):
+        if command_block[i] in ["'", '"']:
+            if i > 0 and command_block[i - 1] == "\\":
+                # \' = '(single character) if outside quote
+                # \' = \' if inside quote
+                # \" = "(single character) any time
+                if (command_block[i] == '"'
+                        or (command_block[i] == "'" and quote is None)):
+                    #i += 1
+                    continue
+            if quote is None:
+                quote = command_block[i]
+                pos = i
+            elif quote == command_block[i]:
+                quote = None
+                indices.append((pos, i))
+            # elif command_block[i] == '"':
+            #     command_block = command_block[:i] + '\\' + command_block[i:]
+            #     i += 1
+        #i += 1
+
+    # Replace quoted texts with random strings
+    L = 10
+    replacement_dict = {}
+    for index in reversed(indices):
+        text = command_block[index[0]:index[1] + 1]
+        while True:
+            replacement = ''.join(
+                random.choices(string.ascii_letters + string.digits, k=L))
+
+            if replacement in replacement_dict.values():
+                continue
+
+            if replacement in (command_block[:index[0]] + "@" +
+                               command_block[index[1] + 1:]):
+                continue
+
+            break
+        replacement_dict[replacement] = text
+        command_block = (command_block[:index[0]] + replacement +
+                         command_block[index[1] + 1:])
+
+    # Replace escaped spaces with a random string
+    while True:
+        replacement = ''.join(
+            random.choices(string.ascii_letters + string.digits, k=L))
+        if replacement not in command_block:
+            num_escaped_space = command_block.count("\\ ")
+            _command_block = command_block.replace("\\ ", replacement)
+            # Check if replacement creates unwanted substrings
+            if _command_block.count(replacement) == num_escaped_space:
+                break
+    command_block = command_block.replace("\\ ", replacement)
+    replacement_dict[replacement] = "\\ "
+
+    # Split the command
+    split = shlex.split(command_block)
+
+    # Restore the quoted texts
+    for i in range(len(split)):
+        for j in range(len(split[i]) - L, -1, -1):
+            substr = split[i][j:j + L]
+            if substr in replacement_dict.keys():
+                split[i] = split[i][:j] + replacement_dict[substr] + split[i][
+                    j + L:]
+
+    return split
+
+
 def extract_commands(response: str) -> list:
     """
     Parse a LLM output to a list of commands, where
     each command is represented in a list of arguments (strs).
-
-
-    TODO: debug: the csv.reader might not give correct results.
-    For instance, `echo hello    world > output.txt`
-
 
     Args:
     - response (str): LLM's response.
@@ -473,29 +573,77 @@ def extract_commands(response: str) -> list:
     Returns:
     - list: a 2D list of commands.
     """
-    #response = response.replace("'", '"')
     command_blocks = extract_command_blocks(response)
 
     parsed_commands = []
 
+    last_keyw_pos = 0
     for command_block in command_blocks:
-        f = io.StringIO(command_block)
-        reader = csv.reader(f,
-                            delimiter=' ',
-                            quotechar='"',
-                            skipinitialspace=True)
-        for row in reader:
-            if row == []:
-                continue
-            if row[0] == "echo":
-                parsed_commands.append(parse_echo(row))
-            else:
-                parsed_commands.append(row)
+        split = split_command(command_block)
+        for i in range(len(split)):
+            if split[i] in SUPPORTED_CMDS:
+                parsed_commands.append(split[last_keyw_pos:i])
+                last_keyw_pos = i
+        parsed_commands.append(split[last_keyw_pos:])
 
-    return parsed_commands
+    ret = []
+
+    for cmd in parsed_commands:
+        if cmd == []:
+            continue
+        if cmd[0] == "echo":
+            cmd = parse_echo(cmd)
+        elif cmd[0] == "python":
+            # Ignore warnings
+            cmd.insert(1, "-W ignore")
+        ret.append(cmd)
+
+    return ret
 
 
-def get_target_dir(cmd: list) -> str:
+def parse_echo(command: list) -> list:
+    """
+    Parses an `echo` command list into 5 parts.
+
+    The function groups the echo command arguments into its main components,
+    specifically handling redirection using the '>' symbol.
+
+    Args:
+    - command (list): A list of strings representing the `echo` command split
+        by whitespace.
+
+    Returns:
+    - list: A list of parsed components.
+
+    Example:
+    Given the command list:
+    ['echo', 'Hello', 'World', '>', 'output.txt']
+    The function will return:
+    ['echo', '-e', '"Hello World"', '>', 'output.txt']
+
+    Note:
+    The function assumes that the redirection symbol '>' is always followed by
+        the filename
+    and that the redirection symbol will only appear once at the end of the
+        command.
+    The `"` characters are added to the message to be echoed to ensure that
+        the message is encapsulated. Only run in Linux.
+    """
+    assert command[0] == "echo", "The command is not an echo command."
+
+    if command[1] == '-e':
+        command = command[:1] + command[2:]
+
+    for i in range(len(command)):
+        if command[i].strip().startswith(">"):
+            assert i == len(command) - 2
+            return [
+                "echo", " ".join(command[1:i]), command[i].strip(), command[-1]
+            ]
+    return ["echo", " ".join(command[1:])]
+
+
+def get_target_dirs(cmd: list) -> list:
     """
     Get the directory of the target file/dir from a command.
 
@@ -503,25 +651,44 @@ def get_target_dir(cmd: list) -> str:
     - cmd (list): a single command splitted into a list of arguments.
 
     Returns:
-    - str: The directory of the target file/dir.
+    - list: A list of the directories of the target file/dirs.
+            If error occurs, return a list of error messages.
     """
-    # Get the file
-    file = get_file_name(cmd)
-    path = os.path.dirname(file) if "." in os.path.basename(file) else file
-    if path == "":
-        path = "."
+    # Get the files
+    files = get_file_names(cmd)
+    target_dirs = []
 
-    # Backup the cwd
-    original_cwd = os.getcwd()
+    for file in files:
+        path = os.path.dirname(file) if "." in os.path.basename(file) else file
+        if path == "":
+            path = "."
 
-    try:
-        os.chdir(path)
-    except Exception as e:
-        return "Error: " + str(e)
+        # Backup the cwd
+        original_cwd = os.getcwd()
 
-    target_dir = os.getcwd().replace('\\', '/') + "/"
+        try:
+            os.chdir(path)
+        except Exception as e:
+            return ["Error: " + str(e)]
 
-    # Restore the cwd
-    os.chdir(original_cwd)
+        target_dirs.append(os.getcwd().replace('\\', '/') + "/")
 
-    return target_dir
+        # Restore the cwd
+        os.chdir(original_cwd)
+
+    return target_dirs
+
+
+def slice_text(text: str,
+               slicing_gap: int = 800,
+               slicing_len: int = 1000) -> list:
+    encoder = tiktoken.encoding_for_model("gpt-4")
+
+    ret = []
+    encoded = encoder.encode(text)
+    i = 0
+    while i < len(encoded):
+        ret.append(encoder.decode(encoded[i:i + slicing_len]))
+        i += slicing_gap
+
+    return ret

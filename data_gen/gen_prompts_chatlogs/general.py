@@ -1,4 +1,4 @@
-from utils import find_all_substr
+from utils import (find_all_substr, slice_text)
 from data_gen.paths import (prompt_output_path, raw_data_path,
                             chatlog_output_path, prompt_template_path)
 from curious_agent import CuriousAgent
@@ -10,9 +10,11 @@ from tqdm import tqdm
 from collections import defaultdict
 import tiktoken
 
+from termcolor import colored
+
 num_response = 2
 num_interaction = 5
-max_token_length = 10000
+max_token_length = 8192 // 2
 encoder = tiktoken.encoding_for_model("gpt-4")
 
 tasks = {}
@@ -28,7 +30,7 @@ def save_prompt(prompt, task):
     global total_data_count
     file_name = task + "_" + str(total_data_count[task]) + ".txt"
     path = prompt_output_path + file_name
-    with open(path, 'w') as handle:
+    with open(path, 'w', encoding="utf-8") as handle:
         handle.write(prompt)
     total_data_count[task] += 1
     prompt_files.append(file_name)
@@ -37,11 +39,13 @@ def save_prompt(prompt, task):
 def dfs(path):
     file_list = os.listdir(path)
     for file in file_list:
+        if file.startswith("."):
+            continue
         new_path = path + file
         if os.path.isdir(new_path):
             dfs(new_path + "/")
         else:
-            with open(new_path, mode="r") as handle:
+            with open(new_path, mode="r", encoding="utf-8") as handle:
                 content = handle.read()
                 if content.replace(" ", "").replace(
                         "\n", "") != "":    # remove empty files
@@ -60,10 +64,13 @@ def enumerate_file_tuples(file_names, content, pos, task):
             if content[pos_ed] == "}":
                 break
 
-        new_content = content[:pos[-1]] + files[
-            file_names[i]] + content[pos_ed + 1:]
+        slices = slice_text(files[file_names[i]])
 
-        enumerate_file_tuples(file_names[i + 1:], new_content, pos[:-1], task)
+        for slice in slices:
+            new_content = content[:pos[-1]] + slice + content[pos_ed + 1:]
+
+            enumerate_file_tuples(file_names[i + 1:], new_content, pos[:-1],
+                                  task)
 
 
 def replace_content(file_names, task, prompt_template, identifier, suffix):
@@ -76,7 +83,8 @@ def replace_content(file_names, task, prompt_template, identifier, suffix):
     for file_name in file_names:
         if file_name.endswith(suffix):
             filtered_fn.append(file_name)
-    enumerate_file_tuples(filtered_fn, prompt_template, pos, task[:-len(".md")])
+    enumerate_file_tuples(filtered_fn, prompt_template, pos,
+                          task[:-len(suffix)])
 
 
 def extract_clip(code, clip_type):
@@ -119,6 +127,7 @@ def gen_data(data_type):
     file_names = list(files.keys())
 
     for (task, prompt_template) in tasks.items():
+        print(colored(f"Generating {task}...", "green"))
         # All {content} {content%x} replacement
         # TODO: {prev_generated_QA} in question.md (all hybrid prompt templates)
         replace_content(file_names, task, prompt_template, "{content", ".md")
@@ -142,7 +151,8 @@ if __name__ == "__main__":
         with open(prompt_template_path + file, mode="r") as handle:
             tasks[file] = handle.read()
 
-    for data_type in ["IFS_code", "IFS_document"]:
+    #for data_type in ["IFS_code", "IFS_document"]:
+    for data_type in ["./"]:
         files = {}
         gen_data(data_type)
 
@@ -153,6 +163,7 @@ if __name__ == "__main__":
             with open(prompt_output_path + file, "r") as handle:
                 prompts = handle.read()
             agent = CuriousAgent(api=get_llm(),
+                                 model="gpt-4",
                                  system_msg=prompts,
                                  formatter=None,
                                  temperature=1,
