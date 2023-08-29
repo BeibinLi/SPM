@@ -4,9 +4,10 @@ import os
 from termcolor import colored
 import yaml
 from transformers import (AutoModelForCausalLM, AutoTokenizer,
-                          BitsAndBytesConfig)
+                          BitsAndBytesConfig, GenerationConfig)
 from peft import PeftConfig, PeftModel
 
+from llama.generation import Message, Dialog, B_INST, E_INST, B_SYS, E_SYS, SPECIAL_TAGS, UNSAFE_ERROR
 
 def load_inference_model(
         experiment_dir: str,
@@ -159,3 +160,160 @@ def answer(question,
         answers.append(ans)
 
     return answers
+
+def GPT_msgs_to_Llama_dialog(messages: list) -> Dialog:
+    """
+    Convert GPT messages to Llama dialog.
+
+    Args:
+    - messages (list[dict]): List of messages from GPT, with format:
+    [{
+        "role": agent_name,
+        "content": message_content
+    }, ...]
+        - `role` taking only ['system', 'user', 'assistant']
+
+    Returns:
+    - Dialog: Llama dialog, with same format, but:
+        - `role` starts with 'system', then 'user' and 'assistant' alternate (u/a/u/a/u...)
+    """
+
+    def predict_role(pos, system):
+        if system:
+            if pos == 0:
+                return "system"
+            else:
+                return ["assistant", "user"][pos % 2]
+        else:
+            return ["user", "assistant"][pos % 2]
+
+    for message in messages:
+        message["role"] = message["role"].lower()
+        assert message["role"] in ["system", "user", "assistant"], "Role must be in ['system', 'user', 'assistant']."
+    
+    pos = 0
+    system = messages[0]["role"] == "system"
+    content = ""
+    dialog = []
+
+    for message in messages:
+        role = predict_role(pos, system)
+        if message["role"] == role:
+            content += "\n" + message["content"]
+        else:
+            dialog.append(Message(role=role, content=content.strip()))
+            pos += 1
+            content = message["content"]
+    dialog.append(Message(role=role, content=content.strip()))
+
+    return dialog
+
+def Llama_chat_completion(
+    model,
+    tokenizer,
+    dialogs: list,
+    temperature: float = 0.6,
+    top_p: float = 0.9,
+    max_gen_len: int = 4096,
+    logprobs: bool = False
+) -> list:
+    """
+    Chat completion for LLAMA 2.
+    """
+    prompt_tokens = []
+    unsafe_requests = []
+    
+    for dialog in dialogs:
+        unsafe_requests.append(
+            any([tag in msg["content"] for tag in SPECIAL_TAGS for msg in dialog])
+        )
+        if dialog[0]["role"] == "system":
+            dialog = [
+                {
+                    "role": dialog[1]["role"],
+                    "content": B_SYS
+                    + dialog[0]["content"]
+                    + E_SYS
+                    + dialog[1]["content"],
+                }
+            ] + dialog[2:]
+        assert all([msg["role"] == "user" for msg in dialog[::2]]) and all(
+            [msg["role"] == "assistant" for msg in dialog[1::2]]
+        ), (
+            "model only supports 'system', 'user' and 'assistant' roles, "
+            "starting with 'system', then 'user' and alternating (u/a/u/a/u...)"
+        )
+        dialog_tokens = sum(
+            [
+                tokenizer.encode(
+                    f"{B_INST} {(prompt['content']).strip()} {E_INST} {(answer['content']).strip()} ",
+                    # bos=True,
+                    # eos=True,
+                )
+                for prompt, answer in zip(
+                    dialog[::2],
+                    dialog[1::2],
+                )
+            ],
+            [],
+        )
+        assert (
+            dialog[-1]["role"] == "user"
+        ), f"Last message must be from user, got {dialog[-1]['role']}"
+        dialog_tokens += tokenizer.encode(
+            f"{B_INST} {(dialog[-1]['content']).strip()} {E_INST}",
+            # bos=True,
+            # eos=False,
+        )
+        prompt_tokens.append(dialog_tokens)
+    
+    max_len = max([len(x) for x in prompt_tokens])
+    inputs = torch.Tensor([x + [tokenizer.pad_token_id] * (max_len - len(x)) for x in prompt_tokens]).long()
+    print(inputs)
+    
+    generation_config = GenerationConfig(
+        max_length=max_gen_len,
+        do_sample=True,
+        temperature=temperature,
+        top_p=top_p,
+        pad_token_id=tokenizer.pad_token_id,
+        return_dict_in_generate=True,
+        output_scores=True,
+    )
+
+    outputs = model.generate(
+        inputs=inputs.to(model.device),
+        generation_config=generation_config,
+    )
+    print(outputs)
+
+    if logprobs:
+        generation_logprobs = model.compute_transition_scores(
+            sequences=outputs.sequences,
+            scores=outputs.scores,
+        )
+        print(generation_logprobs)
+        return [
+            {
+                "generation": {
+                    "role": "assistant",
+                    "content": tokenizer.decode(t)
+                    if not unsafe
+                    else UNSAFE_ERROR,
+                },
+                "tokens": [tokenizer.decode(x) for x in t],
+                "logprobs": logprobs_i,
+            }
+            for t, logprobs_i, unsafe in zip(
+                outputs.sequences, generation_logprobs, unsafe_requests
+            )
+        ]
+    return [
+        {
+            "generation": {
+                "role": "assistant",
+                "content": tokenizer.decode(t) if not unsafe else UNSAFE_ERROR,
+            }
+        }
+        for t, unsafe in zip(outputs.sequences, unsafe_requests)
+    ]
