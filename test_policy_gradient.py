@@ -13,8 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-import glob
 import torch
 from peft import LoraConfig, PeftModel
 from transformers import (
@@ -22,17 +20,13 @@ from transformers import (
     AutoTokenizer,
     BitsAndBytesConfig,
     HfArgumentParser,
-    TrainingArguments,
 )
-from peft.tuners.lora import LoraLayer
-from trl import SFTTrainer
 from termcolor import colored
 
 from experiment_args import ScriptArguments
 
 from accelerate import Accelerator
 
-from llama import Llama
 from model_utils import GPT_msgs_to_Llama_dialog, Llama_chat_completion
 
 accelerator = Accelerator()
@@ -97,6 +91,7 @@ def create_and_prepare_model(args):
 
     return model, peft_config, tokenizer
 
+
 messages = [
     {
         "role": "System",
@@ -146,11 +141,12 @@ dialog = GPT_msgs_to_Llama_dialog(messages)
 #     max_gen_len = 2000,
 # )
 
-# print(res[0]["generation"])
-
-
-
+# print(res[0]["generation"]["content"])
 
 model, peft_config, tokenizer = create_and_prepare_model(script_args)
 
-print(Llama_chat_completion(model, tokenizer, [dialog], logprobs=True, max_gen_len=2000)[0]["generation"])
+print(
+    Llama_chat_completion(model,
+                          tokenizer, [dialog],
+                          logprobs=True,
+                          max_gen_len=2000)[0]["generation"]["content"])
