@@ -39,11 +39,22 @@ def get_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def reset_model(model, adapter_name=None):
+    if adapter_name is None:
+        # prev_forward = model.forward
+        # prev_prepare = model.prepare_inputs_for_generation
+
+        model.forward = model.base_model.forward
+        model.prepare_inputs_for_generation = (
+            model.base_model.prepare_inputs_for_generation)
+    else:
+        model.set_adapter(adapter_name)
+
+
 if __name__ == "__main__":
     args = get_args()
 
     tokenizer, config, model = load_inference_model(args.dir)
-
     # question = "hi"
     # pdb.set_trace()
 

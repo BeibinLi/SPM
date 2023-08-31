@@ -1,3 +1,6 @@
+test:
+	accelerate launch test_policy_gradient.py --model_name ~/llama/converted-llama-2-7b-chat/
+
 b7:
 	accelerate launch train.py --max_steps 200 --model_name ~/llama/converted-llama-2-7b-chat/
 
