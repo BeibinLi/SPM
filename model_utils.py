@@ -6,25 +6,12 @@ import copy
 import inspect
 from termcolor import colored
 import yaml
-import pdb
 from typing import Optional, Callable, List
 from transformers import (AutoModelForCausalLM, AutoTokenizer,
                           BitsAndBytesConfig, GenerationConfig)
-from transformers.generation.logits_process import (
-    LogitsProcessorList,
-    TemperatureLogitsWarper,
-    TopKLogitsWarper,
-    TopPLogitsWarper,
-    TypicalLogitsWarper
-)
+from transformers.generation.logits_process import (LogitsProcessorList)
 from transformers.generation.stopping_criteria import (
-    MaxLengthCriteria,
-    MaxTimeCriteria,
-    StoppingCriteria,
-    StoppingCriteriaList,
-    validate_stopping_criteria
-)
-from transformers.deepspeed import is_deepspeed_zero3_enabled
+    StoppingCriteriaList, validate_stopping_criteria)
 from peft import PeftConfig, PeftModel
 from llama.generation import (Message, Dialog, B_INST, E_INST, B_SYS, E_SYS,
                               SPECIAL_TAGS, UNSAFE_ERROR)
@@ -229,15 +216,14 @@ def GPT_msgs_to_Llama_dialog(messages: list) -> Dialog:
             dialog.append(Message(role=role, content=content.strip()))
             pos += 1
             content = message["content"]
-    dialog.append(Message(role=predict_role(pos, system),
-                          content=content.strip()))
+    dialog.append(
+        Message(role=predict_role(pos, system), content=content.strip()))
 
     return dialog
 
-def Llama_chat_completion(model: PeftModel,
-                          tokenizer: AutoTokenizer,
-                          dialogs: list,
-                          generation_config: GenerationConfig,
+
+def Llama_chat_completion(model: PeftModel, tokenizer: AutoTokenizer,
+                          dialogs: list, generation_config: GenerationConfig,
                           generated_mask: Optional[list]) -> list:
     """
     Chat completion for Llama 2.
@@ -256,7 +242,7 @@ def Llama_chat_completion(model: PeftModel,
     - `generation_config` (GenerationConfig): Generation config for the model.
     - `generated_mask` (list): List of generated mask for each dialog.
     If the position is True, the token is generated, otherwise it is given by the user.
-    
+
     Returns:
     - list: List of generated messages, with format:
     [{
@@ -268,7 +254,8 @@ def Llama_chat_completion(model: PeftModel,
         "generated_mask": list
     }, ...]
     """
-    assert len(dialogs) == 1, "Currently do not support batched dialogs for training."
+    assert len(
+        dialogs) == 1, "Currently do not support batched dialogs for training."
 
     prompt_tokens = []
     unsafe_requests = []
@@ -310,14 +297,14 @@ def Llama_chat_completion(model: PeftModel,
 
     # left-padding
     max_len = max([len(x) for x in prompt_tokens])
-    inputs = torch.Tensor([
-        ([tokenizer.pad_token_id] * (max_len - len(x)) + x) for x in prompt_tokens
-    ]).long()
+    inputs = torch.Tensor([([tokenizer.pad_token_id] * (max_len - len(x)) + x)
+                           for x in prompt_tokens]).long()
 
     # update generated mask of the user texts
     for i in range(len(generated_mask)):
         if len(generated_mask[i]) < max_len:
-            generated_mask[i] = generated_mask[i] + [False] * (max_len - len(generated_mask[i]))
+            generated_mask[i] = generated_mask[i] + [False] * (
+                max_len - len(generated_mask[i]))
 
     outputs = model.generate(
         inputs=inputs.to(model.device),
@@ -336,15 +323,19 @@ def Llama_chat_completion(model: PeftModel,
         newly_generated = t[len(inputs[0]):]
         res.append({
             "generation": {
-                "role": "assistant",
-                "content": tokenizer.decode(remove_trailing_eos(newly_generated)) if not unsafe else UNSAFE_ERROR,
+                "role":
+                    "assistant",
+                "content":
+                    tokenizer.decode(remove_trailing_eos(newly_generated))
+                    if not unsafe else UNSAFE_ERROR,
             },
             "tokens": t,
-            # update generated mask of the generated texts
+        # update generated mask of the generated texts
             "generated_mask": generated_mask[i] + [True] * len(newly_generated),
         })
 
     return res
+
 
 # A new function for PeftModel to support calc prob and log prob WITH GRADIENTS
 def calc_prob_log_prob(
@@ -354,27 +345,32 @@ def calc_prob_log_prob(
     generation_config: Optional[GenerationConfig] = None,
     logits_processor: Optional[LogitsProcessorList] = None,
     stopping_criteria: Optional[StoppingCriteriaList] = None,
-    prefix_allowed_tokens_fn: Optional[Callable[[int, torch.Tensor], List[int]]] = None,
-    assistant_model: Optional["PreTrainedModel"] = None,
+    prefix_allowed_tokens_fn: Optional[Callable[[int, torch.Tensor],
+                                                List[int]]] = None,
     negative_prompt_ids: Optional[torch.Tensor] = None,
     negative_prompt_attention_mask: Optional[torch.Tensor] = None,
     calc_prob: bool = True,
     calc_log_prob: bool = True,
     **kwargs,
 ) -> dict:
-    # 1. Handle `generation_config` and kwargs that might update it, and validate the `.generate()` call
+    # 1. Handle `generation_config` and kwargs that might update it,
+    # and validate the `.generate()` call
     self._validate_model_class()
 
     generation_config = copy.deepcopy(generation_config)
-    model_kwargs = generation_config.update(**kwargs)  # All unused kwargs must be model kwargs
+    model_kwargs = generation_config.update(
+        **kwargs)    # All unused kwargs must be model kwargs
     generation_config.validate()
     self._validate_model_kwargs(model_kwargs.copy())
 
     # 2. Set generation parameters if not already defined
-    logits_processor = logits_processor if logits_processor is not None else LogitsProcessorList()
-    stopping_criteria = stopping_criteria if stopping_criteria is not None else StoppingCriteriaList()
+    logits_processor = (logits_processor if logits_processor is not None else
+                        LogitsProcessorList())
+    stopping_criteria = (stopping_criteria if stopping_criteria is not None else
+                         StoppingCriteriaList())
 
-    if generation_config.pad_token_id is None and generation_config.eos_token_id is not None:
+    if (generation_config.pad_token_id is None
+            and generation_config.eos_token_id is not None):
         eos_token_id = generation_config.eos_token_id
         if isinstance(eos_token_id, list):
             eos_token_id = eos_token_id[0]
@@ -386,37 +382,46 @@ def calc_prob_log_prob(
     # otherwise model_input_name is None
     # all model-specific keyword inputs are removed from `model_kwargs`
     inputs_tensor, model_input_name, model_kwargs = self._prepare_model_inputs(
-        inputs, generation_config.bos_token_id, model_kwargs
-    )
+        inputs, generation_config.bos_token_id, model_kwargs)
 
     # 4. Define other model kwargs
     model_kwargs["output_attentions"] = generation_config.output_attentions
-    model_kwargs["output_hidden_states"] = generation_config.output_hidden_states
-    # decoder-only models with inputs_embeds forwarding must use caching (otherwise we can't detect whether we are
-    # generating the first new token or not, and we only want to use the embeddings for the first new token)
+    model_kwargs[
+        "output_hidden_states"] = generation_config.output_hidden_states
+    # decoder-only models with inputs_embeds forwarding must use caching
+    # (otherwise we can't detect whether we are generating the first new token
+    # or not, and we only want to use the embeddings for the first new token)
 
     if model_input_name == "inputs_embeds":
         model_kwargs["use_cache"] = True
     else:
         model_kwargs["use_cache"] = generation_config.use_cache
 
-    accepts_attention_mask = "attention_mask" in set(inspect.signature(self.forward).parameters.keys())
+    accepts_attention_mask = "attention_mask" in set(
+        inspect.signature(self.forward).parameters.keys())
     requires_attention_mask = "encoder_outputs" not in model_kwargs
 
-    if model_kwargs.get("attention_mask", None) is None and requires_attention_mask and accepts_attention_mask:
-        model_kwargs["attention_mask"] = self._prepare_attention_mask_for_generation(
-            inputs_tensor, generation_config.pad_token_id, generation_config.eos_token_id
-        )
+    if model_kwargs.get(
+            "attention_mask", None
+    ) is None and requires_attention_mask and accepts_attention_mask:
+        model_kwargs[
+            "attention_mask"] = self._prepare_attention_mask_for_generation(
+                inputs_tensor, generation_config.pad_token_id,
+                generation_config.eos_token_id)
 
     # 5. Prepare `input_ids` which will be used for auto-regressive generation
-    input_ids = inputs_tensor if model_input_name == "input_ids" else model_kwargs.pop("input_ids")
+    input_ids = inputs_tensor if model_input_name == "input_ids" else model_kwargs.pop(
+        "input_ids")
 
     # 6. Prepare `max_length` depending on other stopping criteria.
     input_ids_length = input_ids.shape[-1]
-    has_default_max_length = kwargs.get("max_length") is None and generation_config.max_length is not None
+    has_default_max_length = kwargs.get(
+        "max_length") is None and generation_config.max_length is not None
     if generation_config.max_new_tokens is not None:
-        generation_config.max_length = generation_config.max_new_tokens + input_ids_length
-    self._validate_generated_length(generation_config, input_ids_length, has_default_max_length)
+        generation_config.max_length = (generation_config.max_new_tokens +
+                                        input_ids_length)
+    self._validate_generated_length(generation_config, input_ids_length,
+                                    has_default_max_length)
 
     # 8. prepare distribution pre_processing samplers
     logits_processor = self._get_logits_processor(
@@ -432,9 +437,9 @@ def calc_prob_log_prob(
 
     # 9. prepare stopping criteria
     stopping_criteria = self._get_stopping_criteria(
-        generation_config=generation_config, stopping_criteria=stopping_criteria
-    )
-    
+        generation_config=generation_config,
+        stopping_criteria=stopping_criteria)
+
     # 11. prepare logits warper
     logits_warper = self._get_logits_warper(generation_config)
 
@@ -449,13 +454,14 @@ def calc_prob_log_prob(
     # init values
     max_length = generation_config.max_length
     if max_length is not None:
-        stopping_criteria = validate_stopping_criteria(stopping_criteria, max_length)
-    pad_token_id = self.generation_config.pad_token_id
+        stopping_criteria = validate_stopping_criteria(stopping_criteria,
+                                                       max_length)
     eos_token_id = self.generation_config.eos_token_id
     if isinstance(eos_token_id, int):
         eos_token_id = [eos_token_id]
-    eos_token_id_tensor = torch.tensor(eos_token_id).to(input_ids.device) if eos_token_id is not None else None
-    
+    torch.tensor(eos_token_id).to(
+        input_ids.device) if eos_token_id is not None else None
+
     # compared to the original sample():
     # output_scores = True
     # output_attentions = False
@@ -468,10 +474,7 @@ def calc_prob_log_prob(
     print(model_inputs)
 
     # forward pass to get next token
-    outputs = self(
-        **model_inputs,
-        return_dict=True
-    )
+    outputs = self(**model_inputs, return_dict=True)
 
     batch_size = outputs.logits.shape[0]
     axis = torch.arange(batch_size, device=self.device)

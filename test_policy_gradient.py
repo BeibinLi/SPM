@@ -15,21 +15,16 @@
 
 import torch
 from peft import LoraConfig, PeftModel
-from transformers import (
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    BitsAndBytesConfig,
-    HfArgumentParser,
-    GenerationConfig
-)
+from transformers import (AutoModelForCausalLM, AutoTokenizer,
+                          BitsAndBytesConfig, HfArgumentParser,
+                          GenerationConfig)
 from termcolor import colored
-import pdb
 import types
 from accelerate import Accelerator
 
 from experiment_args import ScriptArguments
-from model_utils import (GPT_msgs_to_Llama_dialog,
-                         Llama_chat_completion, calc_prob_log_prob)
+from model_utils import (GPT_msgs_to_Llama_dialog, Llama_chat_completion,
+                         calc_prob_log_prob)
 
 accelerator = Accelerator()
 local_rank = accelerator.process_index
@@ -39,7 +34,8 @@ parser = HfArgumentParser(ScriptArguments)
 script_args = parser.parse_args_into_dataclasses()[0]
 
 
-def create_and_prepare_model(args: ScriptArguments) -> (PeftModel, LoraConfig, AutoTokenizer):
+def create_and_prepare_model(
+        args: ScriptArguments) -> (PeftModel, LoraConfig, AutoTokenizer):
     """
     Create and prepare model for PEFT training.
 
@@ -102,6 +98,7 @@ def create_and_prepare_model(args: ScriptArguments) -> (PeftModel, LoraConfig, A
     tokenizer.pad_token = tokenizer.eos_token
 
     return model, peft_config, tokenizer
+
 
 m1 = [
     {
@@ -166,28 +163,42 @@ model, peft_config, tokenizer = create_and_prepare_model(script_args)
 # Use multinomial sampling to generate the next token:
 # Set do_sample = True, num_beams = 1, and passing temperature and top_p
 generation_config = GenerationConfig(
-                        max_length=2048,
-                        do_sample=True,
-                        num_beams=1,
-                        temperature=0.6,
-                        top_p=0.9,
-                        pad_token_id=tokenizer.pad_token_id,eos_token_id=tokenizer.eos_token_id,
-                    )
+    max_length=2048,
+    do_sample=True,
+    num_beams=1,
+    temperature=0.6,
+    top_p=0.9,
+    pad_token_id=tokenizer.pad_token_id,
+    eos_token_id=tokenizer.eos_token_id,
+)
 dialogs = [d1]
 
 generated_mask = [[] for _ in range(len(dialogs))]
 for _ in range(3):
-    res = Llama_chat_completion(model, tokenizer, dialogs, generation_config, generated_mask)
+    res = Llama_chat_completion(model, tokenizer, dialogs, generation_config,
+                                generated_mask)
     generated_mask = [r["generated_mask"] for r in res]
-    if _ < 2: 
+    if _ < 2:
         for i in range(len(dialogs)):
             dialogs[i].append(res[i]["generation"])
-            dialogs[i].append({"role": "user", "content": "Got it. Can you write another code?"})
+            dialogs[i].append({
+                "role": "user",
+                "content": "Got it. Can you write another code?"
+            })
 
-input_tokens = torch.zeros((len(res), res[0]["tokens"].shape[0]), dtype=torch.long, device=model.device)
+input_tokens = torch.zeros((len(res), res[0]["tokens"].shape[0]),
+                           dtype=torch.long,
+                           device=model.device)
 for i, r in enumerate(res):
     input_tokens[i] = r["tokens"]
-generated_mask = torch.tensor(generated_mask, dtype=torch.bool, device=model.device)
+generated_mask = torch.tensor(generated_mask,
+                              dtype=torch.bool,
+                              device=model.device)
 
 model.calc_prob_log_prob = types.MethodType(calc_prob_log_prob, model)
-print(model.calc_prob_log_prob(input_tokens, generated_mask, generation_config, calc_prob = True, calc_log_prob = False))
+print(
+    model.calc_prob_log_prob(input_tokens,
+                             generated_mask,
+                             generation_config,
+                             calc_prob=True,
+                             calc_log_prob=False))
