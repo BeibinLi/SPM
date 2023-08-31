@@ -20,14 +20,16 @@ from transformers import (
     AutoTokenizer,
     BitsAndBytesConfig,
     HfArgumentParser,
+    GenerationConfig
 )
 from termcolor import colored
-
-from experiment_args import ScriptArguments
-
+import pdb
+import types
 from accelerate import Accelerator
 
-from model_utils import GPT_msgs_to_Llama_dialog, Llama_chat_completion
+from experiment_args import ScriptArguments
+from model_utils import (GPT_msgs_to_Llama_dialog,
+                         Llama_chat_completion, calc_prob_log_prob)
 
 accelerator = Accelerator()
 local_rank = accelerator.process_index
@@ -37,7 +39,18 @@ parser = HfArgumentParser(ScriptArguments)
 script_args = parser.parse_args_into_dataclasses()[0]
 
 
-def create_and_prepare_model(args):
+def create_and_prepare_model(args: ScriptArguments) -> (PeftModel, LoraConfig, AutoTokenizer):
+    """
+    Create and prepare model for PEFT training.
+
+    Args:
+    - args: ScriptArguments
+
+    Returns:
+    - model: PeftModel
+    - peft_config: peft config
+    - tokenizer: tokenizer associated with the model
+    """
     compute_dtype = getattr(torch, args.bnb_4bit_compute_dtype)
 
     bnb_config = BitsAndBytesConfig(
@@ -79,10 +92,9 @@ def create_and_prepare_model(args):
                                           model_id=args.load_dir,
                                           is_trainable=True,
                                           config=peft_config)
-        del base_model
     else:
-        #model = PeftModel(model=base_model, peft_config=peft_config)
-        model = base_model
+        model = PeftModel(model=base_model, peft_config=peft_config)
+    del base_model
 
     tokenizer = AutoTokenizer.from_pretrained(args.model_name,
                                               trust_remote_code=True,
@@ -91,15 +103,36 @@ def create_and_prepare_model(args):
 
     return model, peft_config, tokenizer
 
-
-messages = [
+m1 = [
     {
         "role": "System",
-        "content": "Hey!",
+        "content": "You are a code writing assistant.",
     },
     {
         "role": "User",
         "content": "Hi, how are you?",
+    },
+    {
+        "role": "assistant",
+        "content": "Good to see you, human!",
+    },
+    {
+        "role": "user",
+        "content": "Help me with coding.",
+    },
+    {
+        "role": "assistant",
+        "content": "Sure!",
+    },
+    {
+        "role": "user",
+        "content": "Write a program to check if a number is prime or not.",
+    },
+]
+m2 = [
+    {
+        "role": "System",
+        "content": "Hey!",
     },
     {
         "role": "user",
@@ -127,26 +160,34 @@ messages = [
     },
 ]
 
-dialog = GPT_msgs_to_Llama_dialog(messages)
-
-# model = Llama.build(ckpt_dir="/home/t-rzhou/llama/7B-chat/",
-#                     tokenizer_path="/home/t-rzhou/llama/tokenizer.model",
-#                     max_seq_len=8192//2,
-#                     max_batch_size=1,
-#                     model_parallel_size=1)
-
-# res = model.chat_completion(
-#     dialogs = [dialog],
-#     logprobs = True,
-#     max_gen_len = 2000,
-# )
-
-# print(res[0]["generation"]["content"])
-
+d1 = GPT_msgs_to_Llama_dialog(m1)
+d2 = GPT_msgs_to_Llama_dialog(m2)
 model, peft_config, tokenizer = create_and_prepare_model(script_args)
+# Use multinomial sampling to generate the next token:
+# Set do_sample = True, num_beams = 1, and passing temperature and top_p
+generation_config = GenerationConfig(
+                        max_length=2048,
+                        do_sample=True,
+                        num_beams=1,
+                        temperature=0.6,
+                        top_p=0.9,
+                        pad_token_id=tokenizer.pad_token_id,eos_token_id=tokenizer.eos_token_id,
+                    )
+dialogs = [d1]
 
-print(
-    Llama_chat_completion(model,
-                          tokenizer, [dialog],
-                          logprobs=True,
-                          max_gen_len=2000)[0]["generation"]["content"])
+generated_mask = [[] for _ in range(len(dialogs))]
+for _ in range(3):
+    res = Llama_chat_completion(model, tokenizer, dialogs, generation_config, generated_mask)
+    generated_mask = [r["generated_mask"] for r in res]
+    if _ < 2: 
+        for i in range(len(dialogs)):
+            dialogs[i].append(res[i]["generation"])
+            dialogs[i].append({"role": "user", "content": "Got it. Can you write another code?"})
+
+input_tokens = torch.zeros((len(res), res[0]["tokens"].shape[0]), dtype=torch.long, device=model.device)
+for i, r in enumerate(res):
+    input_tokens[i] = r["tokens"]
+generated_mask = torch.tensor(generated_mask, dtype=torch.bool, device=model.device)
+
+model.calc_prob_log_prob = types.MethodType(calc_prob_log_prob, model)
+print(model.calc_prob_log_prob(input_tokens, generated_mask, generation_config, calc_prob = True, calc_log_prob = False))
