@@ -7,14 +7,85 @@ import inspect
 from termcolor import colored
 import yaml
 import pdb
+from accelerate import Accelerator
 from transformers import (AutoModelForCausalLM, AutoTokenizer,
                           BitsAndBytesConfig, GenerationConfig)
 from transformers.generation.logits_process import (LogitsProcessorList)
 from transformers.generation.stopping_criteria import (
     StoppingCriteriaList, validate_stopping_criteria)
-from peft import PeftConfig, PeftModel
+from peft import PeftConfig, LoraConfig, PeftModel
 from llama.generation import (Message, Dialog, B_INST, E_INST, B_SYS, E_SYS,
                               SPECIAL_TAGS, UNSAFE_ERROR)
+
+from experiment_args import ScriptArguments
+
+
+def create_and_prepare_model(
+        args: ScriptArguments) -> (PeftModel, PeftConfig, AutoTokenizer):
+    """
+    Create and prepare model for PEFT training.
+
+    Args:
+    - args: ScriptArguments
+
+    Returns:
+    - model: PeftModel
+    - peft_config: peft config
+    - tokenizer: tokenizer associated with the model
+    """
+    compute_dtype = getattr(torch, args.bnb_4bit_compute_dtype)
+
+    bnb_config = BitsAndBytesConfig(
+        load_in_4bit=args.use_4bit,
+        bnb_4bit_quant_type=args.bnb_4bit_quant_type,
+        bnb_4bit_compute_dtype=compute_dtype,
+        bnb_4bit_use_double_quant=args.use_nested_quant,
+    )
+
+    if compute_dtype == torch.float16 and args.use_4bit:
+        major, _ = torch.cuda.get_device_capability()
+        if major >= 8:
+            print("=" * 80)
+            print(
+                "Your GPU supports bfloat16, you can accelerate training with "
+                "the argument --bf16")
+            print("=" * 80)
+
+    accelerator = Accelerator()
+    local_rank = accelerator.process_index
+    device_map = {"": local_rank}
+
+    base_model = AutoModelForCausalLM.from_pretrained(
+        args.model_name,
+        quantization_config=bnb_config,
+        device_map=device_map,
+        trust_remote_code=True,
+        cache_dir=args.cache_dir)
+
+    peft_config = LoraConfig(
+        lora_alpha=args.lora_alpha,
+        lora_dropout=args.lora_dropout,
+        r=args.lora_r,
+        bias="none",
+        task_type="CAUSAL_LM",
+    )
+
+    if args.load_dir:
+        print(colored("Loading from " + args.load_dir, "green"))
+        model = PeftModel.from_pretrained(model=base_model,
+                                          model_id=args.load_dir,
+                                          is_trainable=True,
+                                          config=peft_config)
+    else:
+        model = PeftModel(model=base_model, peft_config=peft_config)
+    del base_model
+
+    tokenizer = AutoTokenizer.from_pretrained(args.model_name,
+                                              trust_remote_code=True,
+                                              cache_dir=args.cache_dir)
+    tokenizer.pad_token = tokenizer.eos_token
+
+    return model, peft_config, tokenizer
 
 
 def load_inference_model(
