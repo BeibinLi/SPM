@@ -6,7 +6,7 @@ import copy
 import inspect
 from termcolor import colored
 import yaml
-from typing import Optional, Callable, List
+import pdb
 from transformers import (AutoModelForCausalLM, AutoTokenizer,
                           BitsAndBytesConfig, GenerationConfig)
 from transformers.generation.logits_process import (LogitsProcessorList)
@@ -223,8 +223,8 @@ def GPT_msgs_to_Llama_dialog(messages: list) -> Dialog:
 
 
 def Llama_chat_completion(model: PeftModel, tokenizer: AutoTokenizer,
-                          dialogs: list, generation_config: GenerationConfig,
-                          generated_mask: Optional[list]) -> list:
+                          dialogs: list,
+                          generation_config: GenerationConfig) -> list:
     """
     Chat completion for Llama 2.
 
@@ -240,8 +240,6 @@ def Llama_chat_completion(model: PeftModel, tokenizer: AutoTokenizer,
         - `role` starts with 'system', then 'user' and 'assistant' alternate
         (u/a/u/a/u...)
     - `generation_config` (GenerationConfig): Generation config for the model.
-    - `generated_mask` (list): List of generated mask for each dialog.
-    If the position is True, the token is generated, otherwise it is given by the user.
 
     Returns:
     - list: List of generated messages, with format:
@@ -300,12 +298,6 @@ def Llama_chat_completion(model: PeftModel, tokenizer: AutoTokenizer,
     inputs = torch.Tensor([([tokenizer.pad_token_id] * (max_len - len(x)) + x)
                            for x in prompt_tokens]).long()
 
-    # update generated mask of the user texts
-    for i in range(len(generated_mask)):
-        if len(generated_mask[i]) < max_len:
-            generated_mask[i] = generated_mask[i] + [False] * (
-                max_len - len(generated_mask[i]))
-
     outputs = model.generate(
         inputs=inputs.to(model.device),
         generation_config=generation_config,
@@ -319,8 +311,8 @@ def Llama_chat_completion(model: PeftModel, tokenizer: AutoTokenizer,
     # outputs contain an EOS token in the end
     # remove it when decoding
     res = []
-    for i, (t, unsafe) in enumerate(zip(outputs, unsafe_requests)):
-        newly_generated = t[len(inputs[0]):]
+    for t, unsafe in zip(outputs, unsafe_requests):
+        newly_generated = t[max_len:]
         res.append({
             "generation": {
                 "role":
@@ -330,29 +322,41 @@ def Llama_chat_completion(model: PeftModel, tokenizer: AutoTokenizer,
                     if not unsafe else UNSAFE_ERROR,
             },
             "tokens": t,
-        # update generated mask of the generated texts
-            "generated_mask": generated_mask[i] + [True] * len(newly_generated),
+            "generated_mask": [False] * max_len + [True] * len(newly_generated),
         })
 
     return res
 
 
 # A new function for PeftModel to support calc prob and log prob WITH GRADIENTS
-def calc_prob_log_prob(
+def calc_probs_log_probs(
     self,
     inputs: torch.Tensor,
     generated_mask: torch.Tensor,
-    generation_config: Optional[GenerationConfig] = None,
-    logits_processor: Optional[LogitsProcessorList] = None,
-    stopping_criteria: Optional[StoppingCriteriaList] = None,
-    prefix_allowed_tokens_fn: Optional[Callable[[int, torch.Tensor],
-                                                List[int]]] = None,
-    negative_prompt_ids: Optional[torch.Tensor] = None,
-    negative_prompt_attention_mask: Optional[torch.Tensor] = None,
-    calc_prob: bool = True,
-    calc_log_prob: bool = True,
+    generation_config: GenerationConfig,
+    calc_probs: bool = True,
+    calc_log_probs: bool = True,
     **kwargs,
 ) -> dict:
+    """
+    A member function of the Llama model.
+    Calculate the probability and log probability of the generated tokens.
+
+    Args:
+    - `inputs` (torch.Tensor): The generated tokens.
+    - `generated_mask` (torch.Tensor): List of generated mask for each position.
+    If the position is 1, the token was generated, otherwise it was given by the user.
+    - `generation_config` (GenerationConfig): Generation config used to
+    generate `inputs`.
+    - `calc_probs` (bool): Whether to calculate the probability.
+    - `calc_log_probs` (bool): Whether to calculate the log probability.
+
+    Returns:
+    - dict: A dictionary of {
+        "probs": list of probabilities for each position,
+        "log_probs": list of log probabilities for each position,
+    }
+    """
     # 1. Handle `generation_config` and kwargs that might update it,
     # and validate the `.generate()` call
     self._validate_model_class()
@@ -362,12 +366,6 @@ def calc_prob_log_prob(
         **kwargs)    # All unused kwargs must be model kwargs
     generation_config.validate()
     self._validate_model_kwargs(model_kwargs.copy())
-
-    # 2. Set generation parameters if not already defined
-    logits_processor = (logits_processor if logits_processor is not None else
-                        LogitsProcessorList())
-    stopping_criteria = (stopping_criteria if stopping_criteria is not None else
-                         StoppingCriteriaList())
 
     if (generation_config.pad_token_id is None
             and generation_config.eos_token_id is not None):
@@ -428,17 +426,17 @@ def calc_prob_log_prob(
         generation_config=generation_config,
         input_ids_seq_length=input_ids_length,
         encoder_input_ids=inputs_tensor,
-        prefix_allowed_tokens_fn=prefix_allowed_tokens_fn,
-        logits_processor=logits_processor,
+        prefix_allowed_tokens_fn=None,
+        logits_processor=LogitsProcessorList(),
         model_kwargs=model_kwargs,
-        negative_prompt_ids=negative_prompt_ids,
-        negative_prompt_attention_mask=negative_prompt_attention_mask,
+        negative_prompt_ids=None,
+        negative_prompt_attention_mask=None,
     )
 
     # 9. prepare stopping criteria
     stopping_criteria = self._get_stopping_criteria(
         generation_config=generation_config,
-        stopping_criteria=stopping_criteria)
+        stopping_criteria=StoppingCriteriaList())
 
     # 11. prepare logits warper
     logits_warper = self._get_logits_warper(generation_config)
@@ -471,27 +469,67 @@ def calc_prob_log_prob(
     # prepare model inputs
     model_inputs = self.prepare_inputs_for_generation(input_ids, **model_kwargs)
 
-    print(model_inputs)
-
     # forward pass to get next token
     outputs = self(**model_inputs, return_dict=True)
 
+    # generate the axis to gather from
     batch_size = outputs.logits.shape[0]
     axis = torch.arange(batch_size, device=self.device)
-    probs = torch.zeros_like(input_ids, dtype=torch.float32, device=self.device)
 
-    for pos in range(outputs.logits.shape[1]):
-        logits = outputs.logits[:, pos, :]
+    probs = [[] for _ in range(batch_size)]
+    log_probs = [[] for _ in range(batch_size)]
 
+    accumulated_probs = torch.ones(batch_size, device=self.device)
+    accumulated_log_probs = torch.zeros(batch_size, device=self.device)
+    accumulating = torch.zeros(batch_size, dtype=torch.bool, device=self.device)
+
+    for pos in range(1, outputs.logits.shape[1]):
         # pre-process distribution
-        scores = logits_processor(input_ids, logits)
+        scores = logits_processor(input_ids, outputs.logits[:, pos - 1, :])
         scores = logits_warper(input_ids, scores)
 
-        # get probs of each position
-        _probs = nn.functional.softmax(scores, dim=-1)
-        probs[:, pos] = _probs[axis, input_ids[:, pos]]
+        if calc_probs:
+            # get probs of current position
+            step_probs = nn.functional.softmax(scores, dim=-1)
+            step_probs = step_probs[axis, input_ids[:, pos]]
+        else:
+            step_probs = torch.zeros(batch_size, device=self.device)
+
+        if calc_log_probs:
+            # get log probs of current position
+            step_log_probs = nn.functional.log_softmax(scores, dim=-1)
+            step_log_probs = step_log_probs[axis, input_ids[:, pos]]
+        else:
+            step_log_probs = torch.zeros(batch_size, device=self.device)
+
+        # accumulate probs
+        for i in range(batch_size):
+            if not generated_mask[i][pos]:
+                if accumulating[i]:
+                    if calc_probs:
+                        probs[i].append(accumulated_probs[i].clone())
+                        pdb.set_trace()
+                    if calc_log_probs:
+                        log_probs[i].append(accumulated_log_probs[i].clone())
+                    accumulated_probs[i] = 1
+                    accumulated_log_probs[i] = 0
+                    accumulating[i] = False
+
+        accumulating |= generated_mask[:, pos]
+        step_probs[~accumulating] = 1
+        step_log_probs[~accumulating] = 0
+        accumulated_probs *= step_probs
+        accumulated_log_probs += step_log_probs
+
+    # update final probs and log probs
+    for i in range(batch_size):
+        if accumulating[i]:
+            if calc_probs:
+                probs[i].append(accumulated_probs[i].clone())
+            if calc_log_probs:
+                log_probs[i].append(accumulated_log_probs[i].clone())
 
     return {
-        "prob": probs if calc_prob else None,
-        "log_prob": torch.log(probs) if calc_log_prob else None,
+        "probs": probs if calc_probs else None,
+        "log_probs": log_probs if calc_log_probs else None,
     }

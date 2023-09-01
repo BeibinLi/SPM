@@ -24,7 +24,7 @@ from accelerate import Accelerator
 
 from experiment_args import ScriptArguments
 from model_utils import (GPT_msgs_to_Llama_dialog, Llama_chat_completion,
-                         calc_prob_log_prob)
+                         calc_probs_log_probs)
 
 accelerator = Accelerator()
 local_rank = accelerator.process_index
@@ -158,8 +158,25 @@ m2 = [
 ]
 
 d1 = GPT_msgs_to_Llama_dialog(m1)
+
+# model = Llama.build(ckpt_dir="/home/t-rzhou/llama/7B-chat/",
+#                     tokenizer_path="/home/t-rzhou/llama/tokenizer.model",
+#                     max_seq_len=8192//2,
+#                     max_batch_size=1,
+#                     model_parallel_size=1)
+
+# res = model.chat_completion(
+#     dialogs = [d1],
+#     logprobs = True,
+#     max_gen_len = 2000,
+# )
+
+# print(res)
+
 d2 = GPT_msgs_to_Llama_dialog(m2)
 model, peft_config, tokenizer = create_and_prepare_model(script_args)
+# Add our customized calculation function to the model
+model.calc_probs_log_probs = types.MethodType(calc_probs_log_probs, model)
 # Use multinomial sampling to generate the next token:
 # Set do_sample = True, num_beams = 1, and passing temperature and top_p
 generation_config = GenerationConfig(
@@ -173,32 +190,52 @@ generation_config = GenerationConfig(
 )
 dialogs = [d1]
 
-generated_mask = [[] for _ in range(len(dialogs))]
-for _ in range(3):
-    res = Llama_chat_completion(model, tokenizer, dialogs, generation_config,
-                                generated_mask)
-    generated_mask = [r["generated_mask"] for r in res]
-    if _ < 2:
-        for i in range(len(dialogs)):
-            dialogs[i].append(res[i]["generation"])
-            dialogs[i].append({
-                "role": "user",
-                "content": "Got it. Can you write another code?"
-            })
+n = 3
+res = []
+for _ in range(n):
+    res.append(
+        Llama_chat_completion(model, tokenizer, dialogs, generation_config))
 
-input_tokens = torch.zeros((len(res), res[0]["tokens"].shape[0]),
-                           dtype=torch.long,
-                           device=model.device)
-for i, r in enumerate(res):
-    input_tokens[i] = r["tokens"]
-generated_mask = torch.tensor(generated_mask,
-                              dtype=torch.bool,
-                              device=model.device)
+    for i in range(len(dialogs)):
+        dialogs[i].append(res[-1][i]["generation"])
+        dialogs[i].append({
+            "role": "user",
+            "content": "Got it. Can you write another code?"
+        })
 
-model.calc_prob_log_prob = types.MethodType(calc_prob_log_prob, model)
-print(
-    model.calc_prob_log_prob(input_tokens,
-                             generated_mask,
-                             generation_config,
-                             calc_prob=True,
-                             calc_log_prob=False))
+for _ in range(n):
+    input_tokens = torch.zeros((len(res[_]), res[_][0]["tokens"].shape[0]),
+                               dtype=torch.long,
+                               device=model.device)
+    for i, r in enumerate(res[_]):
+        input_tokens[i] = r["tokens"]
+
+    generated_mask = [r["generated_mask"] for r in res[_]]
+    generated_mask = torch.tensor(generated_mask,
+                                  dtype=torch.bool,
+                                  device=model.device)
+
+    probs_log_probs = model.calc_probs_log_probs(input_tokens,
+                                                 generated_mask,
+                                                 generation_config,
+                                                 calc_probs=True,
+                                                 calc_log_probs=True)
+
+    probs = probs_log_probs["probs"][0]
+
+    for i in range(len(probs)):
+        print(probs[i])
+
+        model.zero_grad()
+        probs[i].backward(retain_graph=True)
+
+        tot = 0
+
+        for name, param in model.named_parameters():
+            if param.requires_grad:
+                print(f'{name}:', torch.norm(param.grad))
+                tot += param.numel()
+
+        print("Total number of parameters in the gradient: ", tot)
+
+print(dialogs)
