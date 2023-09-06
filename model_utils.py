@@ -21,21 +21,23 @@ from experiment_args import ScriptArguments
 
 
 def create_and_prepare_model(
-        args: ScriptArguments) -> (PeftModel, PeftConfig, AutoTokenizer):
+        args: ScriptArguments) -> (AutoTokenizer, PeftConfig, PeftModel):
     """
     Create and prepare model for PEFT training.
 
     Args:
-    - args: ScriptArguments
+    - `args` (ScriptArguments): the arguments for training.
 
     Returns:
-    - model: PeftModel
-    - peft_config: peft config
-    - tokenizer: tokenizer associated with the model
+    - tuple: A tuple containing:
+        - `tokenizer` (AutoTokenizer): Tokenizer associated with the model.
+        - `config` (PeftConfig): Configuration of the model.
+        - `model` (PeftModel): Loaded model for inference.
     """
     compute_dtype = getattr(torch, args.bnb_4bit_compute_dtype)
 
     bnb_config = BitsAndBytesConfig(
+        load_in_8bit=args.use_8bit,
         load_in_4bit=args.use_4bit,
         bnb_4bit_quant_type=args.bnb_4bit_quant_type,
         bnb_4bit_compute_dtype=compute_dtype,
@@ -85,7 +87,7 @@ def create_and_prepare_model(
                                               cache_dir=args.cache_dir)
     tokenizer.pad_token = tokenizer.eos_token
 
-    return model, peft_config, tokenizer
+    return tokenizer, peft_config, model
 
 
 def load_inference_model(
@@ -95,16 +97,16 @@ def load_inference_model(
     Load the model for inference based on the given experiment directory.
 
     Args:
-        experiment_dir (str): Path to the experiment directory containing the
+    - `experiment_dir` (str): Path to the experiment directory containing the
          model's checkpoint and settings.
-        use_original (bool): if True, use the original model rather than
+    - `use_original` (bool): if True, use the original model rather than
             the fine-tuned model.
 
     Returns:
-        tuple: A tuple containing:
-            - tokenizer (AutoTokenizer): Tokenizer associated with the model.
-            - config (PeftConfig): Configuration of the model.
-            - model (PeftModel): Loaded model for inference.
+    - tuple: A tuple containing:
+        - `tokenizer` (AutoTokenizer): Tokenizer associated with the model.
+        - `config` (PeftConfig): Configuration of the model.
+        - `model` (PeftModel): Loaded model for inference.
     """
     setting_file = os.path.join(experiment_dir, "setting.yml")
     if os.path.exists(setting_file):
@@ -171,10 +173,10 @@ def load_latest_model(llm_model, experiment_dir):
     return config, model
 
 
-def answer(question,
-           tokenizer,
-           model,
-           rectifier="",
+def answer(question: str,
+           tokenizer: AutoTokenizer,
+           model: PeftModel,
+           rectifier: str = "",
            max_new_tokens: int = 300,
            temperature: float = 0.7,
            top_p: float = 0.7,
@@ -185,14 +187,14 @@ def answer(question,
     tokenizer.
 
     Args:
-        question (str): User's question.
-        tokenizer (AutoTokenizer): Tokenizer associated with the model.
-        model (PeftModel): Model to generate the answer.
-        rectifier (str, optional): Text used for rectifying the model's output.
+    - `question` (str): User's question.
+    - `tokenizer` (AutoTokenizer): Tokenizer associated with the model.
+    - `model` (PeftModel): Model to generate the answer.
+    - `rectifier` (str, optional): Text used for rectifying the model's output.
             Defaults to an empty string.
 
     Returns:
-        str: Generated answer from the model.
+    - str: Generated answer from the model.
     """
     memory_str = [f"### {agent}: {msg}" for agent, msg in messages]
     memory_str = "\n".join(memory_str)
@@ -246,7 +248,7 @@ def GPT_msgs_to_Llama_dialog(messages: list) -> Dialog:
     Convert GPT messages to Llama dialog.
 
     Args:
-    - messages (list[dict]): List of messages from GPT, with format:
+    - `messages` (list[dict]): List of messages from GPT, with format:
     [{
         "role": agent_name,
         "content": message_content

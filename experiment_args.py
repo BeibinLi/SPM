@@ -35,8 +35,12 @@ class ScriptArguments:
                     " should be the folder with all experiments."
         },
     )
+    use_8bit: Optional[bool] = field(
+        default=False,
+        metadata={"help": "Activate 8bit precision base model loading"},
+    )
     use_4bit: Optional[bool] = field(
-        default=True,
+        default=False,
         metadata={"help": "Activate 4bit precision base model loading"},
     )
     use_nested_quant: Optional[bool] = field(

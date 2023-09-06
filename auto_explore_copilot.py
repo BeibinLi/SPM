@@ -1,29 +1,24 @@
-import csv
-import io
 import json
 import os
 import pickle
-
 import tiktoken
+from peft import PeftModel
 
 from gpt_api import get_llm
-from utils import (get_exp_id, colored_string, find_all_substr,
-                   display_files_recursively)
+from utils import (colored_string, display_files_recursively, extract_commands,
+                   SUPPORTED_CMDS)
+from model_utils import GPT_msgs_to_Llama_dialog, Llama_chat_completion
 
 import argparse
+from auto_explore_sandbox import AutoExploreSandbox
+from transformers import AutoTokenizer, GenerationConfig
+from training_funcs import (AutoExploreCostFunction,
+                            AutoExploreTerminateCriteria)
 
 
 def get_args():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--data_path",
-                        type=str,
-                        default="data/auto_explore/",
-                        help="The path to save the auto-explore data.")
-    parser.add_argument("--dir",
-                        type=str,
-                        required=True,
-                        help="The directory of the code repo to explore.")
     parser.add_argument("--temperature",
                         type=float,
                         default=1,
@@ -32,6 +27,10 @@ def get_args():
                         type=float,
                         default=0.3,
                         help="Top_p of language model.")
+    parser.add_argument("--application_root",
+                        type=str,
+                        default="../Coffee_Roasting_Dataset/data/",
+                        help="The folder location of the application.")
     parser.add_argument(
         "--max_token_length",
         type=int,
@@ -40,236 +39,137 @@ def get_args():
         " chat will be reset.")
     parser.add_argument("--model",
                         type=str,
-                        default="gpt-4-32k",
+                        default="gpt-35-turbo",
                         help="The model to use.")
-
+    parser.add_argument("--file_save_path",
+                        type=str,
+                        default="new_and_changed_files/",
+                        help="The path to save the new or changed files.")
     return parser.parse_args()
 
 
 class AutoExploreCopilot():
 
-    def __init__(self, root, temperature, top_p, max_token_length, model,
-                 data_path):
+    def __init__(self,
+                 root: str,
+                 temperature: float,
+                 top_p: float,
+                 max_token_length: int,
+                 file_save_path: str,
+                 password: str,
+                 interaction_type: str,
+                 model_type: str,
+                 model_name: str = None,
+                 model: PeftModel = None,
+                 tokenizer: AutoTokenizer = None,
+                 cost_function: AutoExploreCostFunction = None,
+                 terminate_criteria: AutoExploreTerminateCriteria = None):
+        """
+        A copilot to help language models explore a repo.
 
-        self.root = root
+        Args:
+        - `root` (str): The root directory of the repo.
+        - `temperature` (float): The temperature of the language model.
+        - `top_p` (float): The top_p of the language model.
+        - `max_token_length` (int): The maximum total token length for chat completion.
+        - `file_save_path` (str): The path to save the new or changed files.
+        - `password` (str): The password to use for the sandbox.
+        - `interaction_type` (str): The type of the interaction, with choices
+        in ['train', 'inference'].
+        - `model_type` (str): The type of the model to use, with choices
+        in ['local', 'remote']. If `interaction_type` is 'train', then must be
+        'local'.
+        - `model_name` (str): The name of the model to use. Only used when
+        `model_type` is 'remote'.
+        - `model` (PeftModel): The model to use, only support Llama 2.
+        Only used when `model_type` is 'local'.
+        - `tokenizer` (AutoTokenizer): The tokenizer to use. Only used when 
+        `model_type` is 'local'.
+        - `cost_function` (AutoExploreCostFunction): The cost function to use.
+        Input is the list of messages, output is the cost. Only used when
+        `interaction_type` is 'train'.
+        - `terminate_criteria` (AutoExploreTerminateCriteria): The terminate
+        criteria for an interaction. Input is the list of messages, output is
+        True / False. Only used when `interaction_type` is 'train'.
+        """
+        # TODO: support terminate criteria for inference
+        if interaction_type == "train":
+            assert model_type == "local", "Only support local model for training."
+
+        if model_type == "local":
+            assert (model is not None
+                    and tokenizer is not None), ("For local model, provide the "
+                                                 "model and the tokenizer.")
+            if interaction_type == "train":
+                assert cost_function is not None, ("For training, provide the "
+                                                   "cost function.")
+        else:
+            assert model_name is not None, ("For remote model, provide the "
+                                            "model name.")
+
+        # replace all paths with absolute paths
+        self.root = os.path.abspath(root).replace('\\', '/')
+        self.file_save_path = os.path.abspath(file_save_path).replace('\\', '/')
+
+        self.root_dir_name = self.root.replace(os.path.basename(self.root), '')
         self.temperature = temperature
         self.top_p = top_p
         self.max_token_length = max_token_length
-        self.model = model
-        self.data_path = data_path
 
-        self.long_mem_path = root + "/long_mem.txt"
-        if not os.path.exists(self.long_mem_path):
-            with open(self.long_mem_path, "w"):
-                pass
-
-        self.short_mem_path = root + "/short_mem.txt"
-        try:
-            with open(self.short_mem_path, "r") as f:
-                self.short_mem = f.read()
-        except Exception as e:
-            del e
-            print("Initialize short-term memory")
-            self.short_mem = ""
-
-        self.api = get_llm()
-
-        start_prompt = open("data_gen/prompt_templates/explore_prompt.md",
-                            "r").read()
-        start_prompt = start_prompt.format(
-            root=os.path.basename(root),
-            root2=os.path.basename(root),
-            all_files=display_files_recursively(root))
-
-        self.msgs = [("system", start_prompt), ("user", "Lets start!")]
-
-        self.encoder = tiktoken.encoding_for_model("gpt-4")
-        self.token_length = sum(
-            [len(self.encoder.encode(msg[1])) for msg in self.msgs])
-
-        for msg in self.msgs:
-            print(colored_string(msg))
-
-        os.chdir(root)
-
-    def get_cwd(self):
-        return os.getcwd().replace('\\', '/').replace(
-            self.root.replace(os.path.basename(self.root), ''), '')
-
-    def extract_bash_commands(self, response, identifier="```bash"):
-        commands = []
-        positions = find_all_substr(response, identifier)
-        for pos in positions:
-            st = pos + len(identifier)
-            p = response[st:].find("```") + st
-            commands.append(response[st:p].strip())
-        return commands
-
-    def parse_echo(self, command):
-        for i in range(len(command)):
-            if command[i].strip().startswith(">"):
-                assert i == len(command) - 2
-                return [
-                    "echo", '"' + "".join(command[1:i]) + '"',
-                    command[i].strip(), command[i + 1]
-                ]
-        return ["echo", '"' + "".join(command[1:]) + '"']
-
-    def extract_commands(self, response):
-        response = response.replace("'", '"')
-        bash_commands = self.extract_bash_commands(response)
-
-        parsed_commands = []
-
-        for bash_command in bash_commands:
-            f = io.StringIO(bash_command)
-            reader = csv.reader(f,
-                                delimiter=' ',
-                                quotechar='"',
-                                skipinitialspace=True)
-            for row in reader:
-                if row == []:
-                    continue
-                if row[0] == "echo":
-                    parsed_commands.append(self.parse_echo(row))
-                else:
-                    parsed_commands.append(row)
-
-        return parsed_commands
-
-    def handle_command(self, cmd):
-        # Test outside repo
-        if cmd[0] in ["cd", "cat", "echo"]:
-            if cmd[0] == "echo" and len(cmd) != 4:
-                self.msgs.append(
-                    ("user",
-                     "Warning: echo command without output file, ignored."))
-                return
-
-            cmd[-1] = cmd[-1].strip()
-            path = os.path.dirname(cmd[-1]) if "." in os.path.basename(
-                cmd[-1]) else cmd[-1]
-            if path == "":
-                path = "."
-            original_cwd = os.getcwd()
-            try:
-                os.chdir(path)
-            except Exception as e:
-                self.msgs.append(("user", "Error: " + str(e)))
-                return
-            cwd = os.getcwd().replace('\\', '/')
-            os.chdir(original_cwd)
-            if not os.path.abspath(cwd).startswith(os.path.abspath(self.root)):
-                self.msgs.append(
-                    ("user",
-                     "Error: You cannot access files outside the repo!"))
-                return
-
-            if cmd[0] == "echo":
-                # TODO: check if it writes to repo files
-                if cmd[-1].endswith("long_mem.txt") and cwd != self.root:
-                    cmd[-1] = self.root + "/long_mem.txt"
-                    self.msgs.append(
-                        ("user",
-                         "Warning: long_mem.txt must be at the root of repo! "
-                         "The file path is redirected to root."))
-                if cmd[-1].endswith("short_mem.txt") and cwd != self.root:
-                    cmd[-1] = self.root + "/short_mem.txt"
-                    self.msgs.append(
-                        ("user",
-                         "Warning: short_mem.txt must be at the root of repo, "
-                         "and you do not need to use echo to update it! "
-                         "The file path is redirected to root."))
-
-        if cmd[0] not in ["cd", "ls", "cat", "echo"]:
-            self.msgs.append(
-                ("user", "Error: You can only run cd, ls, cat, echo commands."))
-            return
-
-        try:
-            if cmd[0] == "cd":
-                os.chdir(cmd[1])
-                self.msgs.append(("user", "Now at: " + self.get_cwd()))
-            else:
-                ret = os.popen(" ".join(cmd)).read()
-                if cmd[0] == "ls":
-                    self.msgs.append(("user", "The result of ls is:\n" + ret))
-                elif cmd[0] == "cat":
-                    self.read_count += 1
-                    if self.read_count == 1:
-                        self.msgs.append(
-                            ("user",
-                             "The content of " + cmd[1] + " is:\n" + ret))
-                    else:
-                        self.msgs.append(
-                            ("user",
-                             "Warning: You can only read one file at a time. " +
-                             cmd[1] + " is ignored."))
-                elif cmd[0] == "echo":
-                    if cmd[-1].endswith("short_mem.txt"):
-                        self.updated_short_mem = True
-                    self.msgs.append(("user", "Echo success!"))
-        except Exception as e:
-            self.msgs.append(("user", "Error: " + str(e)))
-
-    def act(self):
-        self.read_count = 0
-
-        msgs_with_short_mem = self.msgs[:-1] + [
-            ("assistant",
-             f'---- Current short_mem.txt file. Please update it! ----\n'
-             f'{open(os.path.join(self.root, "short_mem.txt"), "r").read()}')
-        ]
-
-        response = self.api.reply(agent_name=self.msgs[-1][0],
-                                  msg=self.msgs[-1][1],
-                                  num_response=1,
-                                  temperature=self.temperature,
-                                  top_p=self.top_p,
-                                  prev_msgs=msgs_with_short_mem,
-                                  model=self.model)[0]
-
-        self.msgs.append(("assistant", response))
-
-        if self.token_length > self.max_token_length:
-            self.dump()
-            self.__init__(self.temperature, self.top_p, self.max_token_length,
-                          self.model, self.data_path)
-            self.msgs.append((
-                "user",
-                "You just restarted the task. You may need to read long memory "
-                "to pick up the progress."))
-            self.token_length += len(self.encoder.encode(self.msgs[-1][1]))
-            return
-
-        unencoded_pos = len(self.msgs) - 1
-
-        self.updated_short_mem = False
-
-        commands = self.extract_commands(response)
-        for cmd in commands:
-            self.handle_command(cmd)
-
-        if commands == []:
-            self.msgs.append((
-                "user",
-                "Warning: You didn't give me any command. Further explore the "
-                "code repo by sending me system commands: ls, cd, cat, and echo."
-            ))
-
-        if response.find("#UpdateShortMem") != -1:
-            mem_blocks = self.extract_bash_commands(response,
-                                                    "```short_mem.txt")
-            if mem_blocks != []:
-                self.short_mem = mem_blocks[0].strip()
-                with open(self.short_mem_path, "w") as f:
-                    f.write(self.short_mem)
-                self.updated_short_mem = True
-
-        if self.updated_short_mem:
-            self.msgs.append(("user", "Short memory updated!"))
+        self.password = password
+        self.interaction_type = interaction_type
+        self.model_type = model_type
+        if model_type == "local":
+            self.model = model
+            self.tokenizer = tokenizer
+            if interaction_type == "train":
+                self.cost_function = cost_function
+                self.terminate_criteria = terminate_criteria
+                # TODO: implement this
         else:
-            self.msgs.append(("user", "Warning: No update to short memory."))
+            self.model_name = model_name
+            self.api = get_llm()
+
+    def answer(self, question):
+        # 1. Setup memory and chat
+        start_prompt = open(
+            "data_gen/prompt_templates/auto_explore/explore_prompt_simple.md",
+            "r").read()
+        start_prompt = start_prompt.format(all_files=display_files_recursively(
+            self.root),
+                                           TASK=question)
+        self.msgs = [("system", start_prompt), ("user", "Lets start!")]
+        # flush the messages
+        self.flush_msgs()
+
+        # store the generation logs for training
+        self.generation_logs = []
+
+        # 2. Create sandbox environment
+        self.sandbox = AutoExploreSandbox(self.root, self.password)
+
+        # 3. Act
+        self.act()
+
+        # 4. Cleanup sandbox and environment
+        del self.sandbox
+
+        # TODO: find the final answer
+
+    def flush_msgs(self):
+        self.msgs = [(agent, msg) for agent, msg in self.msgs if msg]
+        if not hasattr(self, "last_flushed_msg"):
+            self.last_flushed_msg = 0
+            self.encoder = tiktoken.encoding_for_model("gpt-4")
+            self.token_length = 0
+
+        for msg in self.msgs[self.last_flushed_msg:]:
+            print(colored_string(msg))
+            self.token_length += len(self.encoder.encode(msg[1]))
+
+        self.last_flushed_msg = len(self.msgs)
+
+        # TODO: handle memory issues: e.g., cut, summarize, etc.
 
         # Reset here to incorporate the last assistant messages
         if self.token_length > self.max_token_length:
@@ -278,20 +178,102 @@ class AutoExploreCopilot():
                           self.max_token_length, self.model, self.data_path)
             self.msgs.append(
                 ("user",
-                 "You have reached the maximum token length. Now restarted. "
-                 "You may need to read long memory to pick up the progress."))
-            self.token_length += len(self.encoder.encode(self.msgs[-1][1]))
+                 "You have reached the maximum token length. Now restarted."))
             return
 
-        self.token_length += sum([
-            len(self.encoder.encode(msg[1]))
-            for msg in self.msgs[unencoded_pos:]
-        ])
+    def act(self):
+        """
+        Wrapper function to interact with the language model for one step
+        and call the possible next act().
+        """
 
-        for msg in self.msgs[unencoded_pos:]:
-            print(colored_string(msg))
+        ret = self._act()
+
+        self.flush_msgs()
+
+        if ret == "Continue":
+            self.act()
+
+    def _act(self):
+        if self.model_access_type == "local":
+            # Use multinomial sampling to generate the next token:
+            # Set do_sample = True, num_beams = 1
+            generation_config = GenerationConfig(
+                max_length=self.max_token_length,
+                do_sample=True,
+                num_beams=1,
+                temperature=self.temperature,
+                top_p=self.top_p,
+                pad_token_id=self.tokenizer.pad_token_id,
+                eos_token_id=self.tokenizer.eos_token_id,
+            )
+            ret = Llama_chat_completion(
+                model=self.model,
+                tokenizer=self.tokenizer,
+                dialogs=[GPT_msgs_to_Llama_dialog(self.msgs)],
+                generation_config=generation_config)[0]
+
+            response = ret["generation"]["content"]
+            self.generation_logs.append({
+                "tokens": ret["tokens"],
+                "generated_mask": ret["generated_mask"],
+                "cost": 0
+            })
+        else:
+            response = self.api.reply(agent_name=self.msgs[-1][0],
+                                      msg=self.msgs[-1][1],
+                                      num_response=1,
+                                      temperature=self.temperature,
+                                      top_p=self.top_p,
+                                      prev_msgs=self.msgs[:-1],
+                                      model=self.model_name)[0]
+
+        self.msgs.append(("assistant", response))
+
+        commands = extract_commands(response)
+
+        user_response_start = len(self.msgs)
+
+        for cmd in commands:
+            if cmd[0] == "exit":
+                if len(commands) > 1:
+                    self.msgs.append((
+                        "user", "Error: There are other commands. "
+                        "You could only use exit standalone in a single response."
+                    ))
+                else:
+                    self.flush_msgs()
+                    # Success! save the result
+                    os.makedirs(self.file_save_path, exist_ok=True)
+                    for file_name, content in self.sandbox.get_changed_files(
+                    ).items():
+                        os.makedirs(self.file_save_path +
+                                    os.path.dirname(file_name),
+                                    exist_ok=True)
+                        with open(self.file_save_path + file_name, "wb") as f:
+                            f.write(content)
+                    return "Exit"
+            else:
+                command_output = self.sandbox.run_command(cmd, self.password)
+
+                self.msgs.append(("user", command_output))
+
+        if commands == []:
+            self.msgs.append(
+                ("user", "Warning: You didn't give me any command. "
+                 "Further explore the repo by sending me system commands: "
+                 f"{', '.join(SUPPORTED_CMDS)}."))
+
+        self.generation_logs[-1]["cost"] = self.cost_function.call(
+            self.msgs[user_response_start:])
+
+        return "Continue"
 
     def dump(self):
+        """
+        Dump the current state of the agent to a pickle file specified by
+        `self.data_path`.
+        """
         ckpts = os.listdir(self.data_path)
         ckpts = [x.replace(".pickle", "") for x in ckpts]
         ckpt_num_list = [int(x) for x in ckpts if x.isdigit()]
@@ -311,30 +293,29 @@ class AutoExploreCopilot():
                       f,
                       indent=4)
 
+    def get_generation_logs(self):
+        """
+        Get the generation logs for training.
+
+        Returns:
+        - list: the generation logs.
+        """
+        return self.generation_logs
+
 
 if __name__ == "__main__":
     args = get_args()
-    root = args.dir
-
-    if not os.path.exists(os.path.join(root, "long_mem.txt")):
-        open(os.path.join(root, "long_mem.txt"), "w").write("")
-    if not os.path.exists(os.path.join(root, "short_mem.txt")):
-        open(os.path.join(root, "short_mem.txt"), "w").write("")
-
-    if not os.path.exists(root):
-        print("ROOT not found!")
-        exit(1)
-
-    os.makedirs(args.data_path, exist_ok=True)
-    exp_id = get_exp_id(args.data_path)
-    data_path = os.path.abspath(os.path.join(args.data_path, exp_id))
-    os.makedirs(data_path, exist_ok=True)
-
-    agent = AutoExploreCopilot(root=root,
-                               temperature=args.temperature,
-                               top_p=args.top_p,
-                               max_token_length=args.max_token_length,
-                               model=args.model,
-                               data_path=data_path)
-    while True:
-        agent.act()
+    agent = AutoExploreCopilot(
+        root=args.application_root,
+        temperature=args.temperature,
+        top_p=args.top_p,
+        max_token_length=args.max_token_length,
+        model=args.model,
+        file_save_path=os.path.abspath(args.file_save_path) + "/",
+        password="zrl")
+    agent.answer(
+    #"Plot the bean price of Excelsa between Jun 2021 and 2022 Aug."
+    #"Plot employee salary by country in a map."
+    #"Who is the proprietor of the cafe in Shanghai?"
+    #"What is the culture statement of Opti Coffee?"
+        "Tell me details of Employee Appreciation Events.")

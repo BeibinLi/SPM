@@ -25,7 +25,10 @@ class AutoExploreSandbox:
         Prevents any system commands from ruining the original dataset.
 
         Args:
-        - dataset_path (str): The path to the dataset.
+        - `dataset_path` (str): The path to the dataset.
+        - `password` (str): The password for identity verification.
+        - `private_files` (list): The list of private files.
+        Only the creator of the sandbox can access these files.
         """
         # Use absolute path
         self.working_dir = os.path.abspath(".").replace("\\", "/") + "/"
@@ -39,7 +42,7 @@ class AutoExploreSandbox:
         # Store the hashed password for identity verification
         self._sandbox_id = ''.join(
             random.choices(string.ascii_uppercase + string.digits, k=10))
-        self._hashed_password = self._hash_password(password)
+        self._hashed_password = [self._hash_password(password)]
         self.private_files = private_files
 
         # Ignore hidden files and directories
@@ -69,20 +72,31 @@ class AutoExploreSandbox:
     def _hash_password(self, password: str) -> str:
         return sha256((password + self._sandbox_id).encode("utf-8")).hexdigest()
 
+    def register_user(self, password: str):
+        """
+        Register a user with a password.
+
+        Args:
+        - `password` (str): The password for identity verification.
+        """
+        self._hashed_password.append(self._hash_password(password))
+
     def safety_check(self, cmd: list, password: str) -> str:
         """
-        Return "SAFE" iff the cmd is safe to run.
+        Return "SAFE" if and only if the cmd is safe to run.
         Otherwise, return error message.
 
         Args:
-        - cmd (list): a single command splitted into a list of arguments.
-        - password (str): the password for identity verification.
+        - `cmd` (list): A single command splitted into a list of arguments.
+        - `password` (str): The password for identity verification.
 
         Returns:
         """
         # First check if password is correct
-        if self._hash_password(password) != self._hashed_password:
+        hashed_password = self._hash_password(password)
+        if hashed_password not in self._hashed_password:
             return "Error: Wrong password!"
+        is_creator = hashed_password == self._hashed_password[0]
 
         # Restrict command type
         if cmd[0] == "exit":
@@ -102,11 +116,12 @@ class AutoExploreSandbox:
                     f"outside the repo! You are now at {self._get_relative_cwd()}"
                 )
 
-        # Check if the target file is private
-        files = get_file_names(cmd)
-        for file in files:
-            if file in self.private_files:
-                return f"Error: You cannot access a private file {file}!"
+        if not is_creator:
+            # Check if the target file is private
+            files = get_file_names(cmd)
+            for file in files:
+                if file in self.private_files:
+                    return f"Error: You cannot access a private file {file}!"
 
         return SAFE_MESSAGE
 
@@ -119,11 +134,11 @@ class AutoExploreSandbox:
         "exit" is handled outside of this function.
 
         Args:
-        - cmd (list): a single command splitted into a list of arguments.
-        - password (str): the password for identity verification.
+        - `cmd` (list): A single command splitted into a list of arguments.
+        - `password` (str): The password for identity verification.
 
         Returns:
-        - str: the execution result of the given command. If any errors
+        - str: The execution result of the given command. If any errors
         occurred, then just return the error message.
         """
         # Restore to the checkpointed cwd
@@ -144,21 +159,6 @@ class AutoExploreSandbox:
         return ret
 
     def _run_command(self, cmd: list) -> str:
-        """Inner function for self.run_command().
-        Run a bash command in the dataset sandbox.
-
-        The supported tools are:
-        "cd", "ls", "cat", "head", "tail", "echo", "python", "pip".
-        "exit" is handled outside of this function.
-
-        Args:
-        - cmd (list): a single command splitted into a list of arguments.
-
-        Returns:
-        - str: the execution result of the given command. If any errors
-        occurred, then just return the error message.
-        """
-
         # Check if echo outputs to a file
         if cmd[0] == "echo" and len(cmd) == 3:
             return "Warning: echo command without output file, ignored."
@@ -182,11 +182,11 @@ class AutoExploreSandbox:
         Generate the response for the result of a command.
 
         Args:
-        - cmd (list): a single command splitted into a list of arguments.
-        - result (subprocess.CompletedProcess): the result of the command.
+        - `cmd` (list): A single command splitted into a list of arguments.
+        - `result` (subprocess.CompletedProcess): The result of the command.
 
         Returns:
-        - str: the response for the result of the command.
+        - str: The response for the result of the command.
         """
         rstdout = result.stdout.decode('utf-8')
         rstderr = hide_root(result.stderr.decode('utf-8'), self.sandbox_dir)
@@ -217,7 +217,7 @@ class AutoExploreSandbox:
         Return the name and content of changed files in the sandbox.
 
         Returns:
-        - dict: key is relative file path, value is the content in bytes.
+        - dict: Key is relative file path, value is the content in bytes.
         """
         original_files = set(list_files(self.dataset_path))
         current_files = set(list_files(self.sandbox_dir))
@@ -246,6 +246,5 @@ class AutoExploreSandbox:
         }
 
     def _get_relative_cwd(self):
-        "Return the relative path to the sandbox's root directory."
         return os.path.relpath(os.getcwd().replace('\\', '/'),
                                self.sandbox_dir) + "/"

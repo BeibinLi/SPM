@@ -16,20 +16,15 @@
 import os
 import glob
 import torch
-from peft import LoraConfig, PeftModel
 from transformers import (
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    BitsAndBytesConfig,
     HfArgumentParser,
     TrainingArguments,
 )
 from peft.tuners.lora import LoraLayer
 from trl import SFTTrainer
-from termcolor import colored
 
 from utils import get_exp_id, get_spm_dataset
-
+from model_utils import create_and_prepare_model
 from experiment_args import ScriptArguments
 
 from accelerate import Accelerator
@@ -40,62 +35,6 @@ local_rank = accelerator.process_index
 # Distributed
 parser = HfArgumentParser(ScriptArguments)
 script_args = parser.parse_args_into_dataclasses()[0]
-
-
-def create_and_prepare_model(args):
-    compute_dtype = getattr(torch, args.bnb_4bit_compute_dtype)
-
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=args.use_4bit,
-        bnb_4bit_quant_type=args.bnb_4bit_quant_type,
-        bnb_4bit_compute_dtype=compute_dtype,
-        bnb_4bit_use_double_quant=args.use_nested_quant,
-    )
-
-    if compute_dtype == torch.float16 and args.use_4bit:
-        major, _ = torch.cuda.get_device_capability()
-        if major >= 8:
-            print("=" * 80)
-            print(
-                "Your GPU supports bfloat16, you can accelerate training with "
-                "the argument --bf16")
-            print("=" * 80)
-
-    device_map = {"": local_rank}
-
-    base_model = AutoModelForCausalLM.from_pretrained(
-        args.model_name,
-        quantization_config=bnb_config,
-        device_map=device_map,
-        trust_remote_code=True,
-        cache_dir=script_args.cache_dir)
-
-    peft_config = LoraConfig(
-        lora_alpha=script_args.lora_alpha,
-        lora_dropout=script_args.lora_dropout,
-        r=script_args.lora_r,
-        bias="none",
-        task_type="CAUSAL_LM",
-    )
-
-    if args.load_dir:
-        print(colored("Loading from " + args.load_dir, "green"))
-        model = PeftModel.from_pretrained(model=base_model,
-                                          model_id=args.load_dir,
-                                          is_trainable=True,
-                                          config=peft_config)
-        del base_model
-    else:
-        #model = PeftModel(model=base_model, peft_config=peft_config)
-        model = base_model
-
-    tokenizer = AutoTokenizer.from_pretrained(script_args.model_name,
-                                              trust_remote_code=True,
-                                              cache_dir=script_args.cache_dir)
-    tokenizer.pad_token = tokenizer.eos_token
-
-    return model, peft_config, tokenizer
-
 
 exp_id = get_exp_id(script_args.ckpt_path)
 
@@ -124,7 +63,7 @@ else:
 
 # iterate multiple training stages. Usually 1 - 2 stages.
 for phase in procedure:
-    model, peft_config, tokenizer = create_and_prepare_model(script_args)
+    tokenizer, peft_config, model = create_and_prepare_model(script_args)
     model.config.use_cache = False
 
     training_arguments.output_dir = (script_args.ckpt_path + exp_id + "_" +
