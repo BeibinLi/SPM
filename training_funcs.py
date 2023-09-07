@@ -22,57 +22,105 @@ class AutoExploreCostFunction:
     """
     Cost function for auto explore.
     """
-    pass
+
+    def call(self, **kwargs) -> int:
+        pass
 
 
 class NumTokenCost(AutoExploreCostFunction):
+    """
+    Calculate the number of tokens in the user messages.
+    """
 
     def __init__(self, tokenizer: AutoTokenizer):
         """
-        Calculate the number of tokens in the user messages.
-
         Args:
         - `tokenizer` (AutoTokenizer): The tokenizer used to tokenize the user
         messages.
         """
         self.tokenizer = tokenizer
 
-    def call(self, user_msgs: list) -> int:
+    def call(self, **kwargs) -> int:
         """
         Args:
-        - `user_msgs` (list): The user messages.
+        - `kwargs` (dict):
+            - 'user_msgs' (list): The user messages.
 
         Returns:
         - int: The number of tokens in the user messages.
         """
-        return sum([len(self.tokenizer.encode(msg[1])) for msg in user_msgs])
+        return sum(
+            [len(self.tokenizer.encode(msg[1])) for msg in kwargs["user_msgs"]])
 
 
 class AutoExploreTerminateCriteria:
     """
     Terminate criteria for auto explore.
     """
-    pass
+
+    def __init__(self):
+        pass
+
+    def update_status(self, **kwargs):
+        """
+        Update the status of the terminate criteria.
+        """
+        pass
+
+    def can_terminate(self) -> bool:
+        """
+        Returns True if and only if the terminate criteria is met.
+        """
+        pass
+
+    def describe_criteria(self) -> str:
+        """
+        Returns a string describing the terminate criteria.
+        """
+        pass
 
 
-class ReachFileTerminate(AutoExploreTerminateCriteria):
+class AnytimeTerminate(AutoExploreTerminateCriteria):
+    """
+    Terminate at anytime.
+    """
+
+    def can_terminate(self) -> bool:
+        return True
+
+    def describe_criteria(self) -> str:
+        return "Terminate at anytime."
+
+
+class IdentifyFileTerminate(AutoExploreTerminateCriteria):
+    """
+    Terminate when the target file is identified.
+    """
 
     def __init__(self, target_file: str):
         """
-        Terminate when the target file is reached.
-
         Args:
         - `target_file` (str): The target file.
         """
+        self.target_file = target_file
+        self._can_terminate = False
 
-    def call(self, cmds: list) -> bool:
+    def update_status(self, **kwargs):
         """
         Args:
-        - `cmds` (list): The system commands returned by the assistant.
+        - `kwargs` (dict):
+            - 'identified_file' (list): The file identified using 'id'.
         """
-        # TODO: implement this
+        if "identified_file" in kwargs:
+            # terminate when the target file is reached
+            self._can_terminate = (
+                kwargs["identified_file"] == self.target_file)
 
-        return True
+    def can_terminate(self) -> bool:
+        return self._can_terminate
+
+    def describe_criteria(self) -> str:
+        return "Terminate when the target file is identified."
 
 
 def policy_gradient_update(
@@ -111,9 +159,9 @@ def policy_gradient_update(
         for step in generation_result:
             # update total future cost
             tot_cost += step["cost"]
-            input_tokens = torch.tensor([step["tokens"]],
+            input_tokens = torch.tensor(step["tokens"],
                                         dtype=torch.long,
-                                        device=model.device)
+                                        device=model.device).unsqueeze(0)
             generated_mask = torch.tensor([step["generated_mask"]],
                                           dtype=torch.bool,
                                           device=model.device)

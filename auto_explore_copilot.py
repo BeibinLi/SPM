@@ -161,12 +161,14 @@ class AutoExploreCopilot():
 
         # 2. Create sandbox environment
         if self.interaction_type == "train":
-            supported_cmds = ["cd", "ls", "cat", "head", "tail", "id", "exit"]
+            self.supported_cmds = [
+                "cd", "ls", "cat", "head", "tail", "id", "exit"
+            ]
         else:
-            supported_cmds = SUPPORTED_CMDS
+            self.supported_cmds = SUPPORTED_CMDS
         self.sandbox = AutoExploreSandbox(dataset_path=self.root,
                                           password=self.password,
-                                          supported_cmds=supported_cmds)
+                                          supported_cmds=self.supported_cmds)
 
         # 3. Act
         self.act()
@@ -271,18 +273,28 @@ class AutoExploreCopilot():
                     except Exception:
                         return "Exit"
 
-                    # Success! save the result
-                    os.makedirs(self.file_save_path, exist_ok=True)
-                    for file_name, content in self.sandbox.get_changed_files(
-                    ).items():
-                        os.makedirs(self.file_save_path +
-                                    os.path.dirname(file_name),
-                                    exist_ok=True)
-                        with open(self.file_save_path + file_name, "wb") as f:
-                            f.write(content)
-                    return "Exit"
+                    if self.terminate_criteria.can_terminate():
+                        # Success! save the result
+                        os.makedirs(self.file_save_path, exist_ok=True)
+                        for file_name, content in self.sandbox.get_changed_files(
+                        ).items():
+                            os.makedirs(self.file_save_path +
+                                        os.path.dirname(file_name),
+                                        exist_ok=True)
+                            with open(self.file_save_path + file_name,
+                                      "wb") as f:
+                                f.write(content)
+                        return "Exit"
+                    else:
+                        self.msgs.append(
+                            ("user",
+                             "Error: The terminate criteria is not met." +
+                             self.terminate_criteria.describe_criteria()))
+                        return "Continue"
             else:
-                command_output = self.sandbox.run_command(cmd, self.password)
+                command_output, status = self.sandbox.run_command(
+                    cmd, self.password)
+                self.terminate_criteria.update_status(**status)
 
                 self.msgs.append(("user", command_output))
 
@@ -290,10 +302,10 @@ class AutoExploreCopilot():
             self.msgs.append(
                 ("user", "Warning: You didn't give me any command. "
                  "Further explore the repo by sending me system commands: "
-                 f"{', '.join(SUPPORTED_CMDS)}."))
+                 f"{', '.join(self.supported_cmds)}."))
 
         self.generation_logs[-1]["cost"] = self.cost_function.call(
-            self.msgs[user_response_start:])
+            user_msgs=self.msgs[user_response_start:])
 
         return "Continue"
 

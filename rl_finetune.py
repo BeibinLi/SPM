@@ -18,13 +18,12 @@ import torch
 from transformers import (HfArgumentParser, GenerationConfig)
 import types
 import random
-import copy
 
 from experiment_args import ScriptArguments
 from model_utils import (calc_probs_log_probs, create_and_prepare_model)
 from auto_explore_copilot import AutoExploreCopilot
 
-from training_funcs import (NumTokenCost, ReachFileTerminate,
+from training_funcs import (NumTokenCost, IdentifyFileTerminate,
                             policy_gradient_update)
 
 root = "/home/t-rzhou/Coffee_Roasting_Dataset/data/"
@@ -61,23 +60,23 @@ for epoch in range(script_args.max_steps):
     )
 
     # setup the copilot
-    copilot = AutoExploreCopilot(
-        root=root,
-        temperature=temperature,
-        top_p=top_p,
-        max_token_length=script_args.max_seq_length,
-        file_save_path="new_and_changed_files/",
-        password="zrl",
-        interaction_type="train",
-        model_type="local",
-        model=model,
-        tokenizer=tokenizer,
-        cost_function=NumTokenCost(copy.deepcopy(tokenizer)),
-        terminate_criteria=ReachFileTerminate(data["filename"]))
+    copilot = AutoExploreCopilot(root=root,
+                                 temperature=temperature,
+                                 top_p=top_p,
+                                 max_token_length=script_args.max_seq_length,
+                                 file_save_path="new_and_changed_files/",
+                                 password="zrl",
+                                 interaction_type="train",
+                                 model_type="local",
+                                 model=model,
+                                 tokenizer=tokenizer,
+                                 cost_function=NumTokenCost(tokenizer),
+                                 terminate_criteria=IdentifyFileTerminate(
+                                     data["filename"]))
 
     # rollout a trajectory
     copilot.answer(data["question"])
-    logs = copilot.get_generation_logs()
+    logs = [copilot.get_generation_logs()]
 
     # update the model
     policy_gradient_update(model=model,

@@ -36,7 +36,7 @@ class AutoExploreSandbox:
         assert set(supported_cmds).issubset(
             set(SUPPORTED_CMDS
                )), "supported_cmds must be a subset of SUPPORTED_CMDS."
-        self.supported_smds = supported_cmds
+        self.supported_cmds = supported_cmds
 
         # Use absolute path
         self.working_dir = os.path.abspath(".").replace("\\", "/") + "/"
@@ -63,7 +63,7 @@ class AutoExploreSandbox:
                         dirs_exist_ok=True)
         print(
             colored(f"Data copied to temporary directory: {self.sandbox_dir}",
-                    "green"))
+                    "yellow"))
 
         # Checkpoint cwd to avoid outside changes
         self.cwd = self.sandbox_dir
@@ -121,7 +121,7 @@ class AutoExploreSandbox:
             if not target_dir.startswith(self.sandbox_dir):
                 return (
                     f"Error: You cannot access file {target_dir} "
-                    f"outside the repo! You are now at {self._get_relative_cwd()}"
+                    f"outside the repo! You are now at {self._get_relative_path()}"
                 )
 
         if not is_creator:
@@ -133,12 +133,12 @@ class AutoExploreSandbox:
 
         return SAFE_MESSAGE
 
-    def run_command(self, cmd: list, password: str) -> str:
+    def run_command(self, cmd: list, password: str) -> (str, dict):
         """Wrapper function for self._run_command().
         Run a bash command in the dataset sandbox.
 
         The supported tools are:
-        "cd", "ls", "cat", "head", "tail", "echo", "python", "pip"
+        "cd", "ls", "cat", "head", "tail", "echo", "python", "pip".
         "exit" is handled outside of this function.
 
         Args:
@@ -148,6 +148,8 @@ class AutoExploreSandbox:
         Returns:
         - str: The execution result of the given command. If any errors
         occurred, then just return the error message.
+        - dict: State updates to the sandbox.
+            - 'identified_file': The file identified using 'id'.
         """
         # Restore to the checkpointed cwd
         _cwd = os.getcwd()
@@ -156,7 +158,7 @@ class AutoExploreSandbox:
         safety_check_result = self.safety_check(cmd, password)
 
         if safety_check_result != SAFE_MESSAGE:
-            ret = safety_check_result
+            ret = (safety_check_result, {})
         else:
             ret = self._run_command(cmd)
 
@@ -166,26 +168,28 @@ class AutoExploreSandbox:
 
         return ret
 
-    def _run_command(self, cmd: list) -> str:
+    def _run_command(self, cmd: list) -> (str, dict):
         # Check if echo outputs to a file
         if cmd[0] == "echo" and len(cmd) == 3:
-            return "Warning: echo command without output file, ignored."
+            return ("Warning: echo command without output file, ignored.", {})
 
         # Run the command
         try:
             if cmd[0] == "cd":
                 # cd cannot be handled by subprocess
                 os.chdir(cmd[1])
-                return "Success: Now at " + self._get_relative_cwd()
+                return ("Success: Now at " + self._get_relative_path(), {})
             elif cmd[0] == "id":
-                return "Success: Identified file " + cmd[1]
+                return ("Success: Identified file " + cmd[1], {
+                    "identified_file": self._get_relative_path(cmd[1])
+                })
             else:
                 result = subprocess.run(' '.join(cmd),
                                         shell=True,
                                         capture_output=True)
-                return self.respond_cmd(cmd, result)
+                return (self.respond_cmd(cmd, result), {})
         except Exception as e:
-            return "Error: " + str(e)
+            return ("Error: " + str(e), {})
 
     def respond_cmd(self, cmd: list, result) -> str:
         """
@@ -255,6 +259,32 @@ class AutoExploreSandbox:
             for file in changed_files
         }
 
-    def _get_relative_cwd(self):
-        return os.path.relpath(os.getcwd().replace('\\', '/'),
-                               self.sandbox_dir) + "/"
+    def _get_relative_path(self, path: str = ".") -> str:
+        """
+        Get the relative path with respect to the sandbox directory.
+
+        Args:
+        - `path` (str): The path with respect to cwd to be converted to
+        relative path. Default to '.', i.e., return relative cwd.
+
+        Returns:
+        - str: The relative path.
+        """
+        original_cwd = os.getcwd()
+
+        base_name = os.path.basename(path)
+        if base_name == "..":
+            base_name = ""
+        if base_name == path:
+            path = "."
+        else:
+            path = path[:len(path) - len(base_name)]
+
+        os.chdir(path)
+        relative_path = os.path.relpath(
+            os.path.abspath(os.getcwd()).replace('\\', '/'),
+            self.sandbox_dir) + "/" + base_name
+
+        os.chdir(original_cwd)
+
+        return relative_path

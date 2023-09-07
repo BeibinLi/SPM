@@ -393,6 +393,8 @@ def trunc_text(file: str, content: str) -> str:
 def get_file_names(command: list) -> list:
     """
     Extract file names from the command.
+    The file names are relative to the current working directory, so may need
+    handling outside this function.
 
     Args:
     - command (list): The command splitted into a list.
@@ -400,8 +402,16 @@ def get_file_names(command: list) -> list:
     Returns:
     - list: A list of file names.
     """
+    # remove '|'
+    for i in range(len(command)):
+        if command[i] == "|":
+            command = command[:i]
+            break
+
     if command[0] == "ls":
         if len(command) > 1:
+            if command[1].startswith("-"):
+                return ["."]
             return [command[1]]
         else:
             return ["."]
@@ -411,7 +421,7 @@ def get_file_names(command: list) -> list:
             ret.append(command[-1])
         return ret
     elif command[0] in ["head", "tail"]:
-        return [command[3]]
+        return [command[-1]]
     elif command[0] == "cd":
         return [command[1]]
     elif command[0] == "echo":
@@ -650,14 +660,16 @@ def parse_echo(command: list) -> list:
 
 def get_target_dirs(cmd: list) -> list:
     """
-    Get the directory of the target file/dir from a command.
+    Get the directories of the target files/dirs from a command.
+    The directories are absolute paths.
 
     Args:
     - cmd (list): a single command splitted into a list of arguments.
 
     Returns:
-    - list: A list of the directories of the target file/dirs.
-            If error occurs, return a list of error messages.
+    - list: A list of pairs of (directory, file) of the target file/dirs.
+        If the target is a dir, then file = directory.
+        If error occurs, return a list of error messages.
     """
     # Get the files
     files = get_file_names(cmd)
