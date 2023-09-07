@@ -63,7 +63,8 @@ class AutoExploreCopilot():
                  model: PeftModel = None,
                  tokenizer: AutoTokenizer = None,
                  cost_function: AutoExploreCostFunction = None,
-                 terminate_criteria: AutoExploreTerminateCriteria = None):
+                 terminate_criteria: AutoExploreTerminateCriteria = None,
+                 need_output_msgs: bool = True):
         """
         A copilot to help language models explore a repo.
 
@@ -75,10 +76,10 @@ class AutoExploreCopilot():
         - `file_save_path` (str): The path to save the new or changed files.
         - `password` (str): The password to use for the sandbox.
         - `interaction_type` (str): The type of the interaction, with choices
-        in ['train', 'inference'].
+        in ['train', 'inference', 'debug'].
         - `model_type` (str): The type of the model to use, with choices
-        in ['local', 'remote']. If `interaction_type` is 'train', then must be
-        'local'.
+        in ['local', 'remote', 'null']. If `interaction_type` is 'train', then
+        must be 'local'.
         - `model_name` (str): The name of the model to use. Only used when
         `model_type` is 'remote'.
         - `model` (PeftModel): The model to use, only support Llama 2.
@@ -90,11 +91,21 @@ class AutoExploreCopilot():
         `interaction_type` is 'train'.
         - `terminate_criteria` (AutoExploreTerminateCriteria): The terminate
         criteria for an interaction. Input is the list of messages, output is
-        True / False. Only used when `interaction_type` is 'train'.
+        True / False.
+        - `need_output_msgs` (bool): Whether to output the messages after each act.
         """
         # TODO: support terminate criteria for inference
+        assert interaction_type in [
+            "train", "inference", "debug"
+        ], ("Only support interaction type in ['train', 'inference', 'debug'].")
+        assert model_type in [
+            "local", "remote", "null"
+        ], ("Only support model ype in ['local', 'remote', 'null'].")
+
         if interaction_type == "train":
             assert model_type == "local", "Only support local model for training."
+        if interaction_type == "inference":
+            assert model_type != "null", "Must provide a model for inference."
 
         if model_type == "local":
             assert (model is not None
@@ -103,7 +114,7 @@ class AutoExploreCopilot():
             if interaction_type == "train":
                 assert cost_function is not None, ("For training, provide the "
                                                    "cost function.")
-        else:
+        elif model_type == "remote":
             assert model_name is not None, ("For remote model, provide the "
                                             "model name.")
 
@@ -125,18 +136,20 @@ class AutoExploreCopilot():
             self.tokenizer = tokenizer
             if interaction_type == "train":
                 self.cost_function = cost_function
-                self.terminate_criteria = terminate_criteria
-                # TODO: implement this
-        else:
+        elif model_type == "remote":
             self.model_name = model_name
             self.api = get_llm()
 
-    def answer(self, question: str):
+        self.terminate_criteria = terminate_criteria
+        self.need_output_msgs = need_output_msgs
+
+    def answer(self, question: str, ans_cmds: list = []):
         """
         Answer a question about the repo by autonomous exploration.
 
         Args:
         - `question` (str): The question to answer.
+        - `ans_cmds` (list): The commands as answer. Only used when debug.
         """
         self.question = question
 
@@ -145,10 +158,16 @@ class AutoExploreCopilot():
             start_prompt = open(
                 "data_gen/prompt_templates/auto_explore/explore_prompt_rl.md",
                 "r").read()
-        else:
+        elif self.interaction_type == "inference":
             start_prompt = open(
                 "data_gen/prompt_templates/auto_explore/explore_prompt.md",
                 "r").read()
+        else:
+            # Use train prompt when debugging
+            start_prompt = open(
+                "data_gen/prompt_templates/auto_explore/explore_prompt_rl.md",
+                "r").read()
+
         start_prompt = start_prompt.format(all_files=display_files_recursively(
             self.root),
                                            TASK=question)
@@ -171,7 +190,12 @@ class AutoExploreCopilot():
                                           supported_cmds=self.supported_cmds)
 
         # 3. Act
-        self.act()
+        if self.interaction_type == "debug":
+            # Directly use inner function _act()
+            for cmd in ans_cmds:
+                self._act(f"```bash\n{cmd}\n```")
+        else:
+            self.act()
 
         # 4. Cleanup sandbox and environment
         del self.sandbox
@@ -186,7 +210,8 @@ class AutoExploreCopilot():
             self.token_length = 0
 
         for msg in self.msgs[self.last_flushed_msg:]:
-            print(colored_string(msg))
+            if self.need_output_msgs:
+                print(colored_string(msg))
             self.token_length += len(self.encoder.encode(msg[1]))
 
         self.last_flushed_msg = len(self.msgs)
@@ -204,6 +229,16 @@ class AutoExploreCopilot():
 
             raise Exception("Token limit exceeded.")
 
+    def get_msgs(self) -> list:
+        """
+        Get the message history.
+
+        Returns:
+        - list: The message history.
+        """
+
+        return self.msgs
+
     def act(self):
         """
         Wrapper function to interact with the language model for one step
@@ -220,8 +255,13 @@ class AutoExploreCopilot():
         if ret == "Continue":
             self.act()
 
-    def _act(self):
+    def _act(self, response: str = None) -> str:
+        """
+        Args:
+        - `response` (str): The response to use for debugging.
+        """
         if self.model_type == "local":
+            # Get response from local model
             # Use multinomial sampling to generate the next token:
             # Set do_sample = True, num_beams = 1
             generation_config = GenerationConfig(
@@ -245,7 +285,8 @@ class AutoExploreCopilot():
                 "generated_mask": ret["generated_mask"],
                 "cost": 0
             })
-        else:
+        elif self.model_type == "remote":
+            # Get response from remote model
             response = self.api.reply(agent_name=self.msgs[-1][0],
                                       msg=self.msgs[-1][1],
                                       num_response=1,
@@ -253,6 +294,10 @@ class AutoExploreCopilot():
                                       top_p=self.top_p,
                                       prev_msgs=self.msgs[:-1],
                                       model=self.model_name)[0]
+        else:
+            # Use provided response
+            assert response is not None, ("Must provide a response when "
+                                          "debugging.")
 
         self.msgs.append(("assistant", response))
 
@@ -304,8 +349,9 @@ class AutoExploreCopilot():
                  "Further explore the repo by sending me system commands: "
                  f"{', '.join(self.supported_cmds)}."))
 
-        self.generation_logs[-1]["cost"] = self.cost_function.call(
-            user_msgs=self.msgs[user_response_start:])
+        if self.interaction_type == "train":
+            self.generation_logs[-1]["cost"] = self.cost_function.call(
+                user_msgs=self.msgs[user_response_start:])
 
         return "Continue"
 

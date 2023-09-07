@@ -7,7 +7,7 @@ You can send me system commands to explore the repo:
 1. Read files by `cat`, `head` and `tail`. You can only read one file at a time to avoid exceeding memory and space limits.
 3. List all files by `ls`.
 4. Change directory by `cd`.
-5. Identify the file by `id`, e.g., `id a.txt`.
+5. Identify the file by `id <FILE>`.
 6. Halt interaction by `exit`. You should exit if you finish the task. You can only send `exit` in a standalone response.
 
 You must use this format for me to identify the command:

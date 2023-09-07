@@ -303,6 +303,74 @@ def GPT_msgs_to_Llama_dialog(messages: list) -> Dialog:
     return dialog
 
 
+def build_Llama_prompt_from_dialogs(
+        tokenizer: AutoTokenizer,
+        dialogs: list,
+        check_last_user: bool = True) -> (list, list):
+    """
+    Build Llama prompt from dialogs.
+
+    Args:
+    - `tokenizer` (AutoTokenizer): Llama tokenizer.
+    - `dialogs` (list[Dialog]): List of dialogs, with format:
+    [{
+        "role": agent_name,
+        "content": message_content
+    }, ...]
+        - `role` taking only ['system', 'user', 'assistant']
+        - `role` starts with 'system', then 'user' and 'assistant' alternate
+        (u/a/u/a/u...)
+    - `check_last_user` (bool): Whether to check last message from user.
+
+    Returns:
+    - tuple: A tuple containing:
+        - `prompt_tokens` (list): List of prompt tokens.
+        - `unsafe_requests` (list): List of bools indicating whether the
+        request is unsafe.
+    """
+    prompt_tokens = []
+    unsafe_requests = []
+
+    for dialog in dialogs:
+        unsafe_requests.append(
+            any([
+                tag in msg["content"] for tag in SPECIAL_TAGS for msg in dialog
+            ]))
+        if dialog[0]["role"] == "system":
+            dialog = [{
+                "role":
+                    dialog[1]["role"],
+                "content":
+                    B_SYS + dialog[0]["content"] + E_SYS + dialog[1]["content"],
+            }] + dialog[2:]
+        assert all([msg["role"] == "user" for msg in dialog[::2]]) and all([
+            msg["role"] == "assistant" for msg in dialog[1::2]
+        ]), (
+            "model only supports 'system', 'user' and 'assistant' roles, "
+            "starting with 'system', then 'user' and alternating (u/a/u/a/u...)"
+        )
+        dialog_tokens = sum(
+            [
+                tokenizer.encode(f"{B_INST} {(prompt['content']).strip()} "
+                                 f"{E_INST} {(answer['content']).strip()} ") +
+                [tokenizer.eos_token_id] for prompt, answer in zip(
+                    dialog[::2],
+                    dialog[1::2],
+                )
+            ],
+            [],
+        )
+        if check_last_user:
+            assert (
+                dialog[-1]["role"] == "user"
+            ), f"Last message must be from user, got {dialog[-1]['role']}"
+        dialog_tokens += tokenizer.encode(
+            f"{B_INST} {(dialog[-1]['content']).strip()} {E_INST}")
+        prompt_tokens.append(dialog_tokens)
+
+    return prompt_tokens, unsafe_requests
+
+
 def Llama_chat_completion(model: PeftModel, tokenizer: AutoTokenizer,
                           dialogs: list,
                           generation_config: GenerationConfig) -> list:
@@ -336,43 +404,8 @@ def Llama_chat_completion(model: PeftModel, tokenizer: AutoTokenizer,
     assert len(
         dialogs) == 1, "Currently do not support batched dialogs for training."
 
-    prompt_tokens = []
-    unsafe_requests = []
-
-    for dialog in dialogs:
-        unsafe_requests.append(
-            any([
-                tag in msg["content"] for tag in SPECIAL_TAGS for msg in dialog
-            ]))
-        if dialog[0]["role"] == "system":
-            dialog = [{
-                "role":
-                    dialog[1]["role"],
-                "content":
-                    B_SYS + dialog[0]["content"] + E_SYS + dialog[1]["content"],
-            }] + dialog[2:]
-        assert all([msg["role"] == "user" for msg in dialog[::2]]) and all([
-            msg["role"] == "assistant" for msg in dialog[1::2]
-        ]), (
-            "model only supports 'system', 'user' and 'assistant' roles, "
-            "starting with 'system', then 'user' and alternating (u/a/u/a/u...)"
-        )
-        dialog_tokens = sum(
-            [
-                tokenizer.encode(f"{B_INST} {(prompt['content']).strip()} "
-                                 f"{E_INST} {(answer['content']).strip()} ") +
-                [tokenizer.eos_token_id] for prompt, answer in zip(
-                    dialog[::2],
-                    dialog[1::2],
-                )
-            ],
-            [],
-        )
-        assert (dialog[-1]["role"] == "user"
-               ), f"Last message must be from user, got {dialog[-1]['role']}"
-        dialog_tokens += tokenizer.encode(
-            f"{B_INST} {(dialog[-1]['content']).strip()} {E_INST}")
-        prompt_tokens.append(dialog_tokens)
+    prompt_tokens, unsafe_requests = build_Llama_prompt_from_dialogs(
+        tokenizer=tokenizer, dialogs=dialogs)
 
     # left-padding
     max_len = max([len(x) for x in prompt_tokens])
