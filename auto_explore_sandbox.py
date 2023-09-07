@@ -7,7 +7,7 @@ import string
 from hashlib import sha256
 from termcolor import colored
 from utils import (list_files, get_target_dirs, hide_root, trunc_text,
-                   get_file_names, SUPPORTED_CMDS)
+                   get_file_names, handle_ls, SUPPORTED_CMDS)
 
 SAFE_MESSAGE = "SAFE"
 
@@ -18,6 +18,7 @@ class AutoExploreSandbox:
         self,
         dataset_path: str,
         password: str,
+        supported_cmds: list = SUPPORTED_CMDS,
         private_files: list = [],
     ):
         """
@@ -27,9 +28,16 @@ class AutoExploreSandbox:
         Args:
         - `dataset_path` (str): The path to the dataset.
         - `password` (str): The password for identity verification.
+        - `supported_cmds` (list): The list of supported commands. Must be a
+        subset of SUPPORTED_CMDS.
         - `private_files` (list): The list of private files.
         Only the creator of the sandbox can access these files.
         """
+        assert set(supported_cmds).issubset(
+            set(SUPPORTED_CMDS
+               )), "supported_cmds must be a subset of SUPPORTED_CMDS."
+        self.supported_smds = supported_cmds
+
         # Use absolute path
         self.working_dir = os.path.abspath(".").replace("\\", "/") + "/"
         self.dataset_path = os.path.abspath(dataset_path).replace("\\",
@@ -102,8 +110,8 @@ class AutoExploreSandbox:
         if cmd[0] == "exit":
             raise NotImplementedError(
                 "exit should be handled outside of run_command().")
-        if cmd[0] not in SUPPORTED_CMDS:
-            return f"Error: You can only use {', '.join(SUPPORTED_CMDS[:-1])}."
+        if cmd[0] not in self.supported_cmds:
+            return f"Error: You can only use {', '.join(self.supported_cmds[:-1])}."
 
         # Test if the target file/dir is inside the sandbox
         target_dirs = get_target_dirs(cmd)
@@ -169,6 +177,8 @@ class AutoExploreSandbox:
                 # cd cannot be handled by subprocess
                 os.chdir(cmd[1])
                 return "Success: Now at " + self._get_relative_cwd()
+            elif cmd[0] == "id":
+                return "Success: Identified file " + cmd[1]
             else:
                 result = subprocess.run(' '.join(cmd),
                                         shell=True,
@@ -192,7 +202,7 @@ class AutoExploreSandbox:
         rstderr = hide_root(result.stderr.decode('utf-8'), self.sandbox_dir)
 
         if cmd[0] == "ls":
-            return "Success: The result of ls is:\n" + rstdout
+            return "Success: The result of ls is:\n" + handle_ls(rstdout)
         elif cmd[0] in ["cat", "head", "tail"]:
             fn = get_file_names(cmd)[0]
             return (f"Success: The content of {fn} is:\n" +

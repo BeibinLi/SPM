@@ -20,7 +20,7 @@ class ScriptArguments:
     lora_alpha: Optional[int] = field(default=16)
     lora_dropout: Optional[float] = field(default=0.1)
     lora_r: Optional[int] = field(default=64)
-    max_seq_length: Optional[int] = field(default=512)
+    max_seq_length: Optional[int] = field(default=2048)
     model_name: Optional[str] = field(
         default="model/llama2/7B-chat",
         metadata={

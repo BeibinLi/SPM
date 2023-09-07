@@ -84,7 +84,7 @@ def policy_gradient_update(
 
     Args:
     - `model` (PeftModel): the model to be updated
-    - `generation_config` (GenerationConfig): the generation config used to 
+    - `generation_config` (GenerationConfig): the generation config used to
     generate the dialog
     - `generation_results` (list): the generation result, which is a list
     consisting of `batch_size` lists. Each inner list contains dicts in the

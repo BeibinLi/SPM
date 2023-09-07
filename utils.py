@@ -16,7 +16,9 @@ from data_gen.paths import (
 )
 
 # exit should always be the last
-SUPPORTED_CMDS = ["cd", "ls", "cat", "head", "echo", "python", "pip", "exit"]
+SUPPORTED_CMDS = [
+    "cd", "ls", "cat", "head", "tail", "echo", "python", "pip", "exit", "id"
+]
 
 # Common programming language suffixes
 CODE_SUFFIXES = (".py", ".c", ".cpp", ".cxx", ".cc", ".h", ".hpp", ".hxx",
@@ -408,7 +410,7 @@ def get_file_names(command: list) -> list:
         if ">" in command or ">>" in command:
             ret.append(command[-1])
         return ret
-    elif command[0] == "head":
+    elif command[0] in ["head", "tail"]:
         return [command[3]]
     elif command[0] == "cd":
         return [command[1]]
@@ -423,6 +425,8 @@ def get_file_names(command: list) -> list:
                     return [x]
     elif command[0] == "pip":
         return ["."]
+    elif command[0] == "id":
+        return [command[1]]
     else:
         raise NotImplementedError(f"Does not support command: {command[0]}")
 
@@ -581,7 +585,8 @@ def extract_commands(response: str) -> list:
     for command_block in command_blocks:
         split = split_command(command_block)
         for i in range(len(split)):
-            if split[i] in SUPPORTED_CMDS:
+            if (split[i] in SUPPORTED_CMDS
+                    and (i == 0 or (i > 0 and split[i - 1] != "|"))):
                 parsed_commands.append(split[last_keyw_pos:i])
                 last_keyw_pos = i
         parsed_commands.append(split[last_keyw_pos:])
@@ -692,3 +697,18 @@ def slice_text(text: str,
         i += slicing_gap
 
     return ret
+
+
+def handle_ls(stdout: str) -> str:
+    """
+    Add quotes to the filenames after 'ls'.
+
+    Args:
+    - `stdout` (str): The standard output of 'ls'.
+
+    Returns:
+    - str: The formatted output with quotes.
+    """
+
+    files = stdout.split("\n")
+    return '\n'.join([f"'{x}'" for x in files if x != ""])

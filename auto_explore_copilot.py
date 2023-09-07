@@ -83,7 +83,7 @@ class AutoExploreCopilot():
         `model_type` is 'remote'.
         - `model` (PeftModel): The model to use, only support Llama 2.
         Only used when `model_type` is 'local'.
-        - `tokenizer` (AutoTokenizer): The tokenizer to use. Only used when 
+        - `tokenizer` (AutoTokenizer): The tokenizer to use. Only used when
         `model_type` is 'local'.
         - `cost_function` (AutoExploreCostFunction): The cost function to use.
         Input is the list of messages, output is the cost. Only used when
@@ -112,6 +112,7 @@ class AutoExploreCopilot():
         self.file_save_path = os.path.abspath(file_save_path).replace('\\', '/')
 
         self.root_dir_name = self.root.replace(os.path.basename(self.root), '')
+
         self.temperature = temperature
         self.top_p = top_p
         self.max_token_length = max_token_length
@@ -130,11 +131,24 @@ class AutoExploreCopilot():
             self.model_name = model_name
             self.api = get_llm()
 
-    def answer(self, question):
+    def answer(self, question: str):
+        """
+        Answer a question about the repo by autonomous exploration.
+
+        Args:
+        - `question` (str): The question to answer.
+        """
+        self.question = question
+
         # 1. Setup memory and chat
-        start_prompt = open(
-            "data_gen/prompt_templates/auto_explore/explore_prompt_simple.md",
-            "r").read()
+        if self.interaction_type == "train":
+            start_prompt = open(
+                "data_gen/prompt_templates/auto_explore/explore_prompt_rl.md",
+                "r").read()
+        else:
+            start_prompt = open(
+                "data_gen/prompt_templates/auto_explore/explore_prompt.md",
+                "r").read()
         start_prompt = start_prompt.format(all_files=display_files_recursively(
             self.root),
                                            TASK=question)
@@ -146,7 +160,13 @@ class AutoExploreCopilot():
         self.generation_logs = []
 
         # 2. Create sandbox environment
-        self.sandbox = AutoExploreSandbox(self.root, self.password)
+        if self.interaction_type == "train":
+            supported_cmds = ["cd", "ls", "cat", "head", "tail", "id", "exit"]
+        else:
+            supported_cmds = SUPPORTED_CMDS
+        self.sandbox = AutoExploreSandbox(dataset_path=self.root,
+                                          password=self.password,
+                                          supported_cmds=supported_cmds)
 
         # 3. Act
         self.act()
@@ -173,13 +193,14 @@ class AutoExploreCopilot():
 
         # Reset here to incorporate the last assistant messages
         if self.token_length > self.max_token_length:
-            self.dump()
-            self.__init__(self.root, self.temperature, self.top_p,
-                          self.max_token_length, self.model, self.data_path)
-            self.msgs.append(
-                ("user",
-                 "You have reached the maximum token length. Now restarted."))
-            return
+            # self.dump()
+            # self.__init__(self.root, self.temperature, self.top_p,
+            #               self.max_token_length, self.model, self.data_path)
+            # self.msgs.append(
+            #     ("user",
+            #      "You have reached the maximum token length. Now restarted."))
+
+            raise Exception("Token limit exceeded.")
 
     def act(self):
         """
@@ -189,13 +210,16 @@ class AutoExploreCopilot():
 
         ret = self._act()
 
-        self.flush_msgs()
+        try:
+            self.flush_msgs()
+        except Exception:
+            return
 
         if ret == "Continue":
             self.act()
 
     def _act(self):
-        if self.model_access_type == "local":
+        if self.model_type == "local":
             # Use multinomial sampling to generate the next token:
             # Set do_sample = True, num_beams = 1
             generation_config = GenerationConfig(
@@ -242,7 +266,11 @@ class AutoExploreCopilot():
                         "You could only use exit standalone in a single response."
                     ))
                 else:
-                    self.flush_msgs()
+                    try:
+                        self.flush_msgs()
+                    except Exception:
+                        return "Exit"
+
                     # Success! save the result
                     os.makedirs(self.file_save_path, exist_ok=True)
                     for file_name, content in self.sandbox.get_changed_files(

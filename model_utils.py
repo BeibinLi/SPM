@@ -249,6 +249,7 @@ def GPT_msgs_to_Llama_dialog(messages: list) -> Dialog:
 
     Args:
     - `messages` (list[dict]): List of messages from GPT, with format:
+    [(agent_name, message_content), ...] or
     [{
         "role": agent_name,
         "content": message_content
@@ -260,6 +261,13 @@ def GPT_msgs_to_Llama_dialog(messages: list) -> Dialog:
         - `role` starts with 'system', then 'user' and 'assistant' alternate
         (u/a/u/a/u...)
     """
+
+    if isinstance(messages[0], tuple):
+        # convert the first format to the second
+        messages = [{
+            "role": agent_name,
+            "content": message_content
+        } for agent_name, message_content in messages]
 
     def predict_role(pos, system):
         if system:
