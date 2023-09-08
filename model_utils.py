@@ -78,9 +78,10 @@ def create_and_prepare_model(
                                           model_id=args.load_dir,
                                           is_trainable=True,
                                           config=peft_config)
+        del base_model
     else:
-        model = PeftModel(model=base_model, peft_config=peft_config)
-    del base_model
+        #model = PeftModel(model=base_model, peft_config=peft_config)
+        model = base_model
 
     tokenizer = AutoTokenizer.from_pretrained(args.model_name,
                                               trust_remote_code=True,
