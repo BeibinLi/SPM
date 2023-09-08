@@ -3,7 +3,7 @@ from transformers import (HfArgumentParser, AutoTokenizer)
 from experiment_args import ScriptArguments
 
 from auto_explore_copilot import AutoExploreCopilot
-from training_funcs import AnytimeTerminate
+from functions.terminate import AnytimeTerminate
 from model_utils import (GPT_msgs_to_Llama_dialog,
                          build_Llama_prompt_from_dialogs)
 
@@ -16,7 +16,7 @@ def dump(data: list, filename: str):
 parser = HfArgumentParser(ScriptArguments)
 script_args = parser.parse_args_into_dataclasses()[0]
 
-dataset = json.load(open("data/search_coffee.json", "r"))
+dataset = json.load(open("data/file_search_coffee.json", "r"))
 
 tokenizer = AutoTokenizer.from_pretrained(script_args.model_name,
                                           trust_remote_code=True,
@@ -27,9 +27,9 @@ auto_explore_dataset = []
 
 for data in dataset:
     for cmds in [data["commands"], data["optimal_path"]]:
-        for i in range(len(cmds)):
-            if cmds[i].startswith("cat"):
-                cmds[i] = cmds[i].replace("cat ", "cat '") + "'"
+        # for i in range(len(cmds)):
+        #     if cmds[i].startswith("cat"):
+        #         cmds[i] = cmds[i].replace("cat ", "cat '") + "'"
         cmds.append(cmds[-1].replace("cat", "id"))
         cmds.append("exit")
 

@@ -684,7 +684,7 @@ def get_target_dirs(cmd: list) -> list:
         original_cwd = os.getcwd()
 
         try:
-            os.chdir(path)
+            os.chdir(unwrap_path(path))
         except Exception as e:
             return ["Error: " + str(e)]
 
@@ -724,3 +724,11 @@ def handle_ls(stdout: str) -> str:
 
     files = stdout.split("\n")
     return '\n'.join([f"'{x}'" for x in files if x != ""])
+
+
+def unwrap_path(filename):
+    if not filename:
+        return filename
+    if filename[0] in ["\'", "\""] and filename[0] == filename[-1]:
+        return unwrap_path(filename[1:-1])
+    return filename

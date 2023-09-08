@@ -15,21 +15,29 @@
 
 import json
 import torch
-from transformers import (HfArgumentParser, GenerationConfig)
 import types
 import random
+import os
+from tqdm import tqdm
+from transformers import (HfArgumentParser, GenerationConfig)
 
+from utils import get_exp_id
 from experiment_args import ScriptArguments
 from model_utils import (calc_probs_log_probs, create_and_prepare_model)
 from auto_explore_copilot import AutoExploreCopilot
 
-from training_funcs import (NumTokenCost, IdentifyFileTerminate,
-                            policy_gradient_update)
+from functions.cost import (NumTokenCost, KeywordCost, SynthesizedCost)
+from functions.terminate import IdentifyFileTerminate
+from functions.training import policy_gradient_update
 
 root = "/home/t-rzhou/Coffee_Roasting_Dataset/data/"
 
 parser = HfArgumentParser(ScriptArguments)
 script_args = parser.parse_args_into_dataclasses()[0]
+
+exp_id = get_exp_id(script_args.ckpt_path)
+ckpt_path = script_args.ckpt_path + exp_id + "/"
+os.makedirs(ckpt_path, exist_ok=True)
 
 tokenizer, peft_config, model = create_and_prepare_model(script_args)
 # Add our customized calculation function to the model
@@ -40,12 +48,18 @@ scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.9)
 
 #stopping_criteria = MaxLengthCriteria(generation_config.max_length)
 
-dataset = json.load(open("data/search_coffee.json", "r"))
+dataset = json.load(open("data/file_search_coffee.json", "r"))
 
 temperature = 0.6
 top_p = 0.9
 
-for epoch in range(script_args.max_steps):
+# build the cost function
+num_token_cost = NumTokenCost(tokenizer)
+keyword_cost = KeywordCost(keywords=["Error", "Warning"], costs=[100, 20])
+synthesized_cost = SynthesizedCost(
+    cost_functions=[num_token_cost, keyword_cost], weights=[1, 1])
+
+for epoch in tqdm(range(script_args.max_steps)):
     # random sample a data
     data = random.choice(dataset)
 
@@ -70,7 +84,7 @@ for epoch in range(script_args.max_steps):
                                  model_type="local",
                                  model=model,
                                  tokenizer=tokenizer,
-                                 cost_function=NumTokenCost(tokenizer),
+                                 cost_function=synthesized_cost,
                                  terminate_criteria=IdentifyFileTerminate(
                                      data["filename"]))
 
@@ -84,3 +98,9 @@ for epoch in range(script_args.max_steps):
                            generation_results=logs,
                            optimizer=optimizer,
                            scheduler=scheduler)
+
+    if (epoch + 1) % script_args.save_steps == 0:
+        _ckpt_path = ckpt_path + "epoch_" + str(epoch + 1) + "/"
+        os.makedirs(_ckpt_path, exist_ok=True)
+        model.save_pretrained(save_directory=_ckpt_path)
+        tokenizer.save_pretrained(save_directory=_ckpt_path)

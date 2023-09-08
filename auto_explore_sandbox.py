@@ -5,9 +5,8 @@ import shutil
 import random
 import string
 from hashlib import sha256
-from termcolor import colored
 from utils import (list_files, get_target_dirs, hide_root, trunc_text,
-                   get_file_names, handle_ls, SUPPORTED_CMDS)
+                   get_file_names, handle_ls, unwrap_path, SUPPORTED_CMDS)
 
 SAFE_MESSAGE = "SAFE"
 
@@ -32,6 +31,7 @@ class AutoExploreSandbox:
         subset of SUPPORTED_CMDS.
         - `private_files` (list): The list of private files.
         Only the creator of the sandbox can access these files.
+
         """
         assert set(supported_cmds).issubset(
             set(SUPPORTED_CMDS
@@ -61,9 +61,9 @@ class AutoExploreSandbox:
                         self.sandbox_dir,
                         ignore=ignore,
                         dirs_exist_ok=True)
-        print(
-            colored(f"Data copied to temporary directory: {self.sandbox_dir}",
-                    "yellow"))
+        # print(
+        #     colored(f"Data copied to temporary directory: {self.sandbox_dir}",
+        #             "yellow"))
 
         # Checkpoint cwd to avoid outside changes
         self.cwd = self.sandbox_dir
@@ -177,11 +177,12 @@ class AutoExploreSandbox:
         try:
             if cmd[0] == "cd":
                 # cd cannot be handled by subprocess
-                os.chdir(cmd[1])
+                os.chdir(unwrap_path(cmd[1]))
                 return ("Success: Now at " + self._get_relative_path(), {})
             elif cmd[0] == "id":
-                return ("Success: Identified file " + cmd[1], {
-                    "identified_file": self._get_relative_path(cmd[1])
+                return ("Success: Identified file " + unwrap_path(cmd[1]), {
+                    "identified_file":
+                        self._get_relative_path(unwrap_path(cmd[1]))
                 })
             else:
                 result = subprocess.run(' '.join(cmd),
@@ -205,6 +206,9 @@ class AutoExploreSandbox:
         rstdout = result.stdout.decode('utf-8')
         rstderr = hide_root(result.stderr.decode('utf-8'), self.sandbox_dir)
 
+        if rstderr != "":
+            return f"Error: {rstderr}"
+
         if cmd[0] == "ls":
             return "Success: The result of ls is:\n" + handle_ls(rstdout)
         elif cmd[0] in ["cat", "head", "tail"]:
@@ -214,10 +218,7 @@ class AutoExploreSandbox:
         elif cmd[0] == "echo":
             return f"Success: echoed to {cmd[-1]}"
         elif cmd[0] == "python":
-            if rstderr != "":
-                return f"Error: {rstderr}"
-            else:
-                return f"Success: The output of python is:\n{rstdout}"
+            return f"Success: The output of python is:\n{rstdout}"
         elif cmd[0] == "pip":
             if rstderr != "":
                 return f"Error: {rstderr}"
@@ -251,8 +252,8 @@ class AutoExploreSandbox:
             if original_file_content != current_file_content:
                 changed_files.append(file)
 
-        print(colored("List of changed files:", "yellow"))
-        print(changed_files)
+        # print(colored("List of changed files:", "yellow"))
+        # print(changed_files)
 
         return {
             file: open(self.sandbox_dir + file, "rb").read()
@@ -288,3 +289,12 @@ class AutoExploreSandbox:
         os.chdir(original_cwd)
 
         return relative_path
+
+
+if __name__ == "__main__":
+    sandbox = AutoExploreSandbox(
+        dataset_path="/home/t-rzhou/Coffee_Roasting_Dataset/data/",
+        password="zrl",
+    )
+
+    print(sandbox.run_command(["cat", "a.txt"], "zrl"))

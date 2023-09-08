@@ -263,7 +263,7 @@ def GPT_msgs_to_Llama_dialog(messages: list) -> Dialog:
         (u/a/u/a/u...)
     """
 
-    if isinstance(messages[0], tuple):
+    if not isinstance(messages[0], dict):
         # convert the first format to the second
         messages = [{
             "role": agent_name,

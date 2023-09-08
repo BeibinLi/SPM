@@ -12,8 +12,8 @@ from model_utils import GPT_msgs_to_Llama_dialog, Llama_chat_completion
 import argparse
 from auto_explore_sandbox import AutoExploreSandbox
 from transformers import AutoTokenizer, GenerationConfig
-from training_funcs import (AutoExploreCostFunction,
-                            AutoExploreTerminateCriteria)
+from functions.cost import AutoExploreCostFunction
+from functions.terminate import (AutoExploreTerminateCriteria, AnytimeTerminate)
 
 
 def get_args():
@@ -21,20 +21,20 @@ def get_args():
 
     parser.add_argument("--temperature",
                         type=float,
-                        default=1,
+                        default=0.6,
                         help="Temperature of language model.")
     parser.add_argument("--top_p",
                         type=float,
-                        default=0.3,
+                        default=0.9,
                         help="Top_p of language model.")
     parser.add_argument("--application_root",
                         type=str,
-                        default="../Coffee_Roasting_Dataset/data/",
+                        default="/home/t-rzhou/Coffee_Roasting_Dataset/data/",
                         help="The folder location of the application.")
     parser.add_argument(
         "--max_token_length",
         type=int,
-        default=32768 // 2,
+        default=2048,
         help="The maximum token length in a chat. If exceed this amount, the "
         " chat will be reset.")
     parser.add_argument("--model",
@@ -50,21 +50,23 @@ def get_args():
 
 class AutoExploreCopilot():
 
-    def __init__(self,
-                 root: str,
-                 temperature: float,
-                 top_p: float,
-                 max_token_length: int,
-                 file_save_path: str,
-                 password: str,
-                 interaction_type: str,
-                 model_type: str,
-                 model_name: str = None,
-                 model: PeftModel = None,
-                 tokenizer: AutoTokenizer = None,
-                 cost_function: AutoExploreCostFunction = None,
-                 terminate_criteria: AutoExploreTerminateCriteria = None,
-                 need_output_msgs: bool = True):
+    def __init__(
+            self,
+            root: str,
+            temperature: float,
+            top_p: float,
+            max_token_length: int,
+            file_save_path: str,
+            password: str,
+            interaction_type: str,
+            model_type: str,
+            model_name: str = None,
+            model: PeftModel = None,
+            tokenizer: AutoTokenizer = None,
+            cost_function: AutoExploreCostFunction = None,
+            terminate_criteria: AutoExploreTerminateCriteria = AnytimeTerminate(
+            ),
+            need_output_msgs: bool = True):
         """
         A copilot to help language models explore a repo.
 
@@ -76,7 +78,7 @@ class AutoExploreCopilot():
         - `file_save_path` (str): The path to save the new or changed files.
         - `password` (str): The password to use for the sandbox.
         - `interaction_type` (str): The type of the interaction, with choices
-        in ['train', 'inference', 'debug'].
+        in ['train', 'inference', 'debug', 'inference_rl'].
         - `model_type` (str): The type of the model to use, with choices
         in ['local', 'remote', 'null']. If `interaction_type` is 'train', then
         must be 'local'.
@@ -96,8 +98,9 @@ class AutoExploreCopilot():
         """
         # TODO: support terminate criteria for inference
         assert interaction_type in [
-            "train", "inference", "debug"
-        ], ("Only support interaction type in ['train', 'inference', 'debug'].")
+            "train", "inference", "debug", "inference_rl"
+        ], ("Only support interaction type in ['train', 'inference', 'debug', "
+            "'inference_rl'].")
         assert model_type in [
             "local", "remote", "null"
         ], ("Only support model ype in ['local', 'remote', 'null'].")
@@ -154,18 +157,13 @@ class AutoExploreCopilot():
         self.question = question
 
         # 1. Setup memory and chat
-        if self.interaction_type == "train":
+        if self.interaction_type in ["train", "debug", "inference_rl"]:
             start_prompt = open(
                 "data_gen/prompt_templates/auto_explore/explore_prompt_rl.md",
                 "r").read()
         elif self.interaction_type == "inference":
             start_prompt = open(
                 "data_gen/prompt_templates/auto_explore/explore_prompt.md",
-                "r").read()
-        else:
-            # Use train prompt when debugging
-            start_prompt = open(
-                "data_gen/prompt_templates/auto_explore/explore_prompt_rl.md",
                 "r").read()
 
         start_prompt = start_prompt.format(all_files=display_files_recursively(
@@ -196,6 +194,9 @@ class AutoExploreCopilot():
                 self._act(f"```bash\n{cmd}\n```")
         else:
             self.act()
+
+        if not self.terminate_criteria.can_terminate():
+            self.generation_logs[-1]["cost"] += 1000
 
         # 4. Cleanup sandbox and environment
         del self.sandbox
@@ -245,7 +246,10 @@ class AutoExploreCopilot():
         and call the possible next act().
         """
 
-        ret = self._act()
+        try:
+            ret = self._act()
+        except Exception as e:
+            self.msgs.append(("user", str(e)))
 
         try:
             self.flush_msgs()
@@ -396,9 +400,11 @@ if __name__ == "__main__":
         temperature=args.temperature,
         top_p=args.top_p,
         max_token_length=args.max_token_length,
-        model=args.model,
         file_save_path=os.path.abspath(args.file_save_path) + "/",
-        password="zrl")
+        password="zrl",
+        interaction_type="inference_rl",
+        model_type="remote",
+        model_name=args.model)
     agent.answer(
     #"Plot the bean price of Excelsa between Jun 2021 and 2022 Aug."
     #"Plot employee salary by country in a map."

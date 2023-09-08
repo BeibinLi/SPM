@@ -206,10 +206,9 @@ class AzureGPTClient():
         if model in ["tuned", "origin"]:
             # we are going to use our own model
             url = 'http://localhost:5000/chat'
-            input_msg = f"### {agent_name}: {msg}"
 
             data = {
-                "message": input_msg,
+                "message": msg,
                 "model": model,
                 "n": num_response,
                 "temperature": temperature,

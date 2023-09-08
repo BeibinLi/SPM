@@ -78,14 +78,6 @@ dataset = load_dataset("json",
                        data_files="data/auto_explore_dataset.jsonl",
                        split="train").shuffle(seed=42)
 
-# encoded_dataset = dataset.map(encode_batch,
-#                               batched=True,
-#                               batch_size=script_args.per_device_train_batch_size,
-#                               fn_kwargs={
-#                                   'tokenizer': tokenizer,
-#                                   'max_length': script_args.max_seq_length
-#                               })
-
 trainer = SFTTrainer(
     model=model,
     # train_dataset=encoded_dataset,
