@@ -60,4 +60,3 @@ After pretraining, run
 python rl_finetune.py --load_dir=<PRETRAIN_DIR> <Other args>
 ```
 This code can only use a single GPU.
-
