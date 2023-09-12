@@ -365,8 +365,9 @@ def build_Llama_prompt_from_dialogs(
             assert (
                 dialog[-1]["role"] == "user"
             ), f"Last message must be from user, got {dialog[-1]['role']}"
-        dialog_tokens += tokenizer.encode(
-            f"{B_INST} {(dialog[-1]['content']).strip()} {E_INST}")
+        if dialog[-1]["role"] == "user":
+            dialog_tokens += tokenizer.encode(
+                f"{B_INST} {(dialog[-1]['content']).strip()} {E_INST}")
         prompt_tokens.append(dialog_tokens)
 
     return prompt_tokens, unsafe_requests
