@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import torch
+import pdb
 from transformers import GenerationConfig
 from peft import PeftModel
 
@@ -43,11 +44,13 @@ def policy_gradient_update(
     Returns:
     - float: the average total cost of the generation results
     """
-    loss, avg_tot_cost = 0, 0
+    costs = []
+    optimizer.zero_grad()
+
     for generation_result in generation_results:
         # sort the generation results by reversed time order
         generation_result = sorted(generation_result,
-                                   key=lambda x: sum(x["generated_mask"]))
+                                   key=lambda x: -len(x["tokens"]))
         tot_cost = 0
         # calculate the policy gradient by reversed time order to avoid space
         # explosion
@@ -67,13 +70,17 @@ def policy_gradient_update(
                                                          calc_probs=False,
                                                          calc_log_probs=True)
             log_probs = probs_log_probs["log_probs"][0]
-            loss += tot_cost * log_probs[0]
-        avg_tot_cost += tot_cost
-    loss /= len(generation_results)
+            print(log_probs[0].item())
+            (tot_cost * log_probs[0]).backward()
+            for param in model.parameters():
+                if param.grad is not None:
+                    if torch.isnan(param.grad).any() or torch.isinf(
+                            param.grad).any():
+                        pdb.set_trace()
 
-    optimizer.zero_grad()
-    loss.backward()
+        costs.append(tot_cost)
+
     optimizer.step()
     scheduler.step()
 
-    return avg_tot_cost / len(generation_results)
+    return sum(costs) / len(costs)

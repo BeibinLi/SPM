@@ -585,6 +585,7 @@ def calc_probs_log_probs(
     model_inputs = self.prepare_inputs_for_generation(input_ids, **model_kwargs)
 
     # forward pass to get next token
+    # TODO: everytime, this line will take some memory. Try to resolve.
     outputs = self(**model_inputs, return_dict=True)
 
     # generate the axis to gather from
@@ -640,9 +641,9 @@ def calc_probs_log_probs(
     for i in range(batch_size):
         if accumulating[i]:
             if calc_probs:
-                probs[i].append(accumulated_probs[i].clone())
+                probs[i].append(accumulated_probs[i])
             if calc_log_probs:
-                log_probs[i].append(accumulated_log_probs[i].clone())
+                log_probs[i].append(accumulated_log_probs[i])
 
     return {
         "probs": probs if calc_probs else None,

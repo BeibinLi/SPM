@@ -207,7 +207,8 @@ class AutoExploreCopilot():
         self.msgs = [(agent, msg) for agent, msg in self.msgs if msg]
         if not hasattr(self, "last_flushed_msg"):
             self.last_flushed_msg = 0
-            self.encoder = tiktoken.encoding_for_model("gpt-4")
+            self.encoder = self.tokenizer if hasattr(
+                self, "tokenizer") else tiktoken.encoding_for_model("gpt-4")
             self.token_length = 0
 
         for msg in self.msgs[self.last_flushed_msg:]:
@@ -250,6 +251,7 @@ class AutoExploreCopilot():
             ret = self._act()
         except Exception as e:
             self.msgs.append(("user", str(e)))
+            ret = "Continue"
 
         try:
             self.flush_msgs()
@@ -410,4 +412,5 @@ if __name__ == "__main__":
     #"Plot employee salary by country in a map."
     #"Who is the proprietor of the cafe in Shanghai?"
     #"What is the culture statement of Opti Coffee?"
-        "Tell me details of Employee Appreciation Events.")
+    #"Tell me details of Employee Appreciation Events."
+        "What does Opti Coffee's achievement prioritize?")
