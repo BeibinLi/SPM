@@ -44,7 +44,7 @@ tokenizer, peft_config, model = create_and_prepare_model(script_args)
 # Add our customized calculation function to the model
 model.calc_probs_log_probs = types.MethodType(calc_probs_log_probs, model)
 
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+optimizer = torch.optim.Adam(model.parameters(), lr=script_args.learning_rate)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.9)
 
 #stopping_criteria = MaxLengthCriteria(generation_config.max_length)

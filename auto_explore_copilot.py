@@ -123,6 +123,7 @@ class AutoExploreCopilot():
 
         # replace all paths with absolute paths
         self.root = os.path.abspath(root).replace('\\', '/')
+        print(file_save_path)
         self.file_save_path = os.path.abspath(file_save_path).replace('\\', '/')
 
         self.root_dir_name = self.root.replace(os.path.basename(self.root), '')

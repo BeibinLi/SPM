@@ -153,7 +153,7 @@ class AutoExploreSandbox:
         """
         # Restore to the checkpointed cwd
         # Use absolute path to store cwd!
-        _cwd = os.path.abspath(os.getcwd()).replace('\\', '/') + "/"
+        system_cwd = os.path.abspath(os.getcwd()).replace('\\', '/') + "/"
         os.chdir(self.cwd)
 
         safety_check_result = self.safety_check(cmd, password)
@@ -165,7 +165,7 @@ class AutoExploreSandbox:
 
         # Checkpoint cwd
         self.cwd = os.path.abspath(os.getcwd()).replace('\\', '/') + "/"
-        os.chdir(_cwd)
+        os.chdir(system_cwd)
 
         return ret
 
@@ -181,6 +181,11 @@ class AutoExploreSandbox:
                 os.chdir(unwrap_path(cmd[1]))
                 return ("Success: Now at " + self._get_relative_path(), {})
             elif cmd[0] == "id":
+                abs_path = self._get_absolute_path(unwrap_path(cmd[1]))
+                if abs_path.startswith("Error:"):
+                    return (abs_path, {})
+                elif not os.path.isfile(abs_path):
+                    return (f"Error: {cmd[1]} does not exist!", {})
                 return ("Success: Identified file " + unwrap_path(cmd[1]), {
                     "identified_file":
                         self._get_relative_path(unwrap_path(cmd[1]))
