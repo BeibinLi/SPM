@@ -23,7 +23,8 @@ from transformers import (HfArgumentParser, GenerationConfig)
 
 from utils import get_exp_id
 from experiment_args import ScriptArguments
-from model_utils import (calc_probs_log_probs, create_and_prepare_model)
+from model_utils import (calc_probs_log_probs, create_and_prepare_model,
+                         get_bash_only_generated_masks)
 from auto_explore_copilot import AutoExploreCopilot
 
 from functions.cost import (NumTokenCost, KeywordCost, SynthesizedCost)
@@ -90,12 +91,17 @@ for epoch in tqdm(range(script_args.max_steps)):
 
     # rollout a trajectory
     copilot.answer(data["question"])
-    logs = [copilot.get_generation_logs()]
+    logs = copilot.get_generation_logs()
+
+    # calculate probs and log probs for only the bash commands
+    masks = get_bash_only_generated_masks(logs=logs, tokenizer=tokenizer)
+    for i in range(len(logs)):
+        logs[i]["generated_mask"] = masks[i]
 
     # update the model
     policy_gradient_update(model=model,
                            generation_config=generation_config,
-                           generation_results=logs,
+                           generation_results=[logs],
                            optimizer=optimizer,
                            scheduler=scheduler)
 

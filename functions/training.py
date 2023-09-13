@@ -70,8 +70,9 @@ def policy_gradient_update(
                                                          calc_probs=False,
                                                          calc_log_probs=True)
             log_probs = probs_log_probs["log_probs"][0]
-            print(log_probs[0].item())
-            (tot_cost * log_probs[0]).backward()
+            if len(log_probs) == 0:
+                continue
+            (tot_cost * sum(log_probs)).backward()
             for param in model.parameters():
                 if param.grad is not None:
                     if torch.isnan(param.grad).any() or torch.isinf(

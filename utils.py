@@ -441,21 +441,25 @@ def get_file_names(command: list) -> list:
         raise NotImplementedError(f"Does not support command: {command[0]}")
 
 
-def extract_command_blocks(response, identifier="```bash") -> list:
+def extract_command_blocks(response: str,
+                           identifier: str = "```bash") -> (list, list):
     """
     Extracts command blocks encapsulated by markdown code blocks from a given
     response string.
 
-    Parameters:
-    - response (str): The input string containing the bash commands enclosed in
-        markdown code blocks.
-    - identifier (str, optional): The identifier used to recognize the start
-        of the bash commands block. Defaults to "```bash", which can also be
-        "```python"
+    Args:
+    - `response` (str): The input string containing the bash commands enclosed
+    in markdown code blocks.
+    - `identifier` (str, optional): The identifier used to recognize the start
+        of the bash commands block. Defaults to "\`\`\`bash", which can also be
+        "\`\`\`python"
 
     Returns:
-    - list: A list of strings, containing the extracted commands.
-         Each command is a separate string in the list.
+    - tuple: A tuple of two lists.
+        - list: A list of strings, containing the extracted commands.
+        Each command is a separate string in the list.
+        - list: A list of tuple of two integers, indicating the start and end
+        positions of the command blocks (including the identifier).
 
     Example:
     Given the response string:
@@ -479,11 +483,13 @@ def extract_command_blocks(response, identifier="```bash") -> list:
     """
     commands = []
     positions = find_all_substr(response, identifier)
+    end_positions = []
     for pos in positions:
         st = pos + len(identifier)
         p = response[st:].find("```") + st
         commands.append(response[st:p].strip())
-    return commands
+        end_positions.append(p + 3)
+    return commands, list(zip(positions, end_positions))
 
 
 def split_command(command_block: str) -> list:
@@ -587,7 +593,7 @@ def extract_commands(response: str) -> list:
     Returns:
     - list: a 2D list of commands.
     """
-    command_blocks = extract_command_blocks(response)
+    command_blocks = extract_command_blocks(response)[0]
 
     parsed_commands = []
 
@@ -658,44 +664,6 @@ def parse_echo(command: list) -> list:
     return ["echo", " ".join(command[1:])]
 
 
-def get_target_dirs(cmd: list) -> list:
-    """
-    Get the directories of the target files/dirs from a command.
-    The directories are absolute paths.
-
-    Args:
-    - cmd (list): a single command splitted into a list of arguments.
-
-    Returns:
-    - list: A list of pairs of (directory, file) of the target file/dirs.
-        If the target is a dir, then file = directory.
-        If error occurs, return a list of error messages.
-    """
-    # Get the files
-    files = get_file_names(cmd)
-    target_dirs = []
-
-    for file in files:
-        path = os.path.dirname(file) if "." in os.path.basename(file) else file
-        if path == "":
-            path = "."
-
-        # Backup the cwd
-        original_cwd = os.getcwd()
-
-        try:
-            os.chdir(unwrap_path(path))
-        except Exception as e:
-            return ["Error: " + str(e)]
-
-        target_dirs.append(os.getcwd().replace('\\', '/') + "/")
-
-        # Restore the cwd
-        os.chdir(original_cwd)
-
-    return target_dirs
-
-
 def slice_text(text: str,
                slicing_gap: int = 800,
                slicing_len: int = 1000) -> list:
@@ -726,7 +694,16 @@ def handle_ls(stdout: str) -> str:
     return '\n'.join([f"'{x}'" for x in files if x != ""])
 
 
-def unwrap_path(filename):
+def unwrap_path(filename: str) -> str:
+    """
+    Remove the quotes around a path if possible.
+
+    Args:
+    - `filename` (str): The path to unwrap.
+
+    Returns:
+    - str: The unwrapped path.
+    """
     if not filename:
         return filename
     if filename[0] in ["\'", "\""] and filename[0] == filename[-1]:

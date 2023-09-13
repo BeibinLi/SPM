@@ -7,6 +7,7 @@ import inspect
 from termcolor import colored
 import yaml
 import pdb
+from utils import extract_command_blocks
 from accelerate import Accelerator
 from transformers import (AutoModelForCausalLM, AutoTokenizer,
                           BitsAndBytesConfig, GenerationConfig)
@@ -469,8 +470,8 @@ def calc_probs_log_probs(
 
     Returns:
     - dict: A dictionary of {
-        "probs": list of probabilities for each position,
-        "log_probs": list of log probabilities for each position,
+        "probs": list of probabilities for each generated text span,
+        "log_probs": list of log probabilities for each generated text span,
     }
     """
     # 1. Handle `generation_config` and kwargs that might update it,
@@ -650,3 +651,56 @@ def calc_probs_log_probs(
         "probs": probs if calc_probs else None,
         "log_probs": log_probs if calc_log_probs else None,
     }
+
+
+def get_bash_only_generated_masks(logs: list, tokenizer: AutoTokenizer) -> list:
+    """
+    Get the masks of the generated tokens that are part of a bash.
+
+    Args:
+    - `logs` (list): A list of dicts in the
+    following format:
+    {
+        "tokens": torch.Tensor,
+        "generated_mask": list,
+        ...
+    }
+    - `tokenizer` (AutoTokenizer): Tokenizer associated with the output.
+
+    Returns:
+    - list: A list of generated masks that are part of a bash for each dict.
+    """
+    ret = []
+    for log in logs:
+        generated_mask = log["generated_mask"]
+        tokens = log["tokens"][generated_mask]
+        response = tokenizer.decode(tokens)
+        blocks = extract_command_blocks(response)[1]
+
+        mask = []
+        last_end = 0
+        for block in blocks:
+            # non bash part
+            mask += [False] * len(tokenizer.encode(response[last_end:block[0]]))
+
+            # bash part
+            mask += [True] * len(tokenizer.encode(response[block[0]:block[1]]))
+
+            last_end = block[1]
+
+        # remaining non bash part
+        mask += [False] * len(tokenizer.encode(response[last_end:]))
+
+        final_mask = []
+        j = 0
+        for i in range(len(mask)):
+            while j < len(generated_mask) and not generated_mask[j]:
+                final_mask.append(False)
+                j += 1
+
+            final_mask.append(mask[i])
+            j += 1
+
+        ret.append(final_mask)
+
+    return ret

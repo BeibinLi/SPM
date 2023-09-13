@@ -5,8 +5,8 @@ import shutil
 import random
 import string
 from hashlib import sha256
-from utils import (list_files, get_target_dirs, hide_root, trunc_text,
-                   get_file_names, handle_ls, unwrap_path, SUPPORTED_CMDS)
+from utils import (list_files, hide_root, trunc_text, get_file_names, handle_ls,
+                   unwrap_path, SUPPORTED_CMDS)
 
 SAFE_MESSAGE = "SAFE"
 
@@ -114,11 +114,11 @@ class AutoExploreSandbox:
             return f"Error: You can only use {', '.join(self.supported_cmds[:-1])}."
 
         # Test if the target file/dir is inside the sandbox
-        target_dirs = get_target_dirs(cmd)
+        target_dirs = self._get_relative_target_dirs(cmd)
         for target_dir in target_dirs:
-            if "Error" in target_dir:
+            if target_dir.startswith("Error:"):
                 return target_dir
-            if not target_dir.startswith(self.sandbox_dir):
+            if target_dir.startswith(".."):
                 return (
                     f"Error: You cannot access file {target_dir} "
                     f"outside the repo! You are now at {self._get_relative_path()}"
@@ -152,7 +152,8 @@ class AutoExploreSandbox:
             - 'identified_file': The file identified using 'id'.
         """
         # Restore to the checkpointed cwd
-        _cwd = os.getcwd()
+        # Use absolute path to store cwd!
+        _cwd = os.path.abspath(os.getcwd()).replace('\\', '/') + "/"
         os.chdir(self.cwd)
 
         safety_check_result = self.safety_check(cmd, password)
@@ -163,7 +164,7 @@ class AutoExploreSandbox:
             ret = self._run_command(cmd)
 
         # Checkpoint cwd
-        self.cwd = os.getcwd().replace("\\", "/") + "/"
+        self.cwd = os.path.abspath(os.getcwd()).replace('\\', '/') + "/"
         os.chdir(_cwd)
 
         return ret
@@ -260,9 +261,65 @@ class AutoExploreSandbox:
             for file in changed_files
         }
 
+    def _get_relative_target_dirs(self, cmd: list) -> list:
+        """
+        Get the relative directories of the target files/dirs from a command.
+
+        Args:
+        - cmd (list): a single command splitted into a list of arguments.
+
+        Returns:
+        - list: A list of directories.
+        """
+        # Get the files
+        files = get_file_names(cmd)
+        target_dirs = []
+
+        for file in files:
+            target_dirs.append(self._get_relative_path(file))
+
+        return target_dirs
+
+    def _get_absolute_path(self, path: str = ".") -> str:
+        """
+        Get the absolute path of a given path relative to cwd in the
+        sandbox.
+
+        Args:
+        - `path` (str): The path with respect to cwd to be converted to
+        absolute path. Default to '.', i.e., return relative cwd.
+
+        Returns:
+        - str: The absolute path.
+        """
+        # Use absolute path to store cwd!
+        original_cwd = os.path.abspath(os.getcwd()).replace('\\', '/')
+
+        base_name = os.path.basename(path)
+        if base_name in [".", ".."]:
+            base_name = ""
+        elif base_name == path:
+            path = "."
+        else:
+            path = path[:len(path) - len(base_name)]
+
+        try:
+            os.chdir(path)
+        except Exception as e:
+            os.chdir(original_cwd)
+            return "Error: " + str(e)
+
+        absolute_path = os.path.abspath(os.getcwd()).replace(
+            '\\', '/') + "/" + base_name
+
+        os.chdir(original_cwd)
+
+        return absolute_path
+
     def _get_relative_path(self, path: str = ".") -> str:
         """
-        Get the relative path with respect to the sandbox directory.
+        Get the relative path with respect to the sandbox directory of a given
+        path relative to cwd in the sandbox.
 
         Args:
         - `path` (str): The path with respect to cwd to be converted to
@@ -271,22 +328,13 @@ class AutoExploreSandbox:
         Returns:
         - str: The relative path.
         """
-        original_cwd = os.getcwd()
 
-        base_name = os.path.basename(path)
-        if base_name == "..":
-            base_name = ""
-        if base_name == path:
-            path = "."
-        else:
-            path = path[:len(path) - len(base_name)]
+        absolute_path = self._get_absolute_path(path)
 
-        os.chdir(path)
-        relative_path = os.path.relpath(
-            os.path.abspath(os.getcwd()).replace('\\', '/'),
-            self.sandbox_dir) + "/" + base_name
+        if absolute_path.startswith("Error:"):
+            return absolute_path
 
-        os.chdir(original_cwd)
+        relative_path = os.path.relpath(absolute_path, self.sandbox_dir)
 
         return relative_path
 

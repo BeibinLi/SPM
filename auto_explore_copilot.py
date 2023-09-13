@@ -339,7 +339,7 @@ class AutoExploreCopilot():
                     else:
                         self.msgs.append(
                             ("user",
-                             "Error: The terminate criteria is not met." +
+                             "Error: The terminate criteria is not met. " +
                              self.terminate_criteria.describe_criteria()))
                         return "Continue"
             else:
