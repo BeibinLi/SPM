@@ -381,7 +381,7 @@ def trunc_text(file: str, content: str) -> str:
 
     # Truncate the content depending on file type
     if file.endswith(CODE_SUFFIXES):
-        return _trunc_text(content, 1000, 1000)
+        return _trunc_text(content, 1000, 10000)
     elif file.endswith(DATA_SUFFIXES):
         return _trunc_text(content, 5, 500)
     elif file.endswith(TEXT_SUFFIXES):

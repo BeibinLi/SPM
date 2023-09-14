@@ -199,7 +199,15 @@ class AutoExploreCopilot():
         if not self.terminate_criteria.can_terminate():
             self.generation_logs[-1]["cost"] += 1000
 
-        # 4. Cleanup sandbox and environment
+        # 4. Save the new or changed files
+        os.makedirs(self.file_save_path, exist_ok=True)
+        for file_name, content in self.sandbox.get_changed_files().items():
+            os.makedirs(self.file_save_path + os.path.dirname(file_name),
+                        exist_ok=True)
+            with open(self.file_save_path + file_name, "wb") as f:
+                f.write(content)
+
+        # 5. Cleanup sandbox and environment
         del self.sandbox
 
         # TODO: find the final answer
@@ -327,15 +335,6 @@ class AutoExploreCopilot():
 
                     if self.terminate_criteria.can_terminate():
                         # Success! save the result
-                        os.makedirs(self.file_save_path, exist_ok=True)
-                        for file_name, content in self.sandbox.get_changed_files(
-                        ).items():
-                            os.makedirs(self.file_save_path +
-                                        os.path.dirname(file_name),
-                                        exist_ok=True)
-                            with open(self.file_save_path + file_name,
-                                      "wb") as f:
-                                f.write(content)
                         return "Exit"
                     else:
                         self.msgs.append(
@@ -405,13 +404,15 @@ if __name__ == "__main__":
         max_token_length=args.max_token_length,
         file_save_path=os.path.abspath(args.file_save_path) + "/",
         password="zrl",
-        interaction_type="inference_rl",
+        interaction_type="inference",
         model_type="remote",
         model_name=args.model)
     agent.answer(
-    #"Plot the bean price of Excelsa between Jun 2021 and 2022 Aug."
+    #"Plot the price of bean Excelsa between Jun 2021 and 2022 Aug."
     #"Plot employee salary by country in a map."
     #"Who is the proprietor of the cafe in Shanghai?"
     #"What is the culture statement of Opti Coffee?"
     #"Tell me details of Employee Appreciation Events."
-        "What does Opti Coffee's achievement prioritize?")
+    #"What does Opti Coffee's achievement prioritize?"
+        "What is the profit if the shipping cost is doubled in the "
+        "optimization code? Check solver/main.py.")
