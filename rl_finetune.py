@@ -91,8 +91,12 @@ for epoch in tqdm(range(script_args.max_steps)):
 
     # rollout a trajectory
     copilot.answer(data["question"])
-    logs = copilot.get_generation_logs()
 
+    # dump the messages
+    with open(ckpt_path + "epoch_" + str(epoch + 1) + ".json", "w") as f:
+        json.dump(copilot.get_msgs(), f)
+
+    logs = copilot.get_generation_logs()
     # calculate probs and log probs for only the bash commands
     masks = get_bash_only_generated_masks(logs=logs, tokenizer=tokenizer)
     for i in range(len(logs)):

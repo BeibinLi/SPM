@@ -2,6 +2,7 @@ import json
 import os
 import pickle
 import tiktoken
+import pdb
 from peft import PeftModel
 
 from gpt_api import get_llm
@@ -96,7 +97,6 @@ class AutoExploreCopilot():
         True / False.
         - `need_output_msgs` (bool): Whether to output the messages after each act.
         """
-        # TODO: support terminate criteria for inference
         assert interaction_type in [
             "train", "inference", "debug", "inference_rl"
         ], ("Only support interaction type in ['train', 'inference', 'debug', "
@@ -123,8 +123,11 @@ class AutoExploreCopilot():
 
         # replace all paths with absolute paths
         self.root = os.path.abspath(root).replace('\\', '/')
-        print(file_save_path)
-        self.file_save_path = os.path.abspath(file_save_path).replace('\\', '/')
+        try:
+            self.file_save_path = os.path.abspath(file_save_path).replace(
+                '\\', '/')
+        except Exception:
+            pdb.set_trace()
 
         self.root_dir_name = self.root.replace(os.path.basename(self.root), '')
 
@@ -295,11 +298,9 @@ class AutoExploreCopilot():
                 generation_config=generation_config)[0]
 
             response = ret["generation"]["content"]
-            self.generation_logs.append({
-                "tokens": ret["tokens"],
-                "generated_mask": ret["generated_mask"],
-                "cost": 0
-            })
+
+            ret.update({"cost": 0})
+            self.generation_logs.append(ret)
         elif self.model_type == "remote":
             # Get response from remote model
             response = self.api.reply(agent_name=self.msgs[-1][0],
@@ -390,7 +391,17 @@ class AutoExploreCopilot():
         Get the generation logs for training.
 
         Returns:
-        - list: the generation logs.
+        - list: A list of generation logs, each log following format:
+        {
+            "generation":
+            {
+                "role": str,
+                "content": str,
+            }
+            "tokens": torch.Tensor,
+            "generated_mask": list,
+            "cost": float,
+        }
         """
         return self.generation_logs
 

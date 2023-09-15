@@ -17,7 +17,34 @@ from data_gen.paths import (
 
 # exit should always be the last
 SUPPORTED_CMDS = [
-    "cd", "ls", "cat", "head", "tail", "echo", "python", "pip", "exit", "id"
+    "cd", "ls", "cat", "head", "tail", "echo", "python", "pip", "id", "exit"
+]
+FULL_CMDS = SUPPORTED_CMDS + [
+    "pwd",
+    "mkdir",
+    "rmdir",
+    "touch",
+    "rm",
+    "cp",
+    "mv",
+    "less",
+    "grep",
+    "find",
+    "who",
+    "w",
+    "ps",
+    "top",
+    "kill",
+    "tar",
+    "chmod",
+    "chown",
+    "df",
+    "du",
+    "ifconfig",
+    "ping",
+    "netstat",
+    "ssh",
+    "scp",
 ]
 
 # Common programming language suffixes
@@ -601,7 +628,7 @@ def extract_commands(response: str) -> list:
     for command_block in command_blocks:
         split = split_command(command_block)
         for i in range(len(split)):
-            if (split[i] in SUPPORTED_CMDS
+            if (split[i] in FULL_CMDS
                     and (i == 0 or (i > 0 and split[i - 1] != "|"))):
                 parsed_commands.append(split[last_keyw_pos:i])
                 last_keyw_pos = i

@@ -397,8 +397,8 @@ def Llama_chat_completion(model: PeftModel, tokenizer: AutoTokenizer,
     - list: List of generated messages, with format:
     [{
         "generation": {
-            "role": agent_name,
-            "content": message_content
+            "role": str,
+            "content": str
         },
         "tokens": torch.Tensor,
         "generated_mask": list

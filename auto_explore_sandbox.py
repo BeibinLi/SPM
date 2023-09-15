@@ -39,13 +39,11 @@ class AutoExploreSandbox:
         self.supported_cmds = supported_cmds
 
         # Use absolute path
-        self.working_dir = os.path.abspath(".").replace("\\", "/") + "/"
         self.dataset_path = os.path.abspath(dataset_path).replace("\\",
                                                                   "/") + "/"
-
         # Copy dataset to a temporary directory in the working directory
-        self.sandbox_dir = tempfile.mkdtemp(dir=self.working_dir).replace(
-            "\\", "/") + "/"
+        self.sandbox_dir = os.path.abspath(
+            tempfile.mkdtemp(dir=os.getcwd())).replace("\\", "/") + "/"
 
         # Store the hashed password for identity verification
         self._sandbox_id = ''.join(
@@ -226,10 +224,7 @@ class AutoExploreSandbox:
         elif cmd[0] == "python":
             return f"Success: The output of python is:\n{rstdout}"
         elif cmd[0] == "pip":
-            if rstderr != "":
-                return f"Error: {rstderr}"
-            else:
-                return "Success: pip succeeded"
+            return "Success: pip succeeded"
         else:
             raise NotImplementedError(f"Does not support command: {cmd[0]}")
 
