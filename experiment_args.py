@@ -20,7 +20,7 @@ class ScriptArguments:
     lora_alpha: Optional[int] = field(default=16)
     lora_dropout: Optional[float] = field(default=0.1)
     lora_r: Optional[int] = field(default=64)
-    max_seq_length: Optional[int] = field(default=512)
+    max_seq_length: Optional[int] = field(default=2048)
     model_name: Optional[str] = field(
         default="model/llama2/7B-chat",
         metadata={
@@ -35,8 +35,12 @@ class ScriptArguments:
                     " should be the folder with all experiments."
         },
     )
+    use_8bit: Optional[bool] = field(
+        default=False,
+        metadata={"help": "Activate 8bit precision base model loading"},
+    )
     use_4bit: Optional[bool] = field(
-        default=True,
+        default=False,
         metadata={"help": "Activate 4bit precision base model loading"},
     )
     use_nested_quant: Optional[bool] = field(

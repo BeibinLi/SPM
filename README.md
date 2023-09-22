@@ -35,23 +35,28 @@ Packages:
 `pip install termcolor, trl, peft, bitsandbytes, tiktoken`
 
 
+### Supervised pretraining
+
 If you want single-GPU training, simply run
 ```bash
-python train.py <Args>
+python supervised_pretrain.py <Args>
 ```
 
 This code uses `accelerate` for parallel training. Make sure to configure `accelerate` before each run if you want multiple-GPU training:
 
 ```bash
-accelerate configure
+accelerate config
 ```
 After this, run
-
 ```bash
-accelerate launch --main_process_port <PORT> train.py <Args>
+accelerate launch --main_process_port <PORT> supervised_pretrain.py <Args>
 ```
 
+### RL finetuning for file indentification
 
-`accelerator config` and answer with default choices. When asked "yes/No", always answer: NO, NO, NO
-
-accelerate launch train.py
+Place the `json` data file at `data/file_search_coffee.json`.
+After pretraining, run
+```bash
+python rl_finetune.py --load_dir=<PRETRAIN_DIR> <Other args>
+```
+This code can only use a single GPU.
