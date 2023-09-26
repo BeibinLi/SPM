@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -29,7 +30,7 @@ class ScriptArguments:
         },
     )
     ckpt_path: Optional[str] = field(
-        default="results/",
+        default=os.path.abspath(os.path.expanduser("~/data/results/")),
         metadata={
             "help": "The location to save the experiment checkpoints. It "
                     " should be the folder with all experiments."
@@ -116,7 +117,7 @@ class ScriptArguments:
     logging_steps: int = field(default=10,
                                metadata={"help": "Log every X updates steps."})
     cache_dir: Optional[str] = field(
-        default="model/",
+        default=os.path.abspath(os.path.expanduser("~/data/model/")),
         metadata={"help": "Where to store the pretrained models."})
 
     load_dir: Optional[str] = field(

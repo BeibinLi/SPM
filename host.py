@@ -1,7 +1,9 @@
-from flask import Flask, request
 import argparse
-from model_utils import (load_inference_model, GPT_msgs_to_Llama_dialog,
-                         Llama_chat_completion)
+import os
+
+from flask import Flask, request
+from model_utils import (GPT_msgs_to_Llama_dialog, Llama_chat_completion,
+                         load_inference_model)
 from termcolor import colored
 from transformers import GenerationConfig
 
@@ -23,7 +25,10 @@ def get_args() -> argparse.Namespace:
                         type=int,
                         default=0,
                         help="Which cuda to load model.")
-    return parser.parse_args()
+    args = parser.parse_args()
+    args.dir = os.path.abspath(os.path.expanduser(args.dir))
+    print(args)
+    return args
 
 
 class Host:

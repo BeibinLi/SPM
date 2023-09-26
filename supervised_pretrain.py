@@ -13,22 +13,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import glob
+import os
+
 import torch
-from datasets import load_dataset
-from transformers import (
-    HfArgumentParser,
-    TrainingArguments,
-)
-from peft.tuners.lora import LoraLayer
-from trl import SFTTrainer
-
-from utils import get_exp_id
-from model_utils import create_and_prepare_model
-from experiment_args import ScriptArguments
-
 from accelerate import Accelerator
+from datasets import load_dataset
+from experiment_args import ScriptArguments
+from model_utils import create_and_prepare_model
+from peft.tuners.lora import LoraLayer
+from transformers import HfArgumentParser, TrainingArguments
+from trl import SFTTrainer
+from utils import get_exp_id
 
 
 def encode_batch(batch, tokenizer, max_length):
@@ -49,7 +45,8 @@ script_args = parser.parse_args_into_dataclasses()[0]
 exp_id = get_exp_id(script_args.ckpt_path)
 
 training_arguments = TrainingArguments(
-    output_dir=script_args.ckpt_path + exp_id + "_supervised_pretrain/",
+    output_dir=os.path.join(script_args.ckpt_path,
+                            exp_id + "_supervised_pretrain/"),
     per_device_train_batch_size=script_args.per_device_train_batch_size,
     gradient_accumulation_steps=script_args.gradient_accumulation_steps,
     optim=script_args.optim,

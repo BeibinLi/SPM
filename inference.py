@@ -1,10 +1,10 @@
+import argparse
+import os
 import pdb
 
+from model_utils import answer, load_inference_model, load_latest_model
 from termcolor import colored
-
 from utils import get_spm_dataset
-from model_utils import load_latest_model, load_inference_model, answer
-import argparse
 
 
 def get_args() -> argparse.Namespace:
@@ -35,8 +35,10 @@ def get_args() -> argparse.Namespace:
         help="Dataset to use: 'finetune' for finetune dataset, 'pretrain' for "
         "pretrain dataset. If set to 'finetune', the output with wrong "
         "classification will be rectified.")
-
-    return parser.parse_args()
+    args = parser.parse_args()
+    args.dir = os.path.abspath(os.path.expanduser(args.dir))
+    print(args)
+    return args
 
 
 if __name__ == "__main__":
@@ -78,8 +80,12 @@ if __name__ == "__main__":
             print("-" * 30)
             print("Input:", input)
             print("Output:", colored(output, "green"))
-            print("Standard output:", colored(std, "blue"))
 
             if args.dataset == "finetune" and output[:5] != std[:5]:
-                output = answer(input, tokenizer, model, rectifier=std[:5])[0]
+                output = answer(input,
+                                tokenizer,
+                                model,
+                                rectifier=std[:5],
+                                verbose=False)[0]
                 print("Rectified output:", std[:5], colored(output, "yellow"))
+            print("GT output:", colored(std, "blue"))

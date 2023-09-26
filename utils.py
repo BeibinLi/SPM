@@ -1,19 +1,16 @@
 """Utility functions"""
-import os
 import json
+import os
 import random
-from termcolor import colored
-from datasets import load_dataset
-from datasets.arrow_dataset import Dataset
 import shlex
 import string
+
 import tiktoken
-from data_gen.paths import (
-    pretrain_data_path,
-    finetune_data_path,
-    self_instruct_data_path,
-    pretrain_raw_data_path,
-)
+from data_gen.paths import (finetune_data_path, pretrain_data_path,
+                            pretrain_raw_data_path, self_instruct_data_path)
+from datasets import load_dataset
+from datasets.arrow_dataset import Dataset
+from termcolor import colored
 
 # exit should always be the last
 SUPPORTED_CMDS = [
@@ -283,19 +280,21 @@ def get_spm_dataset(phase: str,
 
     if phase == "baseline":
         data_files = [
-            pretrain_raw_data_path + mode + ".jsonl",
+            os.path.join(pretrain_raw_data_path, mode + ".jsonl"),
         ]
         if with_self_instruct:
-            data_files.append(self_instruct_data_path + mode + ".jsonl")
+            data_files.append(
+                os.path.join(self_instruct_data_path, mode + ".jsonl"))
     elif phase == "pretrain":
         data_files = [
-            pretrain_data_path + mode + ".jsonl",
+            os.path.join(pretrain_data_path, mode + ".jsonl"),
         ]
         if with_self_instruct:
-            data_files.append(self_instruct_data_path + mode + ".jsonl")
+            data_files.append(
+                os.path.join(self_instruct_data_path, mode + ".jsonl"))
     elif phase == "finetune":
         data_files = [
-            finetune_data_path + mode + ".jsonl",
+            os.path.join(finetune_data_path, mode + ".jsonl"),
         ]
         if with_self_instruct:
             print(
