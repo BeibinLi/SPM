@@ -736,3 +736,29 @@ def unwrap_path(filename: str) -> str:
     if filename[0] in ["\'", "\""] and filename[0] == filename[-1]:
         return unwrap_path(filename[1:-1])
     return filename
+
+
+def build_curriculum(dataset: list) -> list:
+    """
+    Build a curriculum for the dataset.
+    The curriculum increases in the depth of the target file.
+
+    Args:
+    - `dataset` (list): The dataset.
+
+    Returns:
+    - list: The curriculum, which is a list of datasets with increasing depth.
+    The later datasets do not contain the files in the previous datasets.
+    """
+    dataset = sorted(dataset, key=lambda x: x["filename"].count("/"))
+    depth = -1
+    dataset_by_depth = []
+    for i in range(len(dataset)):
+        cur_depth = dataset[i]["filename"].count("/")
+        if cur_depth > depth:
+            depth = cur_depth
+            dataset_by_depth.append([dataset[i]])
+        else:
+            dataset_by_depth[-1].append(dataset[i])
+
+    return dataset_by_depth

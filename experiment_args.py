@@ -23,6 +23,9 @@ class ScriptArguments:
     max_seq_length: Optional[int] = field(default=2048)
     model_name: Optional[str] = field(
         default="model/llama2/7B-chat",
+    #default="bert-base-uncased",
+    #default="gpt2-large",
+    #default="tiiuae/falcon-7b-instruct",
         metadata={
             "help": "The model that you want to train from the Hugging "
                     "Face hub. E.g. gpt2, gpt2-xl, bert, etc."

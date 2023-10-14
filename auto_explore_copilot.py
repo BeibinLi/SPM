@@ -11,7 +11,7 @@ from utils import (colored_string, display_files_recursively, extract_commands,
 from model_utils import GPT_msgs_to_Llama_dialog, Llama_chat_completion
 
 import argparse
-from auto_explore_sandbox import AutoExploreSandbox
+from auto_explore_sandbox import (LeaveoutOption, AutoExploreSandbox)
 from transformers import AutoTokenizer, GenerationConfig
 from functions.cost import AutoExploreCostFunction
 from functions.terminate import (AutoExploreTerminateCriteria, AnytimeTerminate)
@@ -28,10 +28,11 @@ def get_args():
                         type=float,
                         default=0.9,
                         help="Top_p of language model.")
-    parser.add_argument("--application_root",
-                        type=str,
-                        default="/home/t-rzhou/Coffee_Roasting_Dataset/data/",
-                        help="The folder location of the application.")
+    parser.add_argument(
+        "--application_root",
+        type=str,
+        default="/home/vectorzhou/Coffee_Roasting_Dataset/data/",
+        help="The folder location of the application.")
     parser.add_argument(
         "--max_token_length",
         type=int,
@@ -67,6 +68,7 @@ class AutoExploreCopilot():
             cost_function: AutoExploreCostFunction = None,
             terminate_criteria: AutoExploreTerminateCriteria = AnytimeTerminate(
             ),
+            leaveout_fraction: float = 0,
             need_output_msgs: bool = True):
         """
         A copilot to help language models explore a repo.
@@ -95,6 +97,9 @@ class AutoExploreCopilot():
         - `terminate_criteria` (AutoExploreTerminateCriteria): The terminate
         criteria for an interaction. Input is the list of messages, output is
         True / False.
+        - `leaveout_fraction` (float): The probability of leaving out unrelated
+        files. Only used when `interaction_type` is 'train', and passed to the
+        sandbox.
         - `need_output_msgs` (bool): Whether to output the messages after each act.
         """
         assert interaction_type in [
@@ -148,17 +153,23 @@ class AutoExploreCopilot():
             self.api = get_llm()
 
         self.terminate_criteria = terminate_criteria
+        self.leaveout_fraction = leaveout_fraction
         self.need_output_msgs = need_output_msgs
 
-    def answer(self, question: str, ans_cmds: list = []):
+    def answer(self, question: str, target_file: str = "", ans_cmds: list = []):
         """
         Answer a question about the repo by autonomous exploration.
 
         Args:
         - `question` (str): The question to answer.
-        - `ans_cmds` (list): The commands as answer. Only used when debug.
+        - `target_file` (str): The target file to answer the question. Only used
+        when `self.interaction_type` is 'train'.
+        - `ans_cmds` (list): The commands of answer, can be either optimal or
+        random (but still correct). Only used when debug.
         """
         self.question = question
+        if self.interaction_type != "train":
+            assert target_file == "", "Only support target file for training."
 
         # 1. Setup memory and chat
         if self.interaction_type in ["train", "debug", "inference_rl"]:
@@ -187,9 +198,12 @@ class AutoExploreCopilot():
             ]
         else:
             self.supported_cmds = SUPPORTED_CMDS
-        self.sandbox = AutoExploreSandbox(dataset_path=self.root,
-                                          password=self.password,
-                                          supported_cmds=self.supported_cmds)
+        self.sandbox = AutoExploreSandbox(
+            dataset_path=self.root,
+            password=self.password,
+            supported_cmds=self.supported_cmds,
+            leaveout_option=LeaveoutOption([target_file],
+                                           self.leaveout_fraction))
 
         # 3. Act
         if self.interaction_type == "debug":

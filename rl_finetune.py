@@ -1,18 +1,3 @@
-# coding=utf-8
-# Copyright 2023 The HuggingFace Inc. team. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 import json
 import torch
 import types
@@ -21,7 +6,7 @@ import os
 from tqdm import tqdm
 from transformers import (HfArgumentParser, GenerationConfig)
 
-from utils import get_exp_id
+from utils import (get_exp_id, build_curriculum)
 from experiment_args import ScriptArguments
 from model_utils import (calc_probs_log_probs, create_and_prepare_model,
                          get_bash_only_generated_masks)
@@ -31,7 +16,7 @@ from functions.cost import (NumTokenCost, KeywordCost, SynthesizedCost)
 from functions.terminate import IdentifyFileTerminate
 from functions.training import policy_gradient_update
 
-root = "/home/t-rzhou/Coffee_Roasting_Dataset/data/"
+root = "/home/vectorzhou/Coffee_Roasting_Dataset/data/"
 
 parser = HfArgumentParser(ScriptArguments)
 script_args = parser.parse_args_into_dataclasses()[0]
@@ -49,7 +34,7 @@ scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.9)
 
 #stopping_criteria = MaxLengthCriteria(generation_config.max_length)
 
-dataset = json.load(open("data/file_search_coffee.json", "r"))
+dataset = build_curriculum(json.load(open("data/file_search_coffee.json", "r")))
 
 temperature = 0.6
 top_p = 0.9
@@ -60,9 +45,21 @@ keyword_cost = KeywordCost(keywords=["Error", "Warning"], costs=[100, 20])
 synthesized_cost = SynthesizedCost(
     cost_functions=[num_token_cost, keyword_cost], weights=[1, 1])
 
+step_per_curriculum = script_args.max_steps // len(dataset)
+script_args.max_steps = step_per_curriculum * len(dataset)
+
+# set up first curriculum
+cur_dataset_idx = 0
+cur_dataset = dataset[0]
+
 for epoch in tqdm(range(script_args.max_steps)):
+    # move on to the next curriculum
+    if (epoch + 1) % step_per_curriculum == 0:
+        cur_dataset_idx += 1
+        cur_dataset += dataset[cur_dataset_idx]
+
     # random sample a data
-    data = random.choice(dataset)
+    data = random.choice(cur_dataset)
 
     generation_config = GenerationConfig(
         max_length=script_args.max_seq_length,
@@ -87,10 +84,11 @@ for epoch in tqdm(range(script_args.max_steps)):
                                  tokenizer=tokenizer,
                                  cost_function=synthesized_cost,
                                  terminate_criteria=IdentifyFileTerminate(
-                                     data["filename"]))
+                                     data["filename"]),
+                                 leaveout_fraction=0.5)
 
     # rollout a trajectory
-    copilot.answer(data["question"])
+    copilot.answer(question=data["question"], target_file=data["filename"])
 
     # dump the messages
     with open(ckpt_path + "epoch_" + str(epoch + 1) + ".json", "w") as f:

@@ -5,10 +5,37 @@ import shutil
 import random
 import string
 from hashlib import sha256
-from utils import (list_files, hide_root, trunc_text, get_file_names, handle_ls,
-                   unwrap_path, SUPPORTED_CMDS)
+from utils import (display_files_recursively, list_files, hide_root, trunc_text,
+                   get_file_names, handle_ls, unwrap_path, SUPPORTED_CMDS)
 
 SAFE_MESSAGE = "SAFE"
+
+
+class LeaveoutOption:
+
+    def __init__(self, files_must_contain: list, leaveout_fraction: float):
+        """
+        Args:
+        - `files_must_contain` (list): The list of files that must be included.
+        - `leaveout_fraction` (float): The probability of leaving out unrelated
+        files.
+        """
+        self.files_must_contain = files_must_contain
+        self.leaveout_fraction = leaveout_fraction
+
+    def __call__(self, file: str) -> bool:
+        """
+        Args:
+        - `file` (str): The file to be left out.
+
+        Returns:
+        - bool: True if and only if the file is not in `files_must_contain` and
+        randomly chosen to be left out.
+        """
+        for file_must_contain in self.files_must_contain:
+            if file.startswith(file_must_contain):
+                return False
+        return random.random() < self.leaveout_fraction
 
 
 class AutoExploreSandbox:
@@ -19,6 +46,7 @@ class AutoExploreSandbox:
         password: str,
         supported_cmds: list = SUPPORTED_CMDS,
         private_files: list = [],
+        leaveout_option: LeaveoutOption = None,
     ):
         """
         Wraps the dataset folder.
@@ -31,7 +59,8 @@ class AutoExploreSandbox:
         subset of SUPPORTED_CMDS.
         - `private_files` (list): The list of private files.
         Only the creator of the sandbox can access these files.
-
+        - `leaveout_fraction` (float): The probability of leaving out unrelated
+        files.
         """
         assert set(supported_cmds).issubset(
             set(SUPPORTED_CMDS
@@ -51,14 +80,21 @@ class AutoExploreSandbox:
         self._hashed_password = [self._hash_password(password)]
         self.private_files = private_files
 
-        # Ignore hidden files and directories
+        self.leaveout_option = leaveout_option
+
+        # Ignore hidden files and directories, optionally leave out unrelated
+        # files
         def ignore(directory, filenames):
-            return [fn for fn in filenames if fn.startswith('.')]
+            return [
+                fn for fn in filenames if fn.startswith('.')
+                or self.leaveout_option(os.path.join(directory, fn))
+            ]
 
         shutil.copytree(self.dataset_path,
                         self.sandbox_dir,
                         ignore=ignore,
                         dirs_exist_ok=True)
+
         # print(
         #     colored(f"Data copied to temporary directory: {self.sandbox_dir}",
         #             "yellow"))
@@ -341,8 +377,14 @@ class AutoExploreSandbox:
 
 if __name__ == "__main__":
     sandbox = AutoExploreSandbox(
-        dataset_path="/home/t-rzhou/Coffee_Roasting_Dataset/data/",
+        dataset_path="/home/vectorzhou/Coffee_Roasting_Dataset/data/",
         password="zrl",
+        leaveout_option=LeaveoutOption(files_must_contain=["public/cafe.md"],
+                                       leaveout_fraction=0.5),
     )
 
     print(sandbox.run_command(["cat", "a.txt"], "zrl"))
+
+    print(display_files_recursively(sandbox.sandbox_dir))
+
+    del sandbox

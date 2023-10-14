@@ -16,7 +16,9 @@ def dump(data: list, filename: str):
 parser = HfArgumentParser(ScriptArguments)
 script_args = parser.parse_args_into_dataclasses()[0]
 
-dataset = json.load(open("data/file_search_coffee.json", "r"))
+dataset = json.load(
+    open("/home/vectorzhou/Coffee_Roasting_Dataset/file_search_coffee.json",
+         "r"))
 
 tokenizer = AutoTokenizer.from_pretrained(script_args.model_name,
                                           trust_remote_code=True,
@@ -34,7 +36,7 @@ for data in dataset:
         cmds.append("exit")
 
         copilot = AutoExploreCopilot(
-            root="/home/t-rzhou/Coffee_Roasting_Dataset/data/",
+            root="/home/vectorzhou/Coffee_Roasting_Dataset/data/",
             temperature=0.6,
             top_p=0.9,
             max_token_length=32768,
