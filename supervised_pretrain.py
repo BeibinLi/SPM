@@ -64,7 +64,7 @@ training_arguments = TrainingArguments(
     ddp_find_unused_parameters=False)
 
 tokenizer, peft_config, model = create_and_prepare_model(script_args)
-tokenizer.padding_side = 'right'
+#tokenizer.padding_side = 'right'
 model.config.use_cache = False
 
 # Saving the arguments for reference in the future
@@ -72,19 +72,19 @@ os.makedirs(training_arguments.output_dir, exist_ok=True)
 script_args.dump(os.path.join(training_arguments.output_dir, "setting.yml"))
 
 dataset = load_dataset("json",
-                       data_files="data/auto_explore_dataset.jsonl",
+                       data_files="data/auto_explore_dataset_markov.jsonl",
                        split="train").shuffle(seed=42)
 
 trainer = SFTTrainer(
     model=model,
-    # train_dataset=encoded_dataset,
     train_dataset=dataset,
     peft_config=peft_config,
     dataset_text_field="text",
     max_seq_length=script_args.max_seq_length,
     tokenizer=tokenizer,
     args=training_arguments,
-    packing=script_args.packing)
+    #packing=script_args.packing
+)
 
 for name, module in trainer.model.named_modules():
     if isinstance(module, LoraLayer):

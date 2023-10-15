@@ -84,9 +84,12 @@ def create_and_prepare_model(
         #model = PeftModel(model=base_model, peft_config=peft_config)
         model = base_model
 
-    tokenizer = AutoTokenizer.from_pretrained(args.model_name,
-                                              trust_remote_code=True,
-                                              cache_dir=args.cache_dir)
+    tokenizer = AutoTokenizer.from_pretrained(
+        args.model_name,
+        trust_remote_code=True,
+        cache_dir=args.cache_dir,
+        model_max_length=model.config.max_position_embeddings,
+    )
     tokenizer.pad_token = tokenizer.eos_token
 
     return tokenizer, peft_config, model
@@ -136,9 +139,7 @@ def load_inference_model(
 
     # Load tokenizer from original model
     tokenizer = AutoTokenizer.from_pretrained(
-        pretrained_model_name_or_path=model_name,
-        trust_remote_code=True,
-        model_max_length=8000)
+        pretrained_model_name_or_path=model_name, trust_remote_code=True)
     tokenizer.pad_token = tokenizer.eos_token
 
     if use_original:

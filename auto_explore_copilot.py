@@ -174,22 +174,20 @@ class AutoExploreCopilot():
         # 1. Setup memory and chat
         if self.interaction_type in ["train", "debug", "inference_rl"]:
             start_prompt = open(
-                "data_gen/prompt_templates/auto_explore/explore_prompt_rl.md",
+                "data_gen/prompt_templates/auto_explore/explore_prompt_rl_markov.md",
                 "r").read()
         elif self.interaction_type == "inference":
             start_prompt = open(
                 "data_gen/prompt_templates/auto_explore/explore_prompt.md",
                 "r").read()
 
-        start_prompt = start_prompt.format(all_files=display_files_recursively(
-            self.root),
-                                           TASK=question)
-        self.msgs = [("system", start_prompt), ("user", "Lets start!")]
-        # flush the messages
-        self.flush_msgs()
+        self.start_prompt = start_prompt.format(
+            all_files=display_files_recursively(self.root), TASK=question)
 
         # store the generation logs for training
+        self.msgs = []
         self.generation_logs = []
+        self.whole_msgs = []
 
         # 2. Create sandbox environment
         if self.interaction_type == "train":
@@ -257,7 +255,7 @@ class AutoExploreCopilot():
 
             raise Exception("Token limit exceeded.")
 
-    def get_msgs(self) -> list:
+    def get_whole_msgs(self) -> list:
         """
         Get the message history.
 
@@ -265,24 +263,18 @@ class AutoExploreCopilot():
         - list: The message history.
         """
 
-        return self.msgs
+        return self.whole_msgs
 
     def act(self):
         """
         Wrapper function to interact with the language model for one step
         and call the possible next act().
         """
-
         try:
             ret = self._act()
         except Exception as e:
             self.msgs.append(("user", str(e)))
             ret = "Continue"
-
-        try:
-            self.flush_msgs()
-        except Exception:
-            return
 
         if ret == "Continue":
             self.act()
@@ -292,6 +284,12 @@ class AutoExploreCopilot():
         Args:
         - `response` (str): The response to use for debugging.
         """
+        cur_msgs = [("system", self.start_prompt),
+                    ("user", "Your current working directory is: " +
+                     self.sandbox._get_relative_path(self.sandbox.cwd))
+                   ] + self.msgs
+        self.msgs = []
+
         if self.model_type == "local":
             # Get response from local model
             # Use multinomial sampling to generate the next token:
@@ -329,13 +327,16 @@ class AutoExploreCopilot():
             assert response is not None, ("Must provide a response when "
                                           "debugging.")
 
-        self.msgs.append(("assistant", response))
+        cur_msgs.append(("assistant", response))
+        self.whole_msgs.append(cur_msgs)
 
         commands = extract_commands(response)
 
         user_response_start = len(self.msgs)
 
         for cmd in commands:
+            self.msgs.append(("user", "Executing: " + " ".join(cmd)))
+
             if cmd[0] == "exit":
                 if len(commands) > 1:
                     self.msgs.append((
