@@ -113,6 +113,9 @@ def load_inference_model(
         - `config` (PeftConfig): Configuration of the model.
         - `model` (PeftModel): Loaded model for inference.
     """
+    if experiment_dir[-1] != "/":
+        experiment_dir += "/"
+
     setting_file = os.path.join(experiment_dir, "setting.yml")
     if os.path.exists(setting_file):
         setting = yaml.safe_load(open(setting_file, "r"))

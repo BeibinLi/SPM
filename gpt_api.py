@@ -59,9 +59,9 @@ def cache_llm_infer_result(func):
 
         # Do not use cache for local models.
         use_cache = True
-        if "model" in kwargs and kwargs["model"] in ["tuned", "origin"]:
+        if "model" in kwargs and kwargs["model"] in ["tuned", "original"]:
             use_cache = False
-        if "origin" in args or "tuned" in args:
+        if "original" in args or "tuned" in args:
             use_cache = False
 
         storage = cache_data.get(key, None)
@@ -203,7 +203,7 @@ class AzureGPTClient():
 
         messages = handle_prev_message_history(agent_name, msg, prev_msgs)
 
-        if model in ["tuned", "origin"]:
+        if model in ["tuned", "original"]:
             # we are going to use our own model
             url = 'http://localhost:5000/chat'
 

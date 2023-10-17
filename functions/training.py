@@ -36,7 +36,8 @@ def policy_gradient_update(
     {
         "tokens": torch.Tensor,
         "generated_mask": list,
-        "cost": float
+        "cost": float,
+        "step": int
     }
     - `optimizer` (torch.optim.Optimizer): the optimizer to be used
     - `scheduler` (torch.optim.lr_scheduler.LambdaLR): the scheduler to be used
@@ -49,8 +50,7 @@ def policy_gradient_update(
 
     for generation_result in generation_results:
         # sort the generation results by reversed time order
-        generation_result = sorted(generation_result,
-                                   key=lambda x: -len(x["tokens"]))
+        generation_result = sorted(generation_result, key=lambda x: -x["step"])
         tot_cost = 0
         # calculate the policy gradient by reversed time order to avoid space
         # explosion

@@ -29,9 +29,7 @@ auto_explore_dataset = []
 
 for data in dataset:
     for cmds in [data["commands"], data["optimal_path"]]:
-        # for i in range(len(cmds)):
-        #     if cmds[i].startswith("cat"):
-        #         cmds[i] = cmds[i].replace("cat ", "cat '") + "'"
+        cmds = [cmd for cmd in cmds if cmd != "ls"]
         cmds.append(cmds[-1].replace("cat", "id"))
         cmds.append("exit")
 

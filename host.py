@@ -39,7 +39,7 @@ class Host:
 
     def chat(self):
         message = request.json.get('message')
-        model_name = request.json.get("model", "origin")
+        model_name = request.json.get("model", "original")
         max_tokens = request.json.get("max_tokens", 1000)
         temperature = request.json.get("temperature", 0)
         messages = request.json.get("messages", [])
@@ -59,11 +59,11 @@ class Host:
             eos_token_id=self.tokenizer.eos_token_id,
         )
 
-        if model_name not in ["tuned", "origin"]:
+        if model_name not in ["tuned", "original"]:
             return {
                 'answers': [
                     "Model name is wrong! It should be "
-                    "either 'tuned' or 'origin'"
+                    "either 'tuned' or 'original'"
                 ]
             }
 

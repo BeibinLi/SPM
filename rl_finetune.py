@@ -51,6 +51,7 @@ script_args.max_steps = step_per_curriculum * len(dataset)
 # set up first curriculum
 cur_dataset_idx = 0
 cur_dataset = dataset[0]
+losts = []
 
 for epoch in tqdm(range(script_args.max_steps)):
     # move on to the next curriculum
@@ -85,14 +86,15 @@ for epoch in tqdm(range(script_args.max_steps)):
                                  cost_function=synthesized_cost,
                                  terminate_criteria=IdentifyFileTerminate(
                                      data["filename"]),
-                                 leaveout_fraction=0.5)
+                                 leaveout_fraction=0.5,
+                                 need_output_msgs=False)
 
     # rollout a trajectory
     copilot.answer(question=data["question"], target_file=data["filename"])
 
     # dump the messages
     with open(ckpt_path + "epoch_" + str(epoch + 1) + ".json", "w") as f:
-        json.dump(copilot.get_msgs(), f)
+        json.dump(copilot.get_whole_msgs(), f)
 
     logs = copilot.get_generation_logs()
     # calculate probs and log probs for only the bash commands
@@ -101,11 +103,16 @@ for epoch in tqdm(range(script_args.max_steps)):
         logs[i]["generated_mask"] = masks[i]
 
     # update the model
-    policy_gradient_update(model=model,
-                           generation_config=generation_config,
-                           generation_results=[logs],
-                           optimizer=optimizer,
-                           scheduler=scheduler)
+    losts.append(
+        policy_gradient_update(model=model,
+                               generation_config=generation_config,
+                               generation_results=[logs],
+                               optimizer=optimizer,
+                               scheduler=scheduler))
+
+    if (epoch + 1) % script_args.logging_steps == 0:
+        print(sum(losts) / len(losts))
+        losts = []
 
     if (epoch + 1) % script_args.save_steps == 0:
         _ckpt_path = ckpt_path + "epoch_" + str(epoch + 1) + "/"

@@ -102,6 +102,7 @@ def display_files_recursively(
     folder_path: str,
     indent: str = "",
     file_suffixes: list = [".py", ".cpp", ".cs", ".md", ".txt", ".csv"],
+    depth: int = 1,
 ) -> str:
     """Recursively lists files with specific suffixes from a given directory
       and its subdirectories.
@@ -145,14 +146,15 @@ def display_files_recursively(
             ret += "\n" + indent + os.path.basename(folder_path) + "/"
         ret += "\n" + indent + "    " + file_name
 
-    # Recurse into directories
-    for dir_name in os.listdir(folder_path):
-        dir_path = os.path.join(folder_path, dir_name)
-        if os.path.isdir(dir_path):
-            # Recursively check if sub-directory contains valid files or folders
-            # with valid files
-            ret += display_files_recursively(dir_path, indent + "    ",
-                                             file_suffixes)
+    if depth > 1:
+        # Recurse into directories
+        for dir_name in os.listdir(folder_path):
+            dir_path = os.path.join(folder_path, dir_name)
+            if os.path.isdir(dir_path):
+                # Recursively check if sub-directory contains valid files or folders
+                # with valid files
+                ret += display_files_recursively(dir_path, indent + "    ",
+                                                 file_suffixes, depth - 1)
 
     return ret
 

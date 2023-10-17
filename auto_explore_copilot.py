@@ -1,7 +1,6 @@
 import json
 import os
 import pickle
-import tiktoken
 import pdb
 from peft import PeftModel
 
@@ -39,10 +38,14 @@ def get_args():
         default=2048,
         help="The maximum token length in a chat. If exceed this amount, the "
         " chat will be reset.")
-    parser.add_argument("--model",
-                        type=str,
-                        default="gpt-35-turbo",
-                        help="The model to use.")
+    parser.add_argument(
+        "--model",
+        type=str,
+    #default="gpt-35-turbo",
+        default="tuned",
+        help=
+        "The model to use. Use Huggingface model name, or 'tuned' or 'original'."
+    )
     parser.add_argument("--file_save_path",
                         type=str,
                         default="new_and_changed_files/",
@@ -81,7 +84,7 @@ class AutoExploreCopilot():
         - `file_save_path` (str): The path to save the new or changed files.
         - `password` (str): The password to use for the sandbox.
         - `interaction_type` (str): The type of the interaction, with choices
-        in ['train', 'inference', 'debug', 'inference_rl'].
+        in ['train', 'inference', 'debug'].
         - `model_type` (str): The type of the model to use, with choices
         in ['local', 'remote', 'null']. If `interaction_type` is 'train', then
         must be 'local'.
@@ -103,9 +106,8 @@ class AutoExploreCopilot():
         - `need_output_msgs` (bool): Whether to output the messages after each act.
         """
         assert interaction_type in [
-            "train", "inference", "debug", "inference_rl"
-        ], ("Only support interaction type in ['train', 'inference', 'debug', "
-            "'inference_rl'].")
+            "train", "inference", "debug"
+        ], ("Only support interaction type in ['train', 'inference', 'debug'].")
         assert model_type in [
             "local", "remote", "null"
         ], ("Only support model ype in ['local', 'remote', 'null'].")
@@ -172,22 +174,23 @@ class AutoExploreCopilot():
             assert target_file == "", "Only support target file for training."
 
         # 1. Setup memory and chat
-        if self.interaction_type in ["train", "debug", "inference_rl"]:
-            start_prompt = open(
-                "data_gen/prompt_templates/auto_explore/explore_prompt_rl_markov.md",
-                "r").read()
-        elif self.interaction_type == "inference":
-            start_prompt = open(
-                "data_gen/prompt_templates/auto_explore/explore_prompt.md",
-                "r").read()
-
-        self.start_prompt = start_prompt.format(
-            all_files=display_files_recursively(self.root), TASK=question)
+        # if self.interaction_type in ["train", "debug"]:
+        #     self.start_prompt = open(
+        #         "data_gen/prompt_templates/auto_explore/explore_prompt_rl_markov.md",
+        #         "r").read()
+        # elif self.interaction_type == "inference":
+        #     self.start_prompt = open(
+        #         "data_gen/prompt_templates/auto_explore/explore_prompt.md",
+        #         "r").read()
+        self.start_prompt = open(
+            "data_gen/prompt_templates/auto_explore/explore_prompt_rl_markov.md",
+            "r").read()
 
         # store the generation logs for training
         self.msgs = []
         self.generation_logs = []
         self.whole_msgs = []
+        self.cmd_hisotry = []
 
         # 2. Create sandbox environment
         if self.interaction_type == "train":
@@ -204,6 +207,7 @@ class AutoExploreCopilot():
                                            self.leaveout_fraction))
 
         # 3. Act
+        self.step = 0
         if self.interaction_type == "debug":
             # Directly use inner function _act()
             for cmd in ans_cmds:
@@ -228,32 +232,7 @@ class AutoExploreCopilot():
         # TODO: find the final answer
 
     def flush_msgs(self):
-        self.msgs = [(agent, msg) for agent, msg in self.msgs if msg]
-        if not hasattr(self, "last_flushed_msg"):
-            self.last_flushed_msg = 0
-            self.encoder = self.tokenizer if hasattr(
-                self, "tokenizer") else tiktoken.encoding_for_model("gpt-4")
-            self.token_length = 0
-
-        for msg in self.msgs[self.last_flushed_msg:]:
-            if self.need_output_msgs:
-                print(colored_string(msg))
-            self.token_length += len(self.encoder.encode(msg[1]))
-
-        self.last_flushed_msg = len(self.msgs)
-
-        # TODO: handle memory issues: e.g., cut, summarize, etc.
-
-        # Reset here to incorporate the last assistant messages
-        if self.token_length > self.max_token_length:
-            # self.dump()
-            # self.__init__(self.root, self.temperature, self.top_p,
-            #               self.max_token_length, self.model, self.data_path)
-            # self.msgs.append(
-            #     ("user",
-            #      "You have reached the maximum token length. Now restarted."))
-
-            raise Exception("Token limit exceeded.")
+        pass
 
     def get_whole_msgs(self) -> list:
         """
@@ -276,7 +255,7 @@ class AutoExploreCopilot():
             self.msgs.append(("user", str(e)))
             ret = "Continue"
 
-        if ret == "Continue":
+        if ret == "Continue" and self.step < 10:
             self.act()
 
     def _act(self, response: str = None) -> str:
@@ -284,10 +263,17 @@ class AutoExploreCopilot():
         Args:
         - `response` (str): The response to use for debugging.
         """
-        cur_msgs = [("system", self.start_prompt),
-                    ("user", "Your current working directory is: " +
-                     self.sandbox._get_relative_path(self.sandbox.cwd))
-                   ] + self.msgs
+        cur_msgs = [
+            ("system",
+             self.start_prompt.format(
+                 TASK=self.question,
+                 CWD=self.sandbox._get_relative_path(self.sandbox.cwd),
+                 FILES_UNDER_CWD=display_files_recursively(self.sandbox.cwd,
+                                                           depth=1),
+             )),
+            ("user", "Your command history:\n" + "\n".join(self.cmd_hisotry))
+        ] + self.msgs + [("user", "Now send me your command for the next step.")
+                        ]
         self.msgs = []
 
         if self.model_type == "local":
@@ -306,29 +292,36 @@ class AutoExploreCopilot():
             ret = Llama_chat_completion(
                 model=self.model,
                 tokenizer=self.tokenizer,
-                dialogs=[GPT_msgs_to_Llama_dialog(self.msgs)],
+                dialogs=[GPT_msgs_to_Llama_dialog(cur_msgs)],
                 generation_config=generation_config)[0]
 
             response = ret["generation"]["content"]
 
-            ret.update({"cost": 0})
+            ret.update({"cost": 0, "step": self.step})
             self.generation_logs.append(ret)
         elif self.model_type == "remote":
             # Get response from remote model
-            response = self.api.reply(agent_name=self.msgs[-1][0],
-                                      msg=self.msgs[-1][1],
+            response = self.api.reply(agent_name=cur_msgs[-1][0],
+                                      msg=cur_msgs[-1][1],
                                       num_response=1,
                                       temperature=self.temperature,
                                       top_p=self.top_p,
-                                      prev_msgs=self.msgs[:-1],
+                                      prev_msgs=cur_msgs[:-1],
                                       model=self.model_name)[0]
         else:
             # Use provided response
             assert response is not None, ("Must provide a response when "
                                           "debugging.")
 
+        # Increment step after querying the language model
+        self.step += 1
+
         cur_msgs.append(("assistant", response))
         self.whole_msgs.append(cur_msgs)
+
+        if self.need_output_msgs:
+            for msg in cur_msgs:
+                print(colored_string(msg))
 
         commands = extract_commands(response)
 
@@ -336,6 +329,7 @@ class AutoExploreCopilot():
 
         for cmd in commands:
             self.msgs.append(("user", "Executing: " + " ".join(cmd)))
+            self.cmd_hisotry.append(" ".join(cmd))
 
             if cmd[0] == "exit":
                 if len(commands) > 1:
@@ -416,6 +410,7 @@ class AutoExploreCopilot():
             "tokens": torch.Tensor,
             "generated_mask": list,
             "cost": float,
+            "step": int
         }
         """
         return self.generation_logs
@@ -440,5 +435,4 @@ if __name__ == "__main__":
     #"What is the culture statement of Opti Coffee?"
     #"Tell me details of Employee Appreciation Events."
     #"What does Opti Coffee's achievement prioritize?"
-        "What is the profit if the shipping cost is doubled in the "
-        "optimization code? Check solver/main.py.")
+        "What is Opti Coffee's achievement?")
