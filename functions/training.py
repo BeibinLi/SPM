@@ -13,10 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
 import pdb
-from transformers import GenerationConfig
+
+import torch
 from peft import PeftModel
+from transformers import GenerationConfig
 
 
 def policy_gradient_update(
@@ -79,7 +80,8 @@ def policy_gradient_update(
                     generation_config,
                     calc_probs=False,
                     calc_log_probs=True)
-            except Exception:
+            except Exception as e:
+                print(e)
                 pdb.set_trace()
             log_probs = probs_log_probs["log_probs"][0]
             if len(log_probs) == 0:

@@ -1,19 +1,23 @@
+import argparse
 import json
 import os
-import pickle
 import pdb
+import pickle
+import time
+
 from peft import PeftModel
-
-from gpt_api import get_llm
-from utils import (colored_string, display_files_recursively, extract_commands,
-                   SUPPORTED_CMDS)
-from model_utils import (transformer_text_completion)
-
-import argparse
-from auto_explore_sandbox import (LeaveoutOption, AutoExploreSandbox)
+from termcolor import colored
 from transformers import AutoTokenizer, GenerationConfig
+
+from auto_explore_sandbox import AutoExploreSandbox, LeaveoutOption
 from functions.cost import AutoExploreCostFunction
-from functions.terminate import (AutoExploreTerminateCriteria, AnytimeTerminate)
+from functions.terminate import AnytimeTerminate, AutoExploreTerminateCriteria
+from gpt_api import get_llm
+from model_utils import transformer_text_completion
+from utils import (SUPPORTED_CMDS, colored_string, display_files_recursively,
+                   extract_commands)
+
+DEBUG_MSG = False
 
 
 def get_args():
@@ -61,6 +65,7 @@ class AutoExploreCopilot():
             temperature: float,
             top_p: float,
             max_token_length: int,
+            max_new_tokens: int,
             file_save_path: str,
             password: str,
             interaction_type: str,
@@ -81,6 +86,7 @@ class AutoExploreCopilot():
         - `temperature` (float): The temperature of the language model.
         - `top_p` (float): The top_p of the language model.
         - `max_token_length` (int): The maximum total token length for chat completion.
+        - `max_new_tokens` (int): The maximum new tokens.
         - `file_save_path` (str): The path to save the new or changed files.
         - `password` (str): The password to use for the sandbox.
         - `interaction_type` (str): The type of the interaction, with choices
@@ -141,6 +147,7 @@ class AutoExploreCopilot():
         self.temperature = temperature
         self.top_p = top_p
         self.max_token_length = max_token_length
+        self.max_new_tokens = max_new_tokens
 
         self.password = password
         self.interaction_type = interaction_type
@@ -207,6 +214,8 @@ class AutoExploreCopilot():
                                            self.leaveout_fraction))
 
         # 3. Act
+        if DEBUG_MSG:
+            print(time.ctime(), "Start Acting!")
         self.step = 0
         if self.interaction_type == "debug":
             # Directly use inner function _act()
@@ -254,7 +263,12 @@ class AutoExploreCopilot():
         # except Exception as e:
         #     self.msgs.append(("user", str(e)))
         #     ret = "Continue"
+        tic = time.time()
         ret = self._act()
+        if DEBUG_MSG:
+            print(
+                colored("_act() Time elapsed : " + str(time.time() - tic),
+                        "blue"))
 
         if ret == "Continue" and self.step < 15:
             self.act()
@@ -283,6 +297,8 @@ class AutoExploreCopilot():
             # Set do_sample = True, num_beams = 1
             generation_config = GenerationConfig(
                 max_length=self.max_token_length,
+            # the `max_new_tokens` will override the `max_token_length`
+                max_new_tokens=self.max_new_tokens,
                 do_sample=True,
                 num_beams=1,
                 temperature=self.temperature,
@@ -296,13 +312,18 @@ class AutoExploreCopilot():
             #     tokenizer=self.tokenizer,
             #     dialogs=[GPT_msgs_to_Llama_dialog(cur_msgs)],
             #     generation_config=generation_config)[0]
+            tic = time.time()
             ret = transformer_text_completion(
                 model=self.model,
                 tokenizer=self.tokenizer,
                 prompts=["\n".join([msg[1] for msg in cur_msgs])],
                 generation_config=generation_config)[0]
-
             response = ret["generation"]["content"]
+            if DEBUG_MSG:
+                print(
+                    colored(
+                        "transformer_text_completion: Time elapsed: " +
+                        str(time.time() - tic), "yellow"), response)
 
             ret.update({"cost": 0, "step": self.step})
             self.generation_logs.append(ret)

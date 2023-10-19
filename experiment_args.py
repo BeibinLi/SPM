@@ -21,6 +21,7 @@ class ScriptArguments:
     lora_dropout: Optional[float] = field(default=0.1)
     lora_r: Optional[int] = field(default=64)
     max_seq_length: Optional[int] = field(default=2048)
+    max_new_tokens: Optional[int] = field(default=20)
     model_name: Optional[str] = field(
     #default="model/llama2/7B-chat",
         default="gpt2-xl",
