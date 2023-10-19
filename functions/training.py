@@ -58,29 +58,29 @@ def policy_gradient_update(
             # update total future cost
             tot_cost += step["cost"]
 
-            tokens_cut, mask_cut = [], []
-
             # cut off trailing tokens not covered by the mask
-            for i in range(len(step["generated_mask"]) - 1, -1, -1):
-                if step["generated_mask"][i]:
-                    tokens_cut = step["tokens"][:i + 1]
-                    mask_cut = step["generated_mask"][:i + 1]
-                    generation_config.max_length = i + 2
-                    break
-
-            input_tokens = torch.tensor(tokens_cut,
+            idx = max([
+                x for x in range(len(step["generated_mask"]))
+                if step["generated_mask"][x]
+            ])
+            generation_config.max_length = idx + 2
+            input_tokens = torch.tensor(step["tokens"][:idx + 1],
                                         dtype=torch.long,
                                         device=model.device).unsqueeze(0)
-            generated_mask = torch.tensor([mask_cut],
+            generated_mask = torch.tensor([step["generated_mask"][:idx + 1]],
                                           dtype=torch.bool,
                                           device=model.device)
 
             # policy gradient uses log probs
-            probs_log_probs = model.calc_probs_log_probs(input_tokens,
-                                                         generated_mask,
-                                                         generation_config,
-                                                         calc_probs=False,
-                                                         calc_log_probs=True)
+            try:
+                probs_log_probs = model.calc_probs_log_probs(
+                    input_tokens,
+                    generated_mask,
+                    generation_config,
+                    calc_probs=False,
+                    calc_log_probs=True)
+            except Exception:
+                pdb.set_trace()
             log_probs = probs_log_probs["log_probs"][0]
             if len(log_probs) == 0:
                 continue
