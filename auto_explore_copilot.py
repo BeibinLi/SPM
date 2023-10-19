@@ -7,7 +7,7 @@ from peft import PeftModel
 from gpt_api import get_llm
 from utils import (colored_string, display_files_recursively, extract_commands,
                    SUPPORTED_CMDS)
-from model_utils import GPT_msgs_to_Llama_dialog, Llama_chat_completion
+from model_utils import (transformer_text_completion)
 
 import argparse
 from auto_explore_sandbox import (LeaveoutOption, AutoExploreSandbox)
@@ -249,13 +249,14 @@ class AutoExploreCopilot():
         Wrapper function to interact with the language model for one step
         and call the possible next act().
         """
-        try:
-            ret = self._act()
-        except Exception as e:
-            self.msgs.append(("user", str(e)))
-            ret = "Continue"
+        # try:
+        #     ret = self._act()
+        # except Exception as e:
+        #     self.msgs.append(("user", str(e)))
+        #     ret = "Continue"
+        ret = self._act()
 
-        if ret == "Continue" and self.step < 10:
+        if ret == "Continue" and self.step < 15:
             self.act()
 
     def _act(self, response: str = None) -> str:
@@ -289,10 +290,16 @@ class AutoExploreCopilot():
                 pad_token_id=self.tokenizer.pad_token_id,
                 eos_token_id=self.tokenizer.eos_token_id,
             )
-            ret = Llama_chat_completion(
+
+            # ret = Llama_chat_completion(
+            #     model=self.model,
+            #     tokenizer=self.tokenizer,
+            #     dialogs=[GPT_msgs_to_Llama_dialog(cur_msgs)],
+            #     generation_config=generation_config)[0]
+            ret = transformer_text_completion(
                 model=self.model,
                 tokenizer=self.tokenizer,
-                dialogs=[GPT_msgs_to_Llama_dialog(cur_msgs)],
+                prompts=["\n".join([msg[1] for msg in cur_msgs])],
                 generation_config=generation_config)[0]
 
             response = ret["generation"]["content"]
@@ -323,7 +330,8 @@ class AutoExploreCopilot():
             for msg in cur_msgs:
                 print(colored_string(msg))
 
-        commands = extract_commands(response)
+        # Only consider the first command
+        commands = extract_commands(response, only_first=True)
 
         user_response_start = len(self.msgs)
 

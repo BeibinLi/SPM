@@ -179,74 +179,62 @@ def load_latest_model(llm_model, experiment_dir):
     return config, model
 
 
-def answer(question: str,
-           tokenizer: AutoTokenizer,
-           model: PeftModel,
-           rectifier: str = "",
-           max_new_tokens: int = 300,
-           temperature: float = 0.7,
-           top_p: float = 0.7,
-           num_return_sequences: int = 1,
-           messages: list = []):
+def transformer_text_completion(model: PeftModel, tokenizer: AutoTokenizer,
+                                prompts: list,
+                                generation_config: GenerationConfig) -> list:
     """
-    Generates an answer for the given question using the provided model and
-    tokenizer.
+    Completion for transformer models.
 
     Args:
-    - `question` (str): User's question.
-    - `tokenizer` (AutoTokenizer): Tokenizer associated with the model.
-    - `model` (PeftModel): Model to generate the answer.
-    - `rectifier` (str, optional): Text used for rectifying the model's output.
-            Defaults to an empty string.
+    - `model` (PeftModel): transformer model.
+    - `tokenizer` (AutoTokenizer): tokenizer.
+    - `prompts` (list): List of prompts.
+    - `generation_config` (GenerationConfig): Generation config for the model.
 
     Returns:
-    - str: Generated answer from the model.
+    - list: List of generated messages, with format:
+    [{
+        "generation": {
+            "role": str = "assistant",
+            "content": str
+        },
+        "tokens": torch.Tensor,
+        "generated_mask": list
+    }, ...]
     """
-    memory_str = [f"### {agent}: {msg}" for agent, msg in messages]
-    memory_str = "\n".join(memory_str)
+    assert len(
+        prompts) == 1, "Currently do not support batched prompts for training."
 
-    # TODO: a nicer way to format the prompt
-    if question.find("###") < 0:
-        prompt = f"### Human: {question}\n"
-    else:
-        prompt = question
-    if question.find("Assistant") < 0:
-        prompt += f"### Assistant: {rectifier}"
-    else:
-        prompt += f"{rectifier}"
+    # Clip to max_length-20
+    prompt_tokens = [
+        tokenizer.encode(x)[-generation_config.max_length + 20:]
+        for x in prompts
+    ]
 
-    prompt = memory_str + "\n" + prompt
+    max_len = max([len(x) for x in prompt_tokens])
+    inputs = torch.Tensor([(x + [tokenizer.pad_token_id] * (max_len - len(x)))
+                           for x in prompt_tokens]).long()
 
-    print(prompt)
+    outputs = model.generate(
+        inputs=inputs.to(model.device),
+        generation_config=generation_config,
+    )
 
-    batch = tokenizer(prompt,
-                      padding=True,
-                      truncation=True,
-                      return_tensors='pt')
-    batch = batch.to(f'cuda:{0}')
+    # outputs contain an EOS token in the end
+    # remove it when decoding
+    res = []
+    for t in outputs:
+        newly_generated = t[max_len:]
+        res.append({
+            "generation": {
+                "role": "assistant",
+                "content": tokenizer.decode(newly_generated)
+            },
+            "tokens": t,
+            "generated_mask": [False] * max_len + [True] * len(newly_generated),
+        })
 
-    with torch.cuda.amp.autocast():
-        output_tokens = model.generate(
-            input_ids=batch.input_ids,
-            max_new_tokens=max_new_tokens,
-            temperature=temperature,
-            top_p=top_p,
-            num_return_sequences=num_return_sequences,
-            pad_token_id=tokenizer.eos_token_id,
-            eos_token_id=tokenizer.eos_token_id,
-            num_beams=
-            num_return_sequences    # enable for beam search and multiple replies
-        )
-
-    answers = []
-    for response in output_tokens:
-        generated_text = tokenizer.decode(response, skip_special_tokens=True)
-
-        ans = generated_text.split("### Assistant:")[-1].replace(rectifier,
-                                                                 "").strip()
-        answers.append(ans)
-
-    return answers
+    return res
 
 
 def GPT_msgs_to_Llama_dialog(messages: list) -> Dialog:
@@ -424,11 +412,6 @@ def Llama_chat_completion(model: PeftModel, tokenizer: AutoTokenizer,
         generation_config=generation_config,
     )
 
-    def remove_trailing_eos(tokens):
-        for i in range(len(tokens) - 1, -1, -1):
-            if tokens[i] != tokenizer.eos_token_id:
-                return tokens[:i + 1]
-
     # outputs contain an EOS token in the end
     # remove it when decoding
     res = []
@@ -439,7 +422,7 @@ def Llama_chat_completion(model: PeftModel, tokenizer: AutoTokenizer,
                 "role":
                     "assistant",
                 "content":
-                    tokenizer.decode(remove_trailing_eos(newly_generated))
+                    tokenizer.decode(newly_generated)
                     if not unsafe else UNSAFE_ERROR,
             },
             "tokens": t,
@@ -591,7 +574,6 @@ def calc_probs_log_probs(
     model_inputs = self.prepare_inputs_for_generation(input_ids, **model_kwargs)
 
     # forward pass to get next token
-    # TODO: everytime, this line will take some memory. Try to resolve.
     outputs = self(**model_inputs, return_dict=True)
 
     # generate the axis to gather from
@@ -677,9 +659,9 @@ def get_bash_only_generated_masks(logs: list, tokenizer: AutoTokenizer) -> list:
     ret = []
     for log in logs:
         generated_mask = log["generated_mask"]
-        tokens = log["tokens"][generated_mask]
+        tokens = list(log["tokens"][generated_mask])
         response = tokenizer.decode(tokens)
-        blocks = extract_command_blocks(response)[1]
+        blocks = extract_command_blocks(response, only_first=True)[1]
 
         mask = []
         last_end = 0
@@ -693,7 +675,7 @@ def get_bash_only_generated_masks(logs: list, tokenizer: AutoTokenizer) -> list:
             last_end = block[1]
 
         # remaining non bash part
-        mask += [False] * len(tokenizer.encode(response[last_end:]))
+        mask += [False] * (len(tokens) - len(mask))
 
         final_mask = []
         j = 0
@@ -706,5 +688,8 @@ def get_bash_only_generated_masks(logs: list, tokenizer: AutoTokenizer) -> list:
             j += 1
 
         ret.append(final_mask)
+
+    if len(ret[0]) != len(logs[0]["generated_mask"]):
+        pdb.set_trace()
 
     return ret

@@ -27,15 +27,6 @@ from experiment_args import ScriptArguments
 
 from accelerate import Accelerator
 
-
-def encode_batch(batch, tokenizer, max_length):
-    return tokenizer(batch['text'],
-                     truncation=True,
-                     padding='max_length',
-                     max_length=max_length,
-                     return_tensors='pt')
-
-
 accelerator = Accelerator()
 local_rank = accelerator.process_index
 
@@ -64,17 +55,23 @@ training_arguments = TrainingArguments(
     ddp_find_unused_parameters=False)
 
 tokenizer, peft_config, model = create_and_prepare_model(script_args)
-tokenizer.padding_side = 'right'
 model.config.use_cache = False
 
 # Saving the arguments for reference in the future
 os.makedirs(training_arguments.output_dir, exist_ok=True)
 script_args.dump(os.path.join(training_arguments.output_dir, "setting.yml"))
-# TODO: save lora_r in setting.yml
 
-dataset = load_dataset("json",
-                       data_files="data/auto_explore_dataset_markov.jsonl",
-                       split="train").shuffle(seed=42)
+if "llama" in script_args.model_name.lower():
+    tokenizer.padding_side = 'right'
+    dataset = load_dataset(
+        "json",
+        data_files="data/auto_explore_dataset_markov_llama.jsonl",
+        split="train").shuffle(seed=42)
+else:
+    dataset = load_dataset(
+        "json",
+        data_files="data/auto_explore_dataset_markov_gpt.jsonl",
+        split="train").shuffle(seed=42)
 
 trainer = SFTTrainer(
     model=model,

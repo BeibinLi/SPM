@@ -3,17 +3,9 @@ import os
 import json
 import random
 from termcolor import colored
-from datasets import load_dataset
-from datasets.arrow_dataset import Dataset
 import shlex
 import string
 import tiktoken
-from data_gen.paths import (
-    pretrain_data_path,
-    finetune_data_path,
-    self_instruct_data_path,
-    pretrain_raw_data_path,
-)
 
 # exit should always be the last
 SUPPORTED_CMDS = [
@@ -246,73 +238,6 @@ def get_exp_id(result_path: str) -> str:
     return str(exp_id).zfill(3)
 
 
-def get_spm_dataset(phase: str,
-                    mode: str,
-                    with_self_instruct: bool = False) -> Dataset:
-    """Retrieves the specified dataset based on the provided phase and mode,
-     with an optional inclusion of self-instructed data.
-
-    This function loads datasets based on the given phase (e.g., 'baseline',
-    'pretrain', 'finetune') and mode (e.g., 'train', 'test'). Depending on the
-    provided phase, different data paths are chosen, and if
-    `with_self_instruct` is set to True, the self-instructed data path is also
-    considered. However, self-instructed data is not used in the 'finetune'
-     phase.
-
-    Args:
-    - phase (str): The phase of the data. Expected values are 'baseline',
-        'pretrain', or 'finetune'.
-    - mode (str): The mode of the data. Expected values are 'train' or 'test'.
-    - with_self_instruct (bool, optional): Whether to include self-instructed
-        data. Defaults to False.
-
-    Returns:
-    - Dataset: The specified dataset loaded from the chosen data files, shuffled
-         with a seed of 42.
-
-    Raises:
-    - ValueError: If an invalid mode or phase is provided.
-
-    Note and TODO:
-    The actual paths like 'pretrain_raw_data_path', 'self_instruct_data_path',
-        etc., are assumed to be available in the current scope. Make it more
-        flexible and formal.
-    """
-
-    if mode not in ["train", "test"]:
-        raise ValueError("Invalid mode: " + mode +
-                         ". Valid modes are: {train, test}")
-
-    if phase == "baseline":
-        data_files = [
-            pretrain_raw_data_path + mode + ".jsonl",
-        ]
-        if with_self_instruct:
-            data_files.append(self_instruct_data_path + mode + ".jsonl")
-    elif phase == "pretrain":
-        data_files = [
-            pretrain_data_path + mode + ".jsonl",
-        ]
-        if with_self_instruct:
-            data_files.append(self_instruct_data_path + mode + ".jsonl")
-    elif phase == "finetune":
-        data_files = [
-            finetune_data_path + mode + ".jsonl",
-        ]
-        if with_self_instruct:
-            print(
-                colored(
-                    "Warning: self-instructed data is not used in finetune phase",
-                    "yellow",
-                ))
-    else:
-        raise ValueError("Invalid phase: " + phase +
-                         ". Valid phases are: {baseline, pretrain, finetune}")
-
-    return load_dataset("json", data_files=data_files,
-                        split="train").shuffle(seed=42)
-
-
 def save_data(data: dict,
               train_path: str,
               test_path: str,
@@ -471,7 +396,8 @@ def get_file_names(command: list) -> list:
 
 
 def extract_command_blocks(response: str,
-                           identifier: str = "```bash") -> (list, list):
+                           identifier: str = "```bash",
+                           only_first: bool = False) -> (list, list):
     """
     Extracts command blocks encapsulated by markdown code blocks from a given
     response string.
@@ -482,6 +408,7 @@ def extract_command_blocks(response: str,
     - `identifier` (str, optional): The identifier used to recognize the start
         of the bash commands block. Defaults to "\`\`\`bash", which can also be
         "\`\`\`python"
+    - `only_first` (bool): Whether to only extract the first command block.
 
     Returns:
     - tuple: A tuple of two lists.
@@ -512,6 +439,10 @@ def extract_command_blocks(response: str,
     """
     commands = []
     positions = find_all_substr(response, identifier)
+
+    if only_first:
+        positions = positions[:1]
+
     end_positions = []
     for pos in positions:
         st = pos + len(identifier)
@@ -611,18 +542,19 @@ def split_command(command_block: str) -> list:
     return split
 
 
-def extract_commands(response: str) -> list:
+def extract_commands(response: str, only_first: bool = False) -> list:
     """
     Parse a LLM output to a list of commands, where
     each command is represented in a list of arguments (strs).
 
     Args:
-    - response (str): LLM's response.
+    - `response` (str): LLM's response.
+    - `only_first` (bool): Whether to only extract the first command.
 
     Returns:
     - list: a 2D list of commands.
     """
-    command_blocks = extract_command_blocks(response)[0]
+    command_blocks = extract_command_blocks(response, only_first=only_first)[0]
 
     parsed_commands = []
 
@@ -647,6 +579,9 @@ def extract_commands(response: str) -> list:
             # Ignore warnings
             cmd.insert(1, "-W ignore")
         ret.append(cmd)
+
+    if only_first:
+        ret = ret[:1]
 
     return ret
 
