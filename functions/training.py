@@ -59,7 +59,7 @@ def policy_gradient_update(
             tot_cost += step["cost"]
 
             # cut off trailing tokens not covered by the mask
-            idx = max([
+            idx = max([0] + [
                 x for x in range(len(step["generated_mask"]))
                 if step["generated_mask"][x]
             ])
