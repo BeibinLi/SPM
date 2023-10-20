@@ -17,8 +17,10 @@ Take using 7B as example, make sure you have all the weights in `<WEIGHT_PATH>/7
 ```
 ## Install HuggingFace Transformers from source
 
-pip install "transformers>=4.31"
+```bash
+pip install "transformers>=4.34"
 pip install "tokenizers>=0.13.3"
+```
 
 git clone git@github.com:huggingface/transformers.git
 # Or: git clone http://github.com/huggingface/transformers
@@ -50,7 +52,7 @@ to generate data for supervised pretraining.
 
 ## Run the code
 
-Install packages: `pip install termcolor, trl, peft, bitsandbytes, tiktoken`
+Install packages: `pip install termcolor trl peft bitsandbytes tiktoken`
 
 
 ### Supervised pretraining

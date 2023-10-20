@@ -17,7 +17,7 @@ from model_utils import transformer_text_completion
 from utils import (SUPPORTED_CMDS, colored_string, display_files_recursively,
                    extract_commands)
 
-DEBUG_MSG = False
+DEBUG_MSG = True
 
 
 def get_args():
@@ -353,6 +353,8 @@ class AutoExploreCopilot():
 
         # Only consider the first command
         commands = extract_commands(response, only_first=True)
+        if DEBUG_MSG:
+            print("Commands to run:", colored(commands, "blue"))
 
         user_response_start = len(self.msgs)
 
@@ -387,6 +389,8 @@ class AutoExploreCopilot():
                 self.terminate_criteria.update_status(**status)
 
                 self.msgs.append(("user", command_output))
+            print("Command Executed", colored(cmd, "blue"),
+                  colored(self.msgs[-1][1], "red"))
 
         if commands == []:
             self.msgs.append(

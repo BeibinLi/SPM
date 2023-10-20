@@ -54,7 +54,7 @@ script_args.max_steps = step_per_curriculum * len(dataset)
 # set up first curriculum
 cur_dataset_idx = 0
 cur_dataset = dataset[0]
-losts = []
+losses = []
 
 for epoch in tqdm(range(script_args.max_steps)):
     # move on to the next curriculum
@@ -108,9 +108,10 @@ for epoch in tqdm(range(script_args.max_steps)):
     tic = time.time()
     logs = copilot.get_generation_logs()
     toc = time.time()
-    print(
-        colored("copilot.get_generation_logs: Time elapsed: " + str(toc - tic),
-                "cyan"))
+    # print(
+    #     colored("copilot.get_generation_logs: Time elapsed: " +
+    #  str(toc - tic),
+    #             "cyan"))
 
     # calculate probs and log probs for only the bash commands
     tic = time.time()
@@ -118,13 +119,13 @@ for epoch in tqdm(range(script_args.max_steps)):
     for i in range(len(logs)):
         logs[i]["generated_mask"] = masks[i]
     toc = time.time()
-    print(
-        colored(
-            "get_bash_only_generated_masks: Time elapsed: " + str(toc - tic),
-            "cyan"))
+    # print(
+    #     colored(
+    #         "get_bash_only_generated_masks: Time elapsed: " + str(toc - tic),
+    #         "cyan"))
 
     # update the model
-    losts.append(
+    losses.append(
         policy_gradient_update(model=model,
                                generation_config=generation_config,
                                generation_results=[logs],
@@ -132,12 +133,12 @@ for epoch in tqdm(range(script_args.max_steps)):
                                scheduler=scheduler))
     toc = time.time()
     print(
-        colored("policy_gradient_update: Time elapsed: " + str(toc - toc),
-                "cyan"))
+        colored("policy_gradient_update: Time elapsed:",
+                f"{toc - toc:.2f}. Loss: {losses[-1]}", "cyan"))
 
     if (epoch + 1) % script_args.logging_steps == 0:
-        print(sum(losts) / len(losts))
-        losts = []
+        print(sum(losses) / len(losses))
+        losses = []
 
     if (epoch + 1) % script_args.save_steps == 0:
         _ckpt_path = ckpt_path + "epoch_" + str(epoch + 1) + "/"

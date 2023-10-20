@@ -1,11 +1,13 @@
 """Utility functions"""
-import os
 import json
+import os
 import random
-from termcolor import colored
 import shlex
 import string
+from typing import List
+
 import tiktoken
+from termcolor import colored
 
 # exit should always be the last
 SUPPORTED_CMDS = [
@@ -38,6 +40,112 @@ FULL_CMDS = SUPPORTED_CMDS + [
     "ssh",
     "scp",
 ]
+
+
+def list_all_actions(root: str,
+                     curr_dir: str,
+                     allowed_file_exts: List[str] = [
+                         ".py", ".txt", ".md", ".ipynb"
+                     ],
+                     shuffle: bool = True) -> List[str]:
+    """
+    Generate a list of actions to navigate through directories and read files
+    in a directory tree.
+
+    Args:
+        - root (str): the root directory of the whole project.
+        - curr_dir (str): The current directory to start the action list.
+        - allowed_file_exts (List[str]): List of allowed file extensions to
+            include in the action list.
+        - shuffle (bool): should we shuffle the actions. (Default to True)
+
+    Returns:
+        - action_list (List[str]): A list of strings, each representing a
+            "cd" or "cat" command.
+    """
+    action_list = ["cd .."] if root != curr_dir else []
+
+    # List all files and directories in the current directory
+    entries = os.listdir(curr_dir)
+
+    for entry in entries:
+        entry_path = os.path.join(curr_dir, entry)
+
+        # If the entry is a directory, navigate into it and explore
+        # its contents recursively
+        if os.path.isdir(entry_path):
+            action_list.append(f"cd {entry}")
+            # action_list.extend(
+            # list_all_actions(entry_path, allowed_file_exts))
+            # action_list.append("cd ..")
+
+        # If the entry is a file, read it using the "cat" command if its
+        # extension is allowed
+        elif os.path.isfile(entry_path):
+            _, ext = os.path.splitext(entry)
+            if ext in allowed_file_exts or not allowed_file_exts:
+                action_list.append(f"cat {entry}")
+
+    if shuffle:
+        random.shuffle(action_list)
+
+    return action_list
+
+
+def optimal_action(curr_dir: str, target_file: str, actions: List[str]) -> int:
+    """
+    Find the index of the optimal action that leads to reading a target file.
+
+    Args:
+        curr_dir (str): The root directory where the actions start.
+        target_file (str): The full path of the target file to be read.
+        actions (List[str]): List of actions ('cd ...', 'cat ...') returned from
+            the previous function.
+
+    Returns:
+        int: The index of the action that corresponds to reading the target
+            file, or -1 if not found.
+    """
+    # Normalize path
+    target_file = os.path.abspath(target_file)
+    curr_dir = os.path.abspath(curr_dir)
+    target_file = target_file.replace("\\", "/")    # windows format
+    curr_dir = curr_dir.replace("\\", "/")    # windows format
+
+    if not target_file.startswith(curr_dir):
+        optimal_action = "cd .."
+    elif os.path.dirname(target_file) == curr_dir:
+        optimal_action = f"cat {os.path.basename(target_file)}"
+    else:
+        next_lvl = os.path.dirname(target_file).replace(curr_dir, "")
+        next_lvl = next_lvl.split("/")
+        next_lvl = [x for x in next_lvl if x != ""][0]
+        optimal_action = f"cd {next_lvl}"
+
+    assert optimal_action in actions, (
+        f"Coding Error: Optimal action `{optimal_action}` not in action list.")
+    return actions.index(optimal_action)
+
+
+def action_prompt(action_list: List[str]) -> str:
+    """
+    Format a list of actions into a string where each action is prefixed by its
+        index.
+
+    Args:
+        action_list (List[str]): A list of actions ('cd ...', 'cat ...').
+
+    Returns:
+        str: A formatted string where each line is an index followed by the
+            corresponding action.
+    """
+    formatted_actions = "\n" + "-" * 10 + "\n"
+    formatted_actions += "You can choose one action below:\n"
+    for i, action in enumerate(action_list):
+        formatted_actions += f"{i+1}: {action}\n"
+    formatted_actions += "Give me your action (an integer): "
+    return formatted_actions
+
 
 # Common programming language suffixes
 CODE_SUFFIXES = (".py", ".c", ".cpp", ".cxx", ".cc", ".h", ".hpp", ".hxx",
@@ -84,7 +192,8 @@ def hide_root(text, root) -> str:
     - str: The text with all root paths hidden.
     """
     # Regular expression pattern to match absolute file paths.
-    # This pattern assumes that paths start with / followed by any non-space characters.
+    # This pattern assumes that paths start with / followed by
+    # any non-space characters.
     text = text.replace(root, "")
     text = text.replace(root[:-1], ".")
     return text
@@ -143,8 +252,8 @@ def display_files_recursively(
         for dir_name in os.listdir(folder_path):
             dir_path = os.path.join(folder_path, dir_name)
             if os.path.isdir(dir_path):
-                # Recursively check if sub-directory contains valid files or folders
-                # with valid files
+                # Recursively check if sub-directory contains valid files or
+                # folders with valid files
                 ret += display_files_recursively(dir_path, indent + "    ",
                                                  file_suffixes, depth - 1)
 
@@ -614,7 +723,7 @@ def parse_echo(command: list) -> list:
     The `"` characters are added to the message to be echoed to ensure that
         the message is encapsulated. Only run in Linux.
     """
-    assert command[0] == "echo", "The command is not an echo command."
+    assert command[0] == "echo", ("The command is not an echo command.")
 
     if command[1] == '-e':
         command = command[:1] + command[2:]
