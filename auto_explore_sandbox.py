@@ -155,7 +155,7 @@ class AutoExploreSandbox:
             if target_dir.startswith(".."):
                 return (
                     f"Error: You cannot access file {target_dir} "
-                    f"outside the repo! You are now at {self._get_relative_path()}"
+                    f"outside the repo! You are now at {self._get_relative_path('.')}"
                 )
 
         if not is_creator:
@@ -213,7 +213,7 @@ class AutoExploreSandbox:
             if cmd[0] == "cd":
                 # cd cannot be handled by subprocess
                 os.chdir(unwrap_path(cmd[1]))
-                return ("Success: Now at " + self._get_relative_path(), {})
+                return ("Success: Now at " + self._get_relative_path("."), {})
             elif cmd[0] == "id":
                 abs_path = self._get_absolute_path(unwrap_path(cmd[1]))
                 if abs_path.startswith("Error:"):
@@ -316,14 +316,14 @@ class AutoExploreSandbox:
 
         return target_dirs
 
-    def _get_absolute_path(self, path: str = ".") -> str:
+    def _get_absolute_path(self, path) -> str:
         """
         Get the absolute path of a given path relative to cwd in the
         sandbox.
 
         Args:
         - `path` (str): The path with respect to cwd to be converted to
-        absolute path. Default to '.', i.e., return relative cwd.
+        absolute path.
 
         Returns:
         - str: The absolute path.
@@ -352,14 +352,14 @@ class AutoExploreSandbox:
 
         return absolute_path
 
-    def _get_relative_path(self, path: str = ".") -> str:
+    def _get_relative_path(self, path: str) -> str:
         """
         Get the relative path with respect to the sandbox directory of a given
         path relative to cwd in the sandbox.
 
         Args:
         - `path` (str): The path with respect to cwd to be converted to
-        relative path. Default to '.', i.e., return relative cwd.
+        relative path.
 
         Returns:
         - str: The relative path.

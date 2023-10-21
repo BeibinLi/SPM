@@ -133,8 +133,9 @@ for epoch in tqdm(range(script_args.max_steps)):
                                scheduler=scheduler))
     toc = time.time()
     print(
-        colored("policy_gradient_update: Time elapsed:",
-                f"{toc - toc:.2f}. Loss: {losses[-1]}", "cyan"))
+        colored(
+            "policy_gradient_update: Time elapsed:" +
+            f"{toc - toc:.2f}. Loss: {losses[-1]}", "cyan"))
 
     if (epoch + 1) % script_args.logging_steps == 0:
         print(sum(losses) / len(losses))

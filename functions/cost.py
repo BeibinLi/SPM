@@ -6,8 +6,24 @@ class AutoExploreCostFunction:
     Cost function for auto explore.
     """
 
+    def __init__(self, *kwargs):
+        pass
+
     def call(self, **kwargs) -> float:
         pass
+
+
+class StepCost(AutoExploreCostFunction):
+    """
+    Whatever the command is, the cost is always 1.
+    """
+
+    def call(self, **kwargs) -> float:
+        """
+        Returns:
+        - float: 1.
+        """
+        return 1
 
 
 class NumTokenCost(AutoExploreCostFunction):

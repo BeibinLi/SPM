@@ -80,6 +80,7 @@ def policy_gradient_update(
                     generation_config,
                     calc_probs=False,
                     calc_log_probs=True)
+                print(probs_log_probs)
             except Exception as e:
                 print(e)
                 pdb.set_trace()

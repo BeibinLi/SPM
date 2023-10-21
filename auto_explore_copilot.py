@@ -3,7 +3,7 @@ import json
 import os
 import pdb
 import pickle
-import time
+import string
 
 from peft import PeftModel
 from termcolor import colored
@@ -14,10 +14,12 @@ from functions.cost import AutoExploreCostFunction
 from functions.terminate import AnytimeTerminate, AutoExploreTerminateCriteria
 from gpt_api import get_llm
 from model_utils import transformer_text_completion
-from utils import (SUPPORTED_CMDS, colored_string, display_files_recursively,
-                   extract_commands)
+from utils import (SUPPORTED_CMDS, colored_string, wrap_path, extract_commands,
+                   list_all_actions)
 
 DEBUG_MSG = True
+WAIT_FOR_INPUT = "<<<Wait for input>>>"
+CHOICES = string.digits + string.ascii_letters
 
 
 def get_args():
@@ -41,6 +43,12 @@ def get_args():
         type=int,
         default=2048,
         help="The maximum token length in a chat. If exceed this amount, the "
+        " chat will be reset.")
+    parser.add_argument(
+        "--max_new_tokens",
+        type=int,
+        default=2048,
+        help="The maximum new tokens in a chat. If exceed this amount, the "
         " chat will be reset.")
     parser.add_argument(
         "--model",
@@ -213,14 +221,22 @@ class AutoExploreCopilot():
             leaveout_option=LeaveoutOption([target_file],
                                            self.leaveout_fraction))
 
+        # Initialize the files that have been visited for command filtering
+        self._catted_files = []
+        self._ided_files = []
+
         # 3. Act
-        if DEBUG_MSG:
-            print(time.ctime(), "Start Acting!")
         self.step = 0
         if self.interaction_type == "debug":
             # Directly use inner function _act()
-            for cmd in ans_cmds:
-                self._act(f"```bash\n{cmd}\n```")
+            if ans_cmds == []:
+                while True:
+                    ret = self._act(WAIT_FOR_INPUT)
+                    if ret == "Exit":
+                        break
+            else:
+                for cmd in ans_cmds:
+                    self._act(cmd)
         else:
             self.act()
 
@@ -263,33 +279,40 @@ class AutoExploreCopilot():
         # except Exception as e:
         #     self.msgs.append(("user", str(e)))
         #     ret = "Continue"
-        tic = time.time()
         ret = self._act()
-        if DEBUG_MSG:
-            print(
-                colored("_act() Time elapsed : " + str(time.time() - tic),
-                        "blue"))
 
         if ret == "Continue" and self.step < 15:
             self.act()
 
-    def _act(self, response: str = None) -> str:
+    def _act(self, cmd: str = None) -> str:
         """
         Args:
-        - `response` (str): The response to use for debugging.
+        - `cmd` (str): The command to use for debugging.
         """
+        cwd = os.path.relpath(self.sandbox.cwd, self.sandbox.sandbox_dir)
+        files_under_cwd = os.listdir(self.sandbox.cwd)
+        cmd_list = self._filter_commands(sandbox_cwd=cwd,
+                                         commands=list_all_actions(
+                                             root=self.sandbox.sandbox_dir,
+                                             curr_dir=self.sandbox.cwd,
+                                         ))
         cur_msgs = [
             ("system",
              self.start_prompt.format(
                  TASK=self.question,
-                 CWD=self.sandbox._get_relative_path(self.sandbox.cwd),
-                 FILES_UNDER_CWD=display_files_recursively(self.sandbox.cwd,
-                                                           depth=1),
-             )),
-            ("user", "Your command history:\n" + "\n".join(self.cmd_hisotry))
-        ] + self.msgs + [("user", "Now send me your command for the next step.")
-                        ]
+                 CWD=cwd,
+                 FILES_UNDER_CWD="\n".join(
+                     [wrap_path(f) for f in files_under_cwd]),
+                 CMD_HIST="\n".join(self.cmd_hisotry),
+                 EXEC_RES="\n".join([msg[1] for msg in self.msgs]),
+                 CMD_LIST="\n".join([
+                     CHOICES[i] + ". " + cmd for i, cmd in enumerate(cmd_list)
+                 ])))
+        ]
         self.msgs = []
+
+        if self.need_output_msgs:
+            print(colored_string(cur_msgs[0]))
 
         if self.model_type == "local":
             # Get response from local model
@@ -312,18 +335,12 @@ class AutoExploreCopilot():
             #     tokenizer=self.tokenizer,
             #     dialogs=[GPT_msgs_to_Llama_dialog(cur_msgs)],
             #     generation_config=generation_config)[0]
-            tic = time.time()
             ret = transformer_text_completion(
                 model=self.model,
                 tokenizer=self.tokenizer,
                 prompts=["\n".join([msg[1] for msg in cur_msgs])],
                 generation_config=generation_config)[0]
             response = ret["generation"]["content"]
-            if DEBUG_MSG:
-                print(
-                    colored(
-                        "transformer_text_completion: Time elapsed: " +
-                        str(time.time() - tic), "yellow"), response)
 
             ret.update({"cost": 0, "step": self.step})
             self.generation_logs.append(ret)
@@ -338,8 +355,12 @@ class AutoExploreCopilot():
                                       model=self.model_name)[0]
         else:
             # Use provided response
-            assert response is not None, ("Must provide a response when "
-                                          "debugging.")
+            assert cmd is not None, ("Must provide a response when "
+                                     "debugging.")
+            if cmd == WAIT_FOR_INPUT:
+                response = input("Input a command:")
+            else:
+                response = CHOICES[cmd_list.index(cmd)]
 
         # Increment step after querying the language model
         self.step += 1
@@ -348,19 +369,18 @@ class AutoExploreCopilot():
         self.whole_msgs.append(cur_msgs)
 
         if self.need_output_msgs:
-            for msg in cur_msgs:
-                print(colored_string(msg))
+            print(colored_string(cur_msgs[1]))
 
         # Only consider the first command
-        commands = extract_commands(response, only_first=True)
-        if DEBUG_MSG:
-            print("Commands to run:", colored(commands, "blue"))
-
-        user_response_start = len(self.msgs)
+        assert response[0] in CHOICES, ("The response must start with a "
+                                        "choice.")
+        idx = CHOICES.index(response[0])
+        commands = extract_commands(f"```bash\n{cmd_list[idx]}\n```",
+                                    only_first=True)
 
         for cmd in commands:
             self.msgs.append(("user", "Executing: " + " ".join(cmd)))
-            self.cmd_hisotry.append(" ".join(cmd))
+            self._update_cmd_history(cwd, " ".join(cmd))
 
             if cmd[0] == "exit":
                 if len(commands) > 1:
@@ -400,7 +420,7 @@ class AutoExploreCopilot():
 
         if self.interaction_type == "train":
             self.generation_logs[-1]["cost"] = self.cost_function.call(
-                user_msgs=self.msgs[user_response_start:])
+                user_msgs=self.msgs)
 
         return "Continue"
 
@@ -448,6 +468,48 @@ class AutoExploreCopilot():
         """
         return self.generation_logs
 
+    def _filter_commands(self, sandbox_cwd: str, commands: list) -> list:
+        """
+        Filter out available commands based on the cwd in the sandbox and
+        command history. Prevents repeated access of a same file.
+
+        Args:
+        - `sandbox_cwd` (str): The cwd in the sandbox.
+        - `commands` (list): The commands to filter.
+
+        Returns:
+        - list: The available commands.
+        """
+        ret = []
+        for command in commands:
+            if command.startswith("cat"):
+                file = sandbox_cwd + command[4:]
+                if file not in self._catted_files:
+                    ret.append(command)
+            elif command.startswith("id"):
+                file = sandbox_cwd + command[3:]
+                if file not in self._ided_files:
+                    ret.append(command)
+            else:
+                ret.append(command)
+        return ret
+
+    def _update_cmd_history(self, sandbox_cwd: str, command: string):
+        """
+        Maintain command history.
+
+        Args:
+        - `sandbox_cwd` (str): The cwd in the sandbox.
+        - `command` (str): The command to execute.
+        """
+        self.cmd_hisotry.append(command)
+        if command.startswith("cat"):
+            file = sandbox_cwd + command[4:]
+            self._catted_files.append(file)
+        elif command.startswith("id"):
+            file = sandbox_cwd + command[3:]
+            self._ided_files.append(file)
+
 
 if __name__ == "__main__":
     args = get_args()
@@ -456,10 +518,11 @@ if __name__ == "__main__":
         temperature=args.temperature,
         top_p=args.top_p,
         max_token_length=args.max_token_length,
+        max_new_tokens=args.max_new_tokens,
         file_save_path=os.path.abspath(args.file_save_path) + "/",
         password="zrl",
-        interaction_type="inference",
-        model_type="remote",
+        interaction_type="debug",
+        model_type="null",
         model_name=args.model)
     agent.answer(
     #"Plot the price of bean Excelsa between Jun 2021 and 2022 Aug."

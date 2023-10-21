@@ -53,17 +53,23 @@ def list_all_actions(root: str,
     in a directory tree.
 
     Args:
-        - root (str): the root directory of the whole project.
-        - curr_dir (str): The current directory to start the action list.
-        - allowed_file_exts (List[str]): List of allowed file extensions to
-            include in the action list.
-        - shuffle (bool): should we shuffle the actions. (Default to True)
+    - `root` (str): the root directory (absolute path) of the whole project.
+    - `curr_dir` (str): The current directory (absolute path) to start the
+    action list.
+    - `allowed_file_exts` (List[str]): List of allowed file extensions to
+        include in the action list.
+    - `shuffle` (bool): should we shuffle the actions. (Default to True)
 
     Returns:
-        - action_list (List[str]): A list of strings, each representing a
-            "cd" or "cat" command.
+    - `action_list` (List[str]): A list of strings, each representing a
+        "cd" or "cat" command.
     """
+    assert curr_dir.startswith(root), (
+        f"Coding Error: Current directory `{curr_dir}` not under root `{root}`."
+    )
+
     action_list = ["cd .."] if root != curr_dir else []
+    action_list.append("exit")
 
     # List all files and directories in the current directory
     entries = os.listdir(curr_dir)
@@ -74,17 +80,18 @@ def list_all_actions(root: str,
         # If the entry is a directory, navigate into it and explore
         # its contents recursively
         if os.path.isdir(entry_path):
-            action_list.append(f"cd {entry}")
+            action_list.append(f"cd {wrap_path(entry)}")
             # action_list.extend(
             # list_all_actions(entry_path, allowed_file_exts))
             # action_list.append("cd ..")
 
-        # If the entry is a file, read it using the "cat" command if its
-        # extension is allowed
+        # If the entry is a file, read it using the "cat" command or identify
+        # it using the "id" command if its extension is allowed
         elif os.path.isfile(entry_path):
             _, ext = os.path.splitext(entry)
             if ext in allowed_file_exts or not allowed_file_exts:
-                action_list.append(f"cat {entry}")
+                action_list.append(f"cat {wrap_path(entry)}")
+                action_list.append(f"id {wrap_path(entry)}")
 
     if shuffle:
         random.shuffle(action_list)
@@ -160,24 +167,28 @@ TEXT_SUFFIXES = (".txt", ".md")
 
 def list_files(directory: str, ignore_hidden: bool = True) -> list:
     """
-    List all files in a directory (recursively).
+    List all files in a directory recursively.
 
     Args:
-    - directory (str): The path to the directory to list files from.
-    - ignore_hidden (bool, optional): Whether to ignore hidden files.
+    - `directory` (str): The path to the directory to list files from.
+    - `ignore_hidden` (bool, optional): Whether to ignore hidden files.
         Defaults to True.
 
     Returns:
-    - list of str: A list of file paths relative to the input directory.
+    - list: A list of file paths relative to the input directory.
     """
-    for root, dirs, files in os.walk(directory):
-        if ignore_hidden:
-            dirs[:] = [d for d in dirs if not d.startswith('.')]
 
-        for file in files:
-            if ignore_hidden and file.startswith("."):
-                continue
-            yield os.path.relpath(os.path.join(root, file), directory)
+    def generator():
+        for root, dirs, files in os.walk(directory):
+            if ignore_hidden:
+                dirs[:] = [d for d in dirs if not d.startswith('.')]
+
+            for file in files:
+                if ignore_hidden and file.startswith("."):
+                    continue
+                yield os.path.relpath(os.path.join(root, file), directory)
+
+    return list(generator())
 
 
 def hide_root(text, root) -> str:
@@ -765,6 +776,21 @@ def handle_ls(stdout: str) -> str:
 
     files = stdout.split("\n")
     return '\n'.join([f"'{x}'" for x in files if x != ""])
+
+
+def wrap_path(filename: str) -> str:
+    """
+    Add quotes around a path if it contains spaces.
+
+    Args:
+    - `filename` (str): The path to wrap.
+
+    Returns:
+    - str: The wrapped path.
+    """
+    if " " in filename:
+        filename = f'"{filename}"'
+    return filename
 
 
 def unwrap_path(filename: str) -> str:

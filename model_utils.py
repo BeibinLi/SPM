@@ -689,7 +689,4 @@ def get_bash_only_generated_masks(logs: list, tokenizer: AutoTokenizer) -> list:
 
         ret.append(final_mask)
 
-    if len(ret[0]) != len(logs[0]["generated_mask"]):
-        pdb.set_trace()
-
     return ret
