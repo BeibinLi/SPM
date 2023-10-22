@@ -6,7 +6,6 @@ import pickle
 import string
 
 from peft import PeftModel
-from termcolor import colored
 from transformers import AutoTokenizer, GenerationConfig
 
 from auto_explore_sandbox import AutoExploreSandbox, LeaveoutOption
@@ -20,6 +19,7 @@ from utils import (SUPPORTED_CMDS, colored_string, wrap_path, extract_commands,
 DEBUG_MSG = True
 WAIT_FOR_INPUT = "<<<Wait for input>>>"
 CHOICES = string.digits + string.ascii_letters
+RESPONSE_TEMPLATE = "# Your command (use only the choice)"
 
 
 def get_args():
@@ -207,6 +207,10 @@ class AutoExploreCopilot():
         self.whole_msgs = []
         self.cmd_hisotry = []
 
+        # Initialize the files that have been visited for command filtering
+        self._catted_files = []
+        self._ided_files = []
+
         # 2. Create sandbox environment
         if self.interaction_type == "train":
             self.supported_cmds = [
@@ -220,10 +224,6 @@ class AutoExploreCopilot():
             supported_cmds=self.supported_cmds,
             leaveout_option=LeaveoutOption([target_file],
                                            self.leaveout_fraction))
-
-        # Initialize the files that have been visited for command filtering
-        self._catted_files = []
-        self._ided_files = []
 
         # 3. Act
         self.step = 0
@@ -307,7 +307,7 @@ class AutoExploreCopilot():
                  EXEC_RES="\n".join([msg[1] for msg in self.msgs]),
                  CMD_LIST="\n".join([
                      CHOICES[i] + ". " + cmd for i, cmd in enumerate(cmd_list)
-                 ])))
+                 ])) + RESPONSE_TEMPLATE)
         ]
         self.msgs = []
 
@@ -409,8 +409,6 @@ class AutoExploreCopilot():
                 self.terminate_criteria.update_status(**status)
 
                 self.msgs.append(("user", command_output))
-            print("Command Executed", colored(cmd, "blue"),
-                  colored(self.msgs[-1][1], "red"))
 
         if commands == []:
             self.msgs.append(

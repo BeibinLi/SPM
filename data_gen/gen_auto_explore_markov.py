@@ -4,13 +4,11 @@ from experiment_args import ScriptArguments
 
 from auto_explore_copilot import AutoExploreCopilot
 from functions.terminate import AnytimeTerminate
-from model_utils import (GPT_msgs_to_Llama_dialog,
-                         build_Llama_prompt_from_dialogs)
 
 
 def dump(data: list, filename: str):
     with open(filename, "w") as f:
-        f.write("\n".join([json.dumps({"text": d}) for d in data]))
+        f.write("\n".join([json.dumps(d) for d in data]))
 
 
 parser = HfArgumentParser(ScriptArguments)
@@ -28,7 +26,8 @@ tokenizer.pad_token = tokenizer.eos_token
 auto_explore_dataset_gpt, auto_explore_dataset_llama = [], []
 
 for data in dataset:
-    for cmds in [data["commands"], data["optimal_path"]]:
+    #for cmds in [data["commands"], data["optimal_path"]]:
+    for cmds in [data["optimal_path"]]:
         cmds = [cmd for cmd in cmds if cmd != "ls"]
         cmds.append(cmds[-1].replace("cat", "id"))
         cmds.append("exit")
@@ -38,6 +37,7 @@ for data in dataset:
             temperature=0.6,
             top_p=0.9,
             max_token_length=32768,
+            max_new_tokens=32768,
             file_save_path="new_and_changed_files/",
             password="zrl",
             interaction_type="debug",
@@ -48,24 +48,25 @@ for data in dataset:
             terminate_criteria=AnytimeTerminate(),
             need_output_msgs=False)
 
-        copilot.answer(question=data["question"], ans_cmds=cmds)
+        for _ in range(10):
+            copilot.answer(question=data["question"], ans_cmds=cmds)
 
-        whole_msgs = copilot.get_whole_msgs()
+            whole_msgs = copilot.get_whole_msgs()
 
-        # GPT-2 format
-        auto_explore_dataset_gpt += [
-            "\n".join([msg[1] for msg in msgs]) for msgs in whole_msgs
-        ]
+            # GPT-2 format
+            auto_explore_dataset_gpt += [{
+                "text": "\n".join([msg[1] for msg in msgs[:]]),
+            } for msgs in whole_msgs]
 
-        # Llama2 format
-        dialogs = [GPT_msgs_to_Llama_dialog(msgs) for msgs in whole_msgs]
+            # Llama2 format
+            # dialogs = [GPT_msgs_to_Llama_dialog(msgs) for msgs in whole_msgs]
 
-        prompt_tokens, _ = build_Llama_prompt_from_dialogs(
-            tokenizer=tokenizer, dialogs=dialogs, check_last_user=False)
+            # prompt_tokens, _ = build_Llama_prompt_from_dialogs(
+            #     tokenizer=tokenizer, dialogs=dialogs, check_last_user=False)
 
-        auto_explore_dataset_llama += [
-            tokenizer.decode(pt) for pt in prompt_tokens
-        ]
+            # auto_explore_dataset_llama += [
+            #     tokenizer.decode(pt) for pt in prompt_tokens
+            # ]
 
 dump(auto_explore_dataset_gpt, "data/auto_explore_dataset_markov_gpt.jsonl")
-dump(auto_explore_dataset_llama, "data/auto_explore_dataset_markov_llama.jsonl")
+# dump(auto_explore_dataset_llama, "data/auto_explore_dataset_markov_llama.jsonl")

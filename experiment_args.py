@@ -20,11 +20,11 @@ class ScriptArguments:
     lora_alpha: Optional[int] = field(default=16)
     lora_dropout: Optional[float] = field(default=0.1)
     lora_r: Optional[int] = field(default=64)
-    max_seq_length: Optional[int] = field(default=2048)
-    max_new_tokens: Optional[int] = field(default=20)
+    max_seq_length: Optional[int] = field(default=1024)
+    max_new_tokens: Optional[int] = field(default=1)
     model_name: Optional[str] = field(
     #default="model/llama2/7B-chat",
-        default="gpt2-xl",
+        default="gpt2",
     #default="tiiuae/falcon-7b-instruct",
         metadata={
             "help": "The model that you want to train from the Hugging "
@@ -73,7 +73,7 @@ class ScriptArguments:
         metadata={"help": "Enables bf16 training."},
     )
     packing: Optional[bool] = field(
-        default=True,
+        default=False,
         metadata={"help": "Use packing dataset creating."},
     )
     gradient_checkpointing: Optional[bool] = field(

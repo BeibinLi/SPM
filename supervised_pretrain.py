@@ -13,19 +13,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import glob
+import os
 import torch
-from datasets import load_dataset
-from transformers import (HfArgumentParser, TrainingArguments)
-from peft.tuners.lora import LoraLayer
-from trl import SFTTrainer
-
-from utils import get_exp_id
-from model_utils import create_and_prepare_model
-from experiment_args import ScriptArguments
-
 from accelerate import Accelerator
+from datasets import load_dataset
+from peft.tuners.lora import LoraLayer
+from transformers import HfArgumentParser, TrainingArguments
+
+from auto_explore_copilot import RESPONSE_TEMPLATE
+from experiment_args import ScriptArguments
+from trl import SFTTrainer, DataCollatorForCompletionOnlyLM
+from model_utils import create_and_prepare_model
+from utils import get_exp_id
 
 accelerator = Accelerator()
 local_rank = accelerator.process_index
@@ -73,13 +73,17 @@ else:
         data_files="data/auto_explore_dataset_markov_gpt.jsonl",
         split="train").shuffle(seed=42)
 
+collator = DataCollatorForCompletionOnlyLM(RESPONSE_TEMPLATE + "\n",
+                                           tokenizer=tokenizer)
+
 trainer = SFTTrainer(
     model=model,
     train_dataset=dataset,
-    peft_config=peft_config,
     dataset_text_field="text",
+    peft_config=peft_config,
     max_seq_length=script_args.max_seq_length,
     tokenizer=tokenizer,
+    data_collator=collator,
     args=training_arguments,
     #packing=script_args.packing
 )
