@@ -64,7 +64,7 @@ def policy_gradient_update(
                 x for x in range(len(step["generated_mask"]))
                 if step["generated_mask"][x]
             ])
-            generation_config.max_length = idx + 2
+            generation_config.max_length = idx + 1
             input_tokens = torch.tensor(step["tokens"][:idx + 1],
                                         dtype=torch.long,
                                         device=model.device).unsqueeze(0)
@@ -80,15 +80,15 @@ def policy_gradient_update(
                     generation_config,
                     calc_probs=False,
                     calc_log_probs=True)
-                print(probs_log_probs)
             except Exception as e:
                 print(e)
                 pdb.set_trace()
             log_probs = probs_log_probs["log_probs"][0]
+            print(log_probs)
             if len(log_probs) == 0:
                 continue
             # normalize the cost
-            (tot_cost / len(step["tokens"]) * sum(log_probs)).backward()
+            (-tot_cost / len(step["tokens"]) * sum(log_probs)).backward()
             for param in model.parameters():
                 if param.grad is not None:
                     if torch.isnan(param.grad).any() or torch.isinf(

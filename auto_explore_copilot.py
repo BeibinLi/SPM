@@ -372,11 +372,12 @@ class AutoExploreCopilot():
             print(colored_string(cur_msgs[1]))
 
         # Only consider the first command
-        assert response[0] in CHOICES, ("The response must start with a "
-                                        "choice.")
-        idx = CHOICES.index(response[0])
-        commands = extract_commands(f"```bash\n{cmd_list[idx]}\n```",
-                                    only_first=True)
+        if response[0] in CHOICES:
+            idx = CHOICES.index(response[0])
+            commands = extract_commands(f"```bash\n{cmd_list[idx]}\n```",
+                                        only_first=True)
+        else:
+            commands = []
 
         for cmd in commands:
             self.msgs.append(("user", "Executing: " + " ".join(cmd)))
@@ -519,8 +520,8 @@ if __name__ == "__main__":
         max_new_tokens=args.max_new_tokens,
         file_save_path=os.path.abspath(args.file_save_path) + "/",
         password="zrl",
-        interaction_type="debug",
-        model_type="null",
+        interaction_type="inference",
+        model_type="remote",
         model_name=args.model)
     agent.answer(
     #"Plot the price of bean Excelsa between Jun 2021 and 2022 Aug."

@@ -14,8 +14,7 @@ from experiment_args import ScriptArguments
 from functions.cost import KeywordCost, NumTokenCost, SynthesizedCost
 from functions.terminate import IdentifyFileTerminate
 from functions.training import policy_gradient_update
-from model_utils import (calc_probs_log_probs, create_and_prepare_model,
-                         get_bash_only_generated_masks)
+from model_utils import (calc_probs_log_probs, create_and_prepare_model)
 from utils import build_curriculum, get_exp_id
 
 root = os.path.expanduser("~/Coffee_Roasting_Dataset/data")
@@ -95,34 +94,18 @@ for epoch in tqdm(range(script_args.max_steps)):
                                  need_output_msgs=False)
 
     # rollout a trajectory
-    tic = time.time()
     copilot.answer(question=data["question"], target_file=data["filename"])
-    toc = time.time()
-
-    print(colored("copilot.answer: Time elapsed: " + str(toc - tic), "cyan"))
 
     # dump the messages
     with open(ckpt_path + "epoch_" + str(epoch + 1) + ".json", "w") as f:
         json.dump(copilot.get_whole_msgs(), f)
 
-    tic = time.time()
     logs = copilot.get_generation_logs()
-    toc = time.time()
-    # print(
-    #     colored("copilot.get_generation_logs: Time elapsed: " +
-    #  str(toc - tic),
-    #             "cyan"))
 
     # calculate probs and log probs for only the bash commands
-    tic = time.time()
-    masks = get_bash_only_generated_masks(logs=logs, tokenizer=tokenizer)
-    for i in range(len(logs)):
-        logs[i]["generated_mask"] = masks[i]
-    toc = time.time()
-    # print(
-    #     colored(
-    #         "get_bash_only_generated_masks: Time elapsed: " + str(toc - tic),
-    #         "cyan"))
+    # masks = get_bash_only_generated_masks(logs=logs, tokenizer=tokenizer)
+    # for i in range(len(logs)):
+    #     logs[i]["generated_mask"] = masks[i]
 
     # update the model
     losses.append(
@@ -135,7 +118,7 @@ for epoch in tqdm(range(script_args.max_steps)):
     print(
         colored(
             "policy_gradient_update: Time elapsed:" +
-            f"{toc - toc:.2f}. Loss: {losses[-1]}", "cyan"))
+            f"{time.time() - toc:.2f}. Loss: {losses[-1]}", "cyan"))
 
     if (epoch + 1) % script_args.logging_steps == 0:
         print(sum(losses) / len(losses))
