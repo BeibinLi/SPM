@@ -14,17 +14,22 @@ from experiment_args import ScriptArguments
 from functions.cost import KeywordCost, NumTokenCost, SynthesizedCost
 from functions.terminate import IdentifyFileTerminate
 from functions.training import policy_gradient_update
-from model_utils import (calc_probs_log_probs, create_and_prepare_model)
+from model_utils import (load_script_args, calc_probs_log_probs,
+                         create_and_prepare_model)
 from utils import build_curriculum, get_exp_id
 
 root = os.path.expanduser("~/Coffee_Roasting_Dataset/data")
 
 parser = HfArgumentParser(ScriptArguments)
-script_args = parser.parse_args_into_dataclasses()[0]
+script_args = load_script_args(parser.parse_args_into_dataclasses()[0])
 
 exp_id = get_exp_id(script_args.ckpt_path)
-ckpt_path = script_args.ckpt_path + exp_id + "/"
-os.makedirs(ckpt_path, exist_ok=True)
+output_dir = script_args.ckpt_path + exp_id + "_rl_finetune/"
+os.makedirs(output_dir, exist_ok=True)
+
+# Saving the arguments for reference in the future
+os.makedirs(output_dir, exist_ok=True)
+script_args.dump(os.path.join(output_dir, "setting.yml"))
 
 tokenizer, peft_config, model = create_and_prepare_model(script_args)
 # Add our customized calculation function to the model
@@ -97,7 +102,7 @@ for epoch in tqdm(range(script_args.max_steps)):
     copilot.answer(question=data["question"], target_file=data["filename"])
 
     # dump the messages
-    with open(ckpt_path + "epoch_" + str(epoch + 1) + ".json", "w") as f:
+    with open(output_dir + "epoch_" + str(epoch + 1) + ".json", "w") as f:
         json.dump(copilot.get_whole_msgs(), f)
 
     logs = copilot.get_generation_logs()
@@ -125,7 +130,7 @@ for epoch in tqdm(range(script_args.max_steps)):
         losses = []
 
     if (epoch + 1) % script_args.save_steps == 0:
-        _ckpt_path = ckpt_path + "epoch_" + str(epoch + 1) + "/"
-        os.makedirs(_ckpt_path, exist_ok=True)
-        model.save_pretrained(save_directory=_ckpt_path)
-        tokenizer.save_pretrained(save_directory=_ckpt_path)
+        ckpt_path = output_dir + "epoch_" + str(epoch + 1) + "/"
+        os.makedirs(ckpt_path, exist_ok=True)
+        model.save_pretrained(save_directory=ckpt_path)
+        tokenizer.save_pretrained(save_directory=ckpt_path)

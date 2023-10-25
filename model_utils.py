@@ -21,6 +21,34 @@ from llama.generation import (Message, Dialog, B_INST, E_INST, B_SYS, E_SYS,
 from experiment_args import ScriptArguments
 
 
+def load_script_args(script_args: ScriptArguments) -> ScriptArguments:
+    """
+    If `script_args.load_dir` is not None, load the setting.yml from this
+    directory if possible. After loading, override the `model_name` and
+    `lora_r` from the loaded setting.yml.
+
+    Args:
+    - `script_args` (ScriptArguments): the arguments for training.
+
+    Returns:
+    - ScriptArguments: The updated script arguments.
+    """
+
+    if script_args.load_dir:
+        file = os.path.join(script_args.load_dir, "../setting.yml")
+        if os.path.exists(file):
+            old_script_args = yaml.safe_load(open(file, "r"))
+            script_args.model_name = old_script_args["model_name"]
+            script_args.lora_r = old_script_args["lora_r"]
+        else:
+            print(
+                colored(
+                    "We cannot find the setting.yml file from the load directory.",
+                    "yellow"))
+
+    return script_args
+
+
 def create_and_prepare_model(
         args: ScriptArguments) -> (AutoTokenizer, PeftConfig, PeftModel):
     """
@@ -447,7 +475,7 @@ def calc_probs_log_probs(
     Calculate the probability and log probability of the generated tokens.
 
     Args:
-    - `inputs` (torch.Tensor): The generated tokens.
+    - `inputs` (torch.Tensor): The complete tokens of original input + output.
     - `generated_mask` (torch.Tensor): List of generated mask for each position.
     If the position is 1, the token was generated, otherwise it was given by the user.
     - `generation_config` (GenerationConfig): Generation config used to

@@ -25,7 +25,6 @@ class ScriptArguments:
     model_name: Optional[str] = field(
     #default="model/llama2/7B-chat",
         default="gpt2",
-    #default="tiiuae/falcon-7b-instruct",
         metadata={
             "help": "The model that you want to train from the Hugging "
                     "Face hub. E.g. gpt2, gpt2-xl, bert, etc."

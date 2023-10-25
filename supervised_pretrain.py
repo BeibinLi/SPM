@@ -9,7 +9,7 @@ from transformers import HfArgumentParser, TrainingArguments
 from auto_explore_copilot import RESPONSE_TEMPLATE
 from experiment_args import ScriptArguments
 from trl import SFTTrainer, DataCollatorForCompletionOnlyLM
-from model_utils import create_and_prepare_model
+from model_utils import load_script_args, create_and_prepare_model
 from utils import get_exp_id
 
 accelerator = Accelerator()
@@ -17,7 +17,7 @@ local_rank = accelerator.process_index
 
 # Distributed
 parser = HfArgumentParser(ScriptArguments)
-script_args = parser.parse_args_into_dataclasses()[0]
+script_args = load_script_args(parser.parse_args_into_dataclasses()[0])
 
 exp_id = get_exp_id(script_args.ckpt_path)
 
@@ -39,12 +39,12 @@ training_arguments = TrainingArguments(
     lr_scheduler_type=script_args.lr_scheduler_type,
     ddp_find_unused_parameters=False)
 
-tokenizer, peft_config, model = create_and_prepare_model(script_args)
-model.config.use_cache = False
-
 # Saving the arguments for reference in the future
 os.makedirs(training_arguments.output_dir, exist_ok=True)
 script_args.dump(os.path.join(training_arguments.output_dir, "setting.yml"))
+
+tokenizer, peft_config, model = create_and_prepare_model(script_args)
+model.config.use_cache = False
 
 if "llama" in script_args.model_name.lower():
     tokenizer.padding_side = 'right'
