@@ -155,6 +155,7 @@ def load_inference_model(
         setting = yaml.safe_load(open("default_setting.yml", "r"))
 
     model_name = setting["model_name"]    # original base model path
+    cache_dir = setting["cache_dir"]
 
     bnb_config = BitsAndBytesConfig(
         load_in_4bit=setting["use_4bit"],
@@ -166,11 +167,14 @@ def load_inference_model(
     llm_model = AutoModelForCausalLM.from_pretrained(
         pretrained_model_name_or_path=model_name,
         quantization_config=bnb_config,
-        trust_remote_code=True)
+        trust_remote_code=True,
+        cache_dir=cache_dir)
 
     # Load tokenizer from original model
     tokenizer = AutoTokenizer.from_pretrained(
-        pretrained_model_name_or_path=model_name, trust_remote_code=True)
+        pretrained_model_name_or_path=model_name,
+        trust_remote_code=True,
+        cache_dir=cache_dir)
     tokenizer.pad_token = tokenizer.eos_token
 
     if use_original:

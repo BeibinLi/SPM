@@ -512,7 +512,7 @@ class AutoExploreCopilot():
 
 if __name__ == "__main__":
     args = get_args()
-    agent = AutoExploreCopilot(
+    copilot = AutoExploreCopilot(
         root=args.application_root,
         temperature=args.temperature,
         top_p=args.top_p,
@@ -523,11 +523,13 @@ if __name__ == "__main__":
         interaction_type="inference",
         model_type="remote",
         model_name=args.model)
-    agent.answer(
+    copilot.answer(
     #"Plot the price of bean Excelsa between Jun 2021 and 2022 Aug."
     #"Plot employee salary by country in a map."
     #"Who is the proprietor of the cafe in Shanghai?"
     #"What is the culture statement of Opti Coffee?"
     #"Tell me details of Employee Appreciation Events."
-    #"What does Opti Coffee's achievement prioritize?"
-        "What is Opti Coffee's achievement?")
+        "What does Opti Coffee's achievement prioritize?")
+
+    logs = copilot.get_generation_logs()
+    print(logs)
