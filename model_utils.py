@@ -167,6 +167,7 @@ def load_inference_model(
     llm_model = AutoModelForCausalLM.from_pretrained(
         pretrained_model_name_or_path=model_name,
         quantization_config=bnb_config,
+        device_map={"": 0},
         trust_remote_code=True,
         cache_dir=cache_dir)
 

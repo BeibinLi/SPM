@@ -41,13 +41,13 @@ def get_args():
     parser.add_argument(
         "--max_token_length",
         type=int,
-        default=2048,
+        default=1024,
         help="The maximum token length in a chat. If exceed this amount, the "
         " chat will be reset.")
     parser.add_argument(
         "--max_new_tokens",
         type=int,
-        default=2048,
+        default=1,
         help="The maximum new tokens in a chat. If exceed this amount, the "
         " chat will be reset.")
     parser.add_argument(
