@@ -3,8 +3,6 @@ import os
 import subprocess
 import shutil
 import random
-import string
-from hashlib import sha256
 from utils import (display_files_recursively, list_files, hide_root, trunc_text,
                    get_file_names, handle_ls, unwrap_path, SUPPORTED_CMDS)
 
@@ -43,9 +41,7 @@ class AutoExploreSandbox:
     def __init__(
         self,
         dataset_path: str,
-        password: str,
         supported_cmds: list = SUPPORTED_CMDS,
-        private_files: list = [],
         leaveout_option: LeaveoutOption = None,
     ):
         """
@@ -54,11 +50,8 @@ class AutoExploreSandbox:
 
         Args:
         - `dataset_path` (str): The path to the dataset.
-        - `password` (str): The password for identity verification.
         - `supported_cmds` (list): The list of supported commands. Must be a
         subset of SUPPORTED_CMDS.
-        - `private_files` (list): The list of private files.
-        Only the creator of the sandbox can access these files.
         - `leaveout_fraction` (float): The probability of leaving out unrelated
         files.
         """
@@ -73,12 +66,6 @@ class AutoExploreSandbox:
         # Copy dataset to a temporary directory in the working directory
         self.sandbox_dir = os.path.abspath(
             tempfile.mkdtemp(dir=os.getcwd())).replace("\\", "/") + "/"
-
-        # Store the hashed password for identity verification
-        self._sandbox_id = ''.join(
-            random.choices(string.ascii_uppercase + string.digits, k=10))
-        self._hashed_password = [self._hash_password(password)]
-        self.private_files = private_files
 
         self.leaveout_option = leaveout_option
 
@@ -111,35 +98,16 @@ class AutoExploreSandbox:
         else:
             os.system('rm -rf "{}"'.format(self.sandbox_dir))
 
-    def _hash_password(self, password: str) -> str:
-        return sha256((password + self._sandbox_id).encode("utf-8")).hexdigest()
-
-    def register_user(self, password: str):
-        """
-        Register a user with a password.
-
-        Args:
-        - `password` (str): The password for identity verification.
-        """
-        self._hashed_password.append(self._hash_password(password))
-
-    def safety_check(self, cmd: list, password: str) -> str:
+    def safety_check(self, cmd: list) -> str:
         """
         Return "SAFE" if and only if the cmd is safe to run.
         Otherwise, return error message.
 
         Args:
         - `cmd` (list): A single command splitted into a list of arguments.
-        - `password` (str): The password for identity verification.
 
         Returns:
         """
-        # First check if password is correct
-        hashed_password = self._hash_password(password)
-        if hashed_password not in self._hashed_password:
-            return "Error: Wrong password!"
-        is_creator = hashed_password == self._hashed_password[0]
-
         # Restrict command type
         if cmd[0] == "exit":
             raise NotImplementedError(
@@ -158,16 +126,9 @@ class AutoExploreSandbox:
                     f"outside the repo! You are now at {self._get_relative_path('.')}"
                 )
 
-        if not is_creator:
-            # Check if the target file is private
-            files = get_file_names(cmd)
-            for file in files:
-                if file in self.private_files:
-                    return f"Error: You cannot access a private file {file}!"
-
         return SAFE_MESSAGE
 
-    def run_command(self, cmd: list, password: str) -> (str, dict):
+    def run_command(self, cmd: list) -> (str, dict):
         """Wrapper function for self._run_command().
         Run a bash command in the dataset sandbox.
 
@@ -177,7 +138,6 @@ class AutoExploreSandbox:
 
         Args:
         - `cmd` (list): A single command splitted into a list of arguments.
-        - `password` (str): The password for identity verification.
 
         Returns:
         - str: The execution result of the given command. If any errors
@@ -190,7 +150,7 @@ class AutoExploreSandbox:
         system_cwd = os.path.abspath(os.getcwd()).replace('\\', '/') + "/"
         os.chdir(self.cwd)
 
-        safety_check_result = self.safety_check(cmd, password)
+        safety_check_result = self.safety_check(cmd)
 
         if safety_check_result != SAFE_MESSAGE:
             ret = (safety_check_result, {})
@@ -378,7 +338,6 @@ class AutoExploreSandbox:
 if __name__ == "__main__":
     sandbox = AutoExploreSandbox(
         dataset_path="/home/vectorzhou/Coffee_Roasting_Dataset/data/",
-        password="zrl",
         leaveout_option=LeaveoutOption(files_must_contain=["public/cafe.md"],
                                        leaveout_fraction=0.5),
     )

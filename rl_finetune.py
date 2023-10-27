@@ -1,17 +1,15 @@
 import json
 import os
 import random
-import time
 import types
 
 import torch
-from termcolor import colored
 from tqdm import tqdm
 from transformers import GenerationConfig, HfArgumentParser
 
 from auto_explore_copilot import AutoExploreCopilot
 from experiment_args import ScriptArguments
-from functions.cost import KeywordCost, NumTokenCost, SynthesizedCost
+from functions.cost import StepCost, KeywordCost, NumTokenCost, SynthesizedCost
 from functions.terminate import IdentifyFileTerminate
 from functions.training import policy_gradient_update
 from model_utils import (load_script_args, calc_probs_log_probs,
@@ -49,6 +47,7 @@ top_p = 0.9
 # build the cost function
 num_token_cost = NumTokenCost(tokenizer)
 keyword_cost = KeywordCost(keywords=["Error", "Warning"], costs=[100, 20])
+step_cost = StepCost()
 synthesized_cost = SynthesizedCost(
     cost_functions=[num_token_cost, keyword_cost], weights=[1, 1])
 
@@ -87,12 +86,11 @@ for epoch in tqdm(range(script_args.max_steps)):
                                  max_token_length=script_args.max_seq_length,
                                  max_new_tokens=script_args.max_new_tokens,
                                  file_save_path="new_and_changed_files/",
-                                 password="zrl",
                                  interaction_type="train",
                                  model_type="local",
                                  model=model,
                                  tokenizer=tokenizer,
-                                 cost_function=synthesized_cost,
+                                 cost_function=step_cost,
                                  terminate_criteria=IdentifyFileTerminate(
                                      data["filename"]),
                                  leaveout_fraction=0.5,
@@ -101,11 +99,11 @@ for epoch in tqdm(range(script_args.max_steps)):
     # rollout a trajectory
     copilot.answer(question=data["question"], target_file=data["filename"])
 
+    logs = copilot.get_generation_logs()
     # dump the messages
     with open(output_dir + "epoch_" + str(epoch + 1) + ".json", "w") as f:
-        json.dump(copilot.get_whole_msgs(), f)
-
-    logs = copilot.get_generation_logs()
+        f.write("\n".join(
+            [json.dumps(line) for line in copilot.get_whole_msgs()]))
 
     # calculate probs and log probs for only the bash commands
     # masks = get_bash_only_generated_masks(logs=logs, tokenizer=tokenizer)
@@ -119,14 +117,9 @@ for epoch in tqdm(range(script_args.max_steps)):
                                generation_results=[logs],
                                optimizer=optimizer,
                                scheduler=scheduler))
-    toc = time.time()
-    print(
-        colored(
-            "policy_gradient_update: Time elapsed:" +
-            f"{time.time() - toc:.2f}. Loss: {losses[-1]}", "cyan"))
 
     if (epoch + 1) % script_args.logging_steps == 0:
-        print(sum(losses) / len(losses))
+        print(losses, sum(losses) / len(losses))
         losses = []
 
     if (epoch + 1) % script_args.save_steps == 0:

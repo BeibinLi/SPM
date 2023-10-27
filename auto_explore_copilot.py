@@ -75,7 +75,6 @@ class AutoExploreCopilot():
             max_token_length: int,
             max_new_tokens: int,
             file_save_path: str,
-            password: str,
             interaction_type: str,
             model_type: str,
             model_name: str = None,
@@ -96,7 +95,6 @@ class AutoExploreCopilot():
         - `max_token_length` (int): The maximum total token length for chat completion.
         - `max_new_tokens` (int): The maximum new tokens.
         - `file_save_path` (str): The path to save the new or changed files.
-        - `password` (str): The password to use for the sandbox.
         - `interaction_type` (str): The type of the interaction, with choices
         in ['train', 'inference', 'debug'].
         - `model_type` (str): The type of the model to use, with choices
@@ -157,7 +155,6 @@ class AutoExploreCopilot():
         self.max_token_length = max_token_length
         self.max_new_tokens = max_new_tokens
 
-        self.password = password
         self.interaction_type = interaction_type
         self.model_type = model_type
         if model_type == "local":
@@ -220,7 +217,6 @@ class AutoExploreCopilot():
             self.supported_cmds = SUPPORTED_CMDS
         self.sandbox = AutoExploreSandbox(
             dataset_path=self.root,
-            password=self.password,
             supported_cmds=self.supported_cmds,
             leaveout_option=LeaveoutOption([target_file],
                                            self.leaveout_fraction))
@@ -240,8 +236,10 @@ class AutoExploreCopilot():
         else:
             self.act()
 
-        if not self.terminate_criteria.can_terminate():
-            self.generation_logs[-1]["cost"] += 1000
+        if self.terminate_criteria.can_terminate():
+            self.generation_logs[-1]["cost"] -= 5
+        else:
+            self.generation_logs[-1]["cost"] += 100
 
         # 4. Save the new or changed files
         os.makedirs(self.file_save_path, exist_ok=True)
@@ -280,6 +278,10 @@ class AutoExploreCopilot():
         #     self.msgs.append(("user", str(e)))
         #     ret = "Continue"
         ret = self._act()
+
+        if self.interaction_type == "train":
+            self.generation_logs[-1]["cost"] = self.cost_function.call(
+                user_msgs=self.msgs)
 
         if ret == "Continue" and self.step < 15:
             self.act()
@@ -342,6 +344,11 @@ class AutoExploreCopilot():
                 generation_config=generation_config)[0]
             response = ret["generation"]["content"]
 
+            response = response.strip(" ")
+
+            if response == "":
+                pdb.set_trace()
+
             ret.update({"cost": 0, "step": self.step})
             self.generation_logs.append(ret)
         elif self.model_type == "remote":
@@ -374,6 +381,9 @@ class AutoExploreCopilot():
         # Only consider the first command
         if response[0] in CHOICES:
             idx = CHOICES.index(response[0])
+            if idx >= len(cmd_list):
+                self.msgs.append(("user", "Error: Invalid choice."))
+                return "Continue"
             commands = extract_commands(f"```bash\n{cmd_list[idx]}\n```",
                                         only_first=True)
         else:
@@ -395,18 +405,17 @@ class AutoExploreCopilot():
                     except Exception:
                         return "Exit"
 
-                    if self.terminate_criteria.can_terminate():
-                        # Success! save the result
-                        return "Exit"
-                    else:
-                        self.msgs.append(
-                            ("user",
-                             "Error: The terminate criteria is not met. " +
-                             self.terminate_criteria.describe_criteria()))
-                        return "Continue"
+                    return "Exit"
+                    # if self.terminate_criteria.can_terminate():
+                    #     # Success! save the result
+                    #     return "Exit"
+                    # else:
+                    #     self.msgs.append(
+                    #         ("user",
+                    #          "Error: The terminate criteria is not met. " +
+                    #          self.terminate_criteria.describe_criteria()))
             else:
-                command_output, status = self.sandbox.run_command(
-                    cmd, self.password)
+                command_output, status = self.sandbox.run_command(cmd)
                 self.terminate_criteria.update_status(**status)
 
                 self.msgs.append(("user", command_output))
@@ -416,10 +425,6 @@ class AutoExploreCopilot():
                 ("user", "Warning: You didn't give me any command. "
                  "Further explore the repo by sending me system commands: "
                  f"{', '.join(self.supported_cmds)}."))
-
-        if self.interaction_type == "train":
-            self.generation_logs[-1]["cost"] = self.cost_function.call(
-                user_msgs=self.msgs)
 
         return "Continue"
 
@@ -519,7 +524,6 @@ if __name__ == "__main__":
         max_token_length=args.max_token_length,
         max_new_tokens=args.max_new_tokens,
         file_save_path=os.path.abspath(args.file_save_path) + "/",
-        password="zrl",
         interaction_type="inference",
         model_type="remote",
         model_name=args.model)
