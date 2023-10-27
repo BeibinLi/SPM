@@ -237,9 +237,9 @@ class AutoExploreCopilot():
             self.act()
 
         if self.terminate_criteria.can_terminate():
-            self.generation_logs[-1]["cost"] -= 5
+            self.generation_logs[-1]["cost"] -= 15
         else:
-            self.generation_logs[-1]["cost"] += 100
+            self.generation_logs[-1]["cost"] += 15
 
         # 4. Save the new or changed files
         os.makedirs(self.file_save_path, exist_ok=True)
@@ -298,19 +298,19 @@ class AutoExploreCopilot():
                                              root=self.sandbox.sandbox_dir,
                                              curr_dir=self.sandbox.cwd,
                                          ))
-        cur_msgs = [
-            ("system",
-             self.start_prompt.format(
-                 TASK=self.question,
-                 CWD=cwd,
-                 FILES_UNDER_CWD="\n".join(
-                     [wrap_path(f) for f in files_under_cwd]),
-                 CMD_HIST="\n".join(self.cmd_hisotry),
-                 EXEC_RES="\n".join([msg[1] for msg in self.msgs]),
-                 CMD_LIST="\n".join([
-                     CHOICES[i] + ". " + cmd for i, cmd in enumerate(cmd_list)
-                 ])) + RESPONSE_TEMPLATE)
-        ]
+        cur_msgs = [(
+            "system",
+            self.start_prompt.format(
+        #TASK=self.question,
+                TASK=f"Find {self.terminate_criteria.target_file}",
+                CWD=cwd,
+                FILES_UNDER_CWD="\n".join(
+                    [wrap_path(f) for f in files_under_cwd]),
+                CMD_HIST="\n".join(self.cmd_hisotry),
+                EXEC_RES="\n".join([msg[1] for msg in self.msgs]),
+                CMD_LIST="\n".join([
+                    CHOICES[i] + ". " + cmd for i, cmd in enumerate(cmd_list)
+                ])) + RESPONSE_TEMPLATE)]
         self.msgs = []
 
         if self.need_output_msgs:
@@ -345,9 +345,8 @@ class AutoExploreCopilot():
             response = ret["generation"]["content"]
 
             response = response.strip(" ")
-
             if response == "":
-                pdb.set_trace()
+                response = " "
 
             ret.update({"cost": 0, "step": self.step})
             self.generation_logs.append(ret)

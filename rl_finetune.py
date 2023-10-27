@@ -51,6 +51,12 @@ step_cost = StepCost()
 synthesized_cost = SynthesizedCost(
     cost_functions=[num_token_cost, keyword_cost], weights=[1, 1])
 
+################
+################
+# dataset = dataset[:1]
+################
+################
+
 step_per_curriculum = script_args.max_steps // len(dataset)
 script_args.max_steps = step_per_curriculum * len(dataset)
 
@@ -100,10 +106,6 @@ for epoch in tqdm(range(script_args.max_steps)):
     copilot.answer(question=data["question"], target_file=data["filename"])
 
     logs = copilot.get_generation_logs()
-    # dump the messages
-    with open(output_dir + "epoch_" + str(epoch + 1) + ".json", "w") as f:
-        f.write("\n".join(
-            [json.dumps(line) for line in copilot.get_whole_msgs()]))
 
     # calculate probs and log probs for only the bash commands
     # masks = get_bash_only_generated_masks(logs=logs, tokenizer=tokenizer)
@@ -127,3 +129,8 @@ for epoch in tqdm(range(script_args.max_steps)):
         os.makedirs(ckpt_path, exist_ok=True)
         model.save_pretrained(save_directory=ckpt_path)
         tokenizer.save_pretrained(save_directory=ckpt_path)
+
+        # dump the messages
+        with open(ckpt_path + "msgs.json", "w") as f:
+            f.write("\n".join(
+                [json.dumps(line) for line in copilot.get_whole_msgs()]))
