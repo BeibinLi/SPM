@@ -38,13 +38,16 @@ model.calc_probs_log_probs = types.MethodType(calc_probs_log_probs, model)
 optimizer = torch.optim.Adam(model.parameters(), lr=script_args.learning_rate)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.9)
 
-# Setup value network
-value_model = GPT2ForSequenceClassification.from_pretrained(
-    'gpt2', num_labels=1).cuda()
-value_model.config.pad_token_id = value_model.config.eos_token_id
-value_tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
-value_tokenizer.pad_token = value_tokenizer.eos_token
-value_optimizer = torch.optim.Adam(value_model.parameters(), lr=1e-2)
+if script_args.use_critic:
+    # Setup value network
+    value_model = GPT2ForSequenceClassification.from_pretrained(
+        'gpt2', num_labels=1).cuda()
+    value_model.config.pad_token_id = value_model.config.eos_token_id
+    value_tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
+    value_tokenizer.pad_token = value_tokenizer.eos_token
+    value_optimizer = torch.optim.Adam(value_model.parameters(), lr=1e-4)
+else:
+    value_model, value_tokenizer, value_optimizer = None, None, None
 
 # Build dataset
 dataset = build_curriculum(

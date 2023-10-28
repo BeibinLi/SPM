@@ -37,25 +37,34 @@ def policy_gradient_update(model: PeftModel,
     Returns:
     - float: the average total cost of the generation results
     """
+    use_critic = value_model is not None
+
     costs = []
     optimizer.zero_grad()
-    value_optimizer.zero_grad()
+
+    if use_critic:
+        value_optimizer.zero_grad()
 
     for generation_result in generation_results:
         # sort the generation results by reversed time order
         generation_result = sorted(generation_result, key=lambda x: -x["step"])
         tot_cost = 0
 
-        value_inputs = value_tokenizer.batch_encode_plus(
-            [x["prompt"] for x in generation_result],
-            truncation=True,
-            padding=True,
-            max_length=1024,
-            return_tensors="pt")
-        value_inputs = {
-            k: v.to(value_model.device) for k, v in value_inputs.items()
-        }
-        values = value_model(**value_inputs).logits.squeeze(-1)
+        if use_critic:
+            value_inputs = value_tokenizer.batch_encode_plus(
+                [x["prompt"] for x in generation_result],
+                truncation=True,
+                padding=True,
+                max_length=1024,
+                return_tensors="pt")
+            value_inputs = {
+                k: v.to(value_model.device) for k, v in value_inputs.items()
+            }
+            values = value_model(**value_inputs).logits.squeeze(-1)
+        else:
+            values = torch.zeros(len(generation_result),
+                                 dtype=torch.float32,
+                                 device=model.device)
 
         Qvalues = []
 
@@ -96,15 +105,17 @@ def policy_gradient_update(model: PeftModel,
 
         costs.append(tot_cost)
 
-        # Value network update
-        Qvalues = torch.tensor(Qvalues,
-                               dtype=torch.float32,
-                               device=value_model.device)
-        torch.nn.MSELoss()(Qvalues, values).backward()
+        if use_critic:
+            # Value network update
+            Qvalues = torch.tensor(Qvalues,
+                                   dtype=torch.float32,
+                                   device=value_model.device)
+            torch.nn.MSELoss()(Qvalues, values).backward()
 
     optimizer.step()
     scheduler.step()
 
-    value_optimizer.step()
+    if use_critic:
+        value_optimizer.step()
 
     return sum(costs) / len(costs)

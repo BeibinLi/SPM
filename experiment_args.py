@@ -145,6 +145,10 @@ class ScriptArguments:
         metadata={"help": "Whether only finetune on "
                           "self-instruct data."})
 
+    use_critic: Optional[bool] = field(
+        default=False,
+        metadata={"help": "Whether use critic in RL finetuning."})
+
     def load(self, yaml_file: str):
         with open(yaml_file, 'r') as file:
             yaml_data = yaml.safe_load(file)

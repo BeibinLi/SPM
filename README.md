@@ -83,7 +83,7 @@ After pretraining, run
 python rl_finetune.py --load_dir=<PRETRAIN_DIR> <Other args>
 ```
 This code can only use a single GPU.
-For example, to run a GPT 2 model, you should
+For example, to run a GPT2-XL model, you can run
 ```bash
-python rl_finetune.py --load_dir=results/123_supervised_pretrain/checkpoint-2000/ --use_8bit --max_seq_length=1024 --bf16
+python rl_finetune.py --load_dir=results/123_supervised_pretrain/checkpoint-2000/ --use_8bit --max_seq_length=1024 --bf16 --use_critic --model_name=gpt2-xl
 ```
