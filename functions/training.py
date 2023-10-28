@@ -1,14 +1,17 @@
-import pdb
 import torch
 
 from peft import PeftModel
-from transformers import GenerationConfig
+from transformers import GenerationConfig, AutoTokenizer
 
 
-def policy_gradient_update(
-        model: PeftModel, generation_config: GenerationConfig,
-        generation_results: list, optimizer: torch.optim.Optimizer,
-        scheduler: torch.optim.lr_scheduler.LambdaLR) -> float:
+def policy_gradient_update(model: PeftModel,
+                           generation_config: GenerationConfig,
+                           generation_results: list,
+                           optimizer: torch.optim.Optimizer,
+                           scheduler: torch.optim.lr_scheduler.LambdaLR,
+                           value_model: PeftModel,
+                           value_tokenizer: AutoTokenizer,
+                           value_optimizer: torch.optim.Optimizer) -> float:
     """
     Do one step policy gradient update to the model.
 
@@ -25,24 +28,43 @@ def policy_gradient_update(
         "cost": float,
         "step": int
     }
-    - `optimizer` (torch.optim.Optimizer): the optimizer to be used
-    - `scheduler` (torch.optim.lr_scheduler.LambdaLR): the scheduler to be used
+    - `optimizer` (torch.optim.Optimizer): the optimizer for `model`
+    - `scheduler` (torch.optim.lr_scheduler.LambdaLR): the scheduler for `model`
+    - `value_model` (PeftModel): the value model to be updated
+    - `value_tokenizer` (AutoTokenizer): the tokenizer for `value_model`
+    - `value_optimizer` (torch.optim.Optimizer): the optimizer for `value_model`
 
     Returns:
     - float: the average total cost of the generation results
     """
     costs = []
     optimizer.zero_grad()
+    value_optimizer.zero_grad()
 
     for generation_result in generation_results:
         # sort the generation results by reversed time order
         generation_result = sorted(generation_result, key=lambda x: -x["step"])
         tot_cost = 0
+
+        value_inputs = value_tokenizer.batch_encode_plus(
+            [x["prompt"] for x in generation_result],
+            truncation=True,
+            padding=True,
+            max_length=1024,
+            return_tensors="pt")
+        value_inputs = {
+            k: v.to(value_model.device) for k, v in value_inputs.items()
+        }
+        values = value_model(**value_inputs).logits.squeeze(-1)
+
+        Qvalues = []
+
         # calculate the policy gradient by reversed time order to avoid space
         # explosion
-        for step in generation_result:
+        for i, step in enumerate(generation_result):
             # update total future cost
             tot_cost += step["cost"]
+            Qvalues.append(tot_cost)
 
             # cut off trailing tokens not covered by the mask
             idx = max([0] + [
@@ -58,31 +80,31 @@ def policy_gradient_update(
                                           device=model.device)
 
             # policy gradient uses log probs
-            try:
-                probs_log_probs = model.calc_probs_log_probs(
-                    input_tokens,
-                    generated_mask,
-                    generation_config,
-                    calc_probs=False,
-                    calc_log_probs=True)
-            except Exception as e:
-                print(e)
-                pdb.set_trace()
+            probs_log_probs = model.calc_probs_log_probs(input_tokens,
+                                                         generated_mask,
+                                                         generation_config,
+                                                         calc_probs=False,
+                                                         calc_log_probs=True)
             log_probs = probs_log_probs["log_probs"][0]
 
             if len(log_probs) == 0:
                 continue
             # normalize the cost
-            (tot_cost * sum(log_probs)).backward()
-            for param in model.parameters():
-                if param.grad is not None:
-                    if torch.isnan(param.grad).any() or torch.isinf(
-                            param.grad).any():
-                        pdb.set_trace()
+
+            # Policy network update
+            ((tot_cost - values[i].detach()) * sum(log_probs)).backward()
 
         costs.append(tot_cost)
 
+        # Value network update
+        Qvalues = torch.tensor(Qvalues,
+                               dtype=torch.float32,
+                               device=value_model.device)
+        torch.nn.MSELoss()(Qvalues, values).backward()
+
     optimizer.step()
     scheduler.step()
+
+    value_optimizer.step()
 
     return sum(costs) / len(costs)

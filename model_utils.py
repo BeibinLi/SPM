@@ -227,12 +227,13 @@ def transformer_text_completion(model: PeftModel, tokenizer: AutoTokenizer,
     Returns:
     - list: List of generated messages, with format:
     [{
+        "prompt": str,
         "generation": {
             "role": str = "assistant",
-            "content": str
+            "content": str,
         },
         "tokens": torch.Tensor,
-        "generated_mask": list
+        "generated_mask": list,
     }, ...]
     """
     assert len(
@@ -256,9 +257,10 @@ def transformer_text_completion(model: PeftModel, tokenizer: AutoTokenizer,
     # outputs contain an EOS token in the end
     # remove it when decoding
     res = []
-    for t in outputs:
+    for p, t in zip(prompts, outputs):
         newly_generated = t[max_len:]
         res.append({
+            "prompt": p,
             "generation": {
                 "role": "assistant",
                 "content": tokenizer.decode(newly_generated)
