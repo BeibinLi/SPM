@@ -23,7 +23,7 @@ tokenizer = AutoTokenizer.from_pretrained(script_args.model_name,
                                           cache_dir=script_args.cache_dir)
 tokenizer.pad_token = tokenizer.eos_token
 
-auto_explore_dataset_gpt, auto_explore_dataset_llama = [], []
+auto_explore_dataset, auto_explore_dataset_easy = [], []
 
 for data in dataset:
     #for cmds in [data["commands"], data["optimal_path"]]:
@@ -39,7 +39,6 @@ for data in dataset:
             max_token_length=32768,
             max_new_tokens=32768,
             file_save_path="new_and_changed_files/",
-            password="zrl",
             interaction_type="debug",
             model_type="null",
             model=None,
@@ -53,20 +52,17 @@ for data in dataset:
 
             whole_msgs = copilot.get_whole_msgs()
 
-            # GPT-2 format
-            auto_explore_dataset_gpt += [{
+            auto_explore_dataset += [{
                 "text": "\n".join([msg[1] for msg in msgs[:]]),
             } for msgs in whole_msgs]
 
-            # Llama2 format
-            # dialogs = [GPT_msgs_to_Llama_dialog(msgs) for msgs in whole_msgs]
+            copilot.answer(question=f"Find {data['filename']}", ans_cmds=cmds)
 
-            # prompt_tokens, _ = build_Llama_prompt_from_dialogs(
-            #     tokenizer=tokenizer, dialogs=dialogs, check_last_user=False)
+            whole_msgs = copilot.get_whole_msgs()
 
-            # auto_explore_dataset_llama += [
-            #     tokenizer.decode(pt) for pt in prompt_tokens
-            # ]
+            auto_explore_dataset_easy += [{
+                "text": "\n".join([msg[1] for msg in msgs[:]]),
+            } for msgs in whole_msgs]
 
-dump(auto_explore_dataset_gpt, "data/auto_explore_dataset_markov_gpt.jsonl")
-# dump(auto_explore_dataset_llama, "data/auto_explore_dataset_markov_llama.jsonl")
+dump(auto_explore_dataset, "data/auto_explore_dataset_markov.jsonl")
+dump(auto_explore_dataset_easy, "data/auto_explore_dataset_markov_easy.jsonl")

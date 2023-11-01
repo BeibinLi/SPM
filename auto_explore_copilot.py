@@ -185,15 +185,6 @@ class AutoExploreCopilot():
         if self.interaction_type != "train":
             assert target_file == "", "Only support target file for training."
 
-        # 1. Setup memory and chat
-        # if self.interaction_type in ["train", "debug"]:
-        #     self.start_prompt = open(
-        #         "data_gen/prompt_templates/auto_explore/explore_prompt_rl_markov.md",
-        #         "r").read()
-        # elif self.interaction_type == "inference":
-        #     self.start_prompt = open(
-        #         "data_gen/prompt_templates/auto_explore/explore_prompt.md",
-        #         "r").read()
         self.start_prompt = open(
             "data_gen/prompt_templates/auto_explore/explore_prompt_rl_markov.md",
             "r").read()
@@ -236,10 +227,11 @@ class AutoExploreCopilot():
         else:
             self.act()
 
-        if self.terminate_criteria.can_terminate():
-            self.generation_logs[-1]["cost"] -= 15
-        else:
-            self.generation_logs[-1]["cost"] += 15
+        if self.interaction_type == "train":
+            if self.terminate_criteria.can_terminate():
+                self.generation_logs[-1]["cost"] -= 15
+            else:
+                self.generation_logs[-1]["cost"] += 15
 
         # 4. Save the new or changed files
         os.makedirs(self.file_save_path, exist_ok=True)
@@ -298,19 +290,19 @@ class AutoExploreCopilot():
                                              root=self.sandbox.sandbox_dir,
                                              curr_dir=self.sandbox.cwd,
                                          ))
-        cur_msgs = [(
-            "system",
-            self.start_prompt.format(
-        #TASK=self.question,
-                TASK=f"Find {self.terminate_criteria.target_file}",
-                CWD=cwd,
-                FILES_UNDER_CWD="\n".join(
-                    [wrap_path(f) for f in files_under_cwd]),
-                CMD_HIST="\n".join(self.cmd_hisotry),
-                EXEC_RES="\n".join([msg[1] for msg in self.msgs]),
-                CMD_LIST="\n".join([
-                    CHOICES[i] + ". " + cmd for i, cmd in enumerate(cmd_list)
-                ])) + RESPONSE_TEMPLATE)]
+        cur_msgs = [
+            ("system",
+             self.start_prompt.format(
+                 TASK=self.question,
+                 CWD=cwd,
+                 FILES_UNDER_CWD="\n".join(
+                     [wrap_path(f) for f in files_under_cwd]),
+                 CMD_HIST="\n".join(self.cmd_hisotry),
+                 EXEC_RES="\n".join([msg[1] for msg in self.msgs]),
+                 CMD_LIST="\n".join([
+                     CHOICES[i] + ". " + cmd for i, cmd in enumerate(cmd_list)
+                 ])) + RESPONSE_TEMPLATE)
+        ]
         self.msgs = []
 
         if self.need_output_msgs:
@@ -332,11 +324,6 @@ class AutoExploreCopilot():
                 eos_token_id=self.tokenizer.eos_token_id,
             )
 
-            # ret = Llama_chat_completion(
-            #     model=self.model,
-            #     tokenizer=self.tokenizer,
-            #     dialogs=[GPT_msgs_to_Llama_dialog(cur_msgs)],
-            #     generation_config=generation_config)[0]
             ret = transformer_text_completion(
                 model=self.model,
                 tokenizer=self.tokenizer,

@@ -87,6 +87,7 @@ class Host:
             #     num_return_sequences=n,
             # )
 
+            # TODO: change from chat_ to text_completion
             completion_results = Llama_chat_completion(
                 model=self.tuned_model
                 if model_name == "tuned" else self.original_model,

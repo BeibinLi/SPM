@@ -46,17 +46,9 @@ script_args.dump(os.path.join(training_arguments.output_dir, "setting.yml"))
 tokenizer, peft_config, model = create_and_prepare_model(script_args)
 model.config.use_cache = False
 
-if "llama" in script_args.model_name.lower():
-    tokenizer.padding_side = 'right'
-    dataset = load_dataset(
-        "json",
-        data_files="data/auto_explore_dataset_markov_llama.jsonl",
-        split="train").shuffle(seed=42)
-else:
-    dataset = load_dataset(
-        "json",
-        data_files="data/auto_explore_dataset_markov_gpt.jsonl",
-        split="train").shuffle(seed=42)
+dataset = load_dataset("json",
+                       data_files="data/auto_explore_dataset_markov_gpt.jsonl",
+                       split="train").shuffle(seed=42)
 
 collator = DataCollatorForCompletionOnlyLM(RESPONSE_TEMPLATE + "\n",
                                            tokenizer=tokenizer)
