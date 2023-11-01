@@ -149,6 +149,10 @@ class ScriptArguments:
         default=False,
         metadata={"help": "Whether use critic in RL finetuning."})
 
+    easy: Optional[bool] = field(
+        default=False,
+        metadata={"help": "Whether use easy task (file finding)."})
+
     def load(self, yaml_file: str):
         with open(yaml_file, 'r') as file:
             yaml_data = yaml.safe_load(file)

@@ -19,7 +19,7 @@ from utils import (SUPPORTED_CMDS, colored_string, wrap_path, extract_commands,
 DEBUG_MSG = True
 WAIT_FOR_INPUT = "<<<Wait for input>>>"
 CHOICES = string.digits + string.ascii_letters
-RESPONSE_TEMPLATE = "# Your command (use only the choice)"
+RESPONSE_TEMPLATE = "Response:\n"
 
 
 def get_args():

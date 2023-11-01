@@ -46,11 +46,14 @@ script_args.dump(os.path.join(training_arguments.output_dir, "setting.yml"))
 tokenizer, peft_config, model = create_and_prepare_model(script_args)
 model.config.use_cache = False
 
-dataset = load_dataset("json",
-                       data_files="data/auto_explore_dataset_markov_gpt.jsonl",
-                       split="train").shuffle(seed=42)
+suffix = "_easy" if script_args.easy else ""
 
-collator = DataCollatorForCompletionOnlyLM(RESPONSE_TEMPLATE + "\n",
+dataset = load_dataset(
+    "json",
+    data_files=f"data/auto_explore_dataset_markov{suffix}.jsonl",
+    split="train").shuffle(seed=42)
+
+collator = DataCollatorForCompletionOnlyLM(RESPONSE_TEMPLATE,
                                            tokenizer=tokenizer)
 
 trainer = SFTTrainer(

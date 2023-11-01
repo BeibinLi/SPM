@@ -1,13 +1,13 @@
-# Your task
+# Task:
 {TASK}
 
-# Your current working directory
+# Current working directory
 {CWD}
 
 # Files under current working directory
 {FILES_UNDER_CWD}
 
-# Your command history
+# Command history
 {CMD_HIST}
 
 # Execution result of your last command

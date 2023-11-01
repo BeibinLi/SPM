@@ -53,7 +53,7 @@ for data in dataset:
             whole_msgs = copilot.get_whole_msgs()
 
             auto_explore_dataset += [{
-                "text": "\n".join([msg[1] for msg in msgs[:]]),
+                "text": "\n".join([msg[1] for msg in msgs[:-1]]) + msgs[-1][1],
             } for msgs in whole_msgs]
 
             copilot.answer(question=f"Find {data['filename']}", ans_cmds=cmds)
@@ -61,7 +61,7 @@ for data in dataset:
             whole_msgs = copilot.get_whole_msgs()
 
             auto_explore_dataset_easy += [{
-                "text": "\n".join([msg[1] for msg in msgs[:]]),
+                "text": "\n".join([msg[1] for msg in msgs[:-1]]) + msgs[-1][1],
             } for msgs in whole_msgs]
 
 dump(auto_explore_dataset, "data/auto_explore_dataset_markov.jsonl")
