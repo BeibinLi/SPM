@@ -53,8 +53,10 @@ dataset = load_dataset(
     data_files=f"data/auto_explore_dataset_markov{suffix}.jsonl",
     split="train").shuffle(seed=42)
 
-collator = DataCollatorForCompletionOnlyLM(RESPONSE_TEMPLATE,
-                                           tokenizer=tokenizer)
+collator = DataCollatorForCompletionOnlyLM(
+    response_template=[5103, 29901, 13]
+    if "llama" in script_args.model_name.lower() else RESPONSE_TEMPLATE,
+    tokenizer=tokenizer)
 
 trainer = SFTTrainer(
     model=model,
