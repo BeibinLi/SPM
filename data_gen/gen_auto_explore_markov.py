@@ -48,6 +48,7 @@ for data in dataset:
             need_output_msgs=False)
 
         for _ in range(10):
+            copilot.easy_mode = False
             copilot.answer(question=data["question"], ans_cmds=cmds)
 
             whole_msgs = copilot.get_whole_msgs()
@@ -56,6 +57,7 @@ for data in dataset:
                 "text": "\n".join([msg[1] for msg in msgs[:-1]]) + msgs[-1][1],
             } for msgs in whole_msgs]
 
+            copilot.easy_mode = True
             copilot.answer(question=f"Find {data['filename']}", ans_cmds=cmds)
 
             whole_msgs = copilot.get_whole_msgs()

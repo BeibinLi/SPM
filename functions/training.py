@@ -172,6 +172,14 @@ def proximal_policy_optimization_update(
         }
         values = value_model(**value_inputs).logits.squeeze(-1)
 
+        # with torch.no_grad():
+        #     probs_log_probs = model.calc_probs_log_probs(input_tokens,
+        #                                                  generated_mask,
+        #                                                  generation_config,
+        #                                                  calc_probs=False,
+        #                                                  calc_log_probs=True)
+        #     log_probs = probs_log_probs["log_probs"][0]
+
         Qvalues = []
 
         # calculate the policy gradient by reversed time order to avoid space

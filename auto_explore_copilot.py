@@ -83,7 +83,8 @@ class AutoExploreCopilot():
             cost_function: AutoExploreCostFunction = None,
             terminate_criteria: AutoExploreTerminateCriteria = AnytimeTerminate(
             ),
-            leaveout_fraction: float = 0,
+            leaveout_prob: float = 0,
+            easy_mode: bool = False,
             need_output_msgs: bool = True):
         """
         A copilot to help language models explore a repo.
@@ -112,9 +113,10 @@ class AutoExploreCopilot():
         - `terminate_criteria` (AutoExploreTerminateCriteria): The terminate
         criteria for an interaction. Input is the list of messages, output is
         True / False.
-        - `leaveout_fraction` (float): The probability of leaving out unrelated
+        - `leaveout_prob` (float): The probability of leaving out unrelated
         files. Only used when `interaction_type` is 'train', and passed to the
         sandbox.
+        - `easy_mode` (bool): Whether to use easy mode, which omits cat operations.
         - `need_output_msgs` (bool): Whether to output the messages after each act.
         """
         assert interaction_type in [
@@ -167,7 +169,8 @@ class AutoExploreCopilot():
             self.api = get_llm()
 
         self.terminate_criteria = terminate_criteria
-        self.leaveout_fraction = leaveout_fraction
+        self.leaveout_prob = leaveout_prob
+        self.easy_mode = easy_mode
         self.need_output_msgs = need_output_msgs
 
     def answer(self, question: str, target_file: str = "", ans_cmds: list = []):
@@ -209,8 +212,7 @@ class AutoExploreCopilot():
         self.sandbox = AutoExploreSandbox(
             dataset_path=self.root,
             supported_cmds=self.supported_cmds,
-            leaveout_option=LeaveoutOption([target_file],
-                                           self.leaveout_fraction))
+            leaveout_option=LeaveoutOption([target_file], self.leaveout_prob))
 
         # 3. Act
         self.step = 0
@@ -289,6 +291,7 @@ class AutoExploreCopilot():
                                          commands=list_all_actions(
                                              root=self.sandbox.sandbox_dir,
                                              curr_dir=self.sandbox.cwd,
+                                             shuffle=False,
                                          ))
         cur_msgs = [
             ("system",
@@ -403,6 +406,10 @@ class AutoExploreCopilot():
             else:
                 command_output, status = self.sandbox.run_command(cmd)
                 self.terminate_criteria.update_status(**status)
+
+                if self.easy_mode:
+                    if cmd[0] == "cat":
+                        command_output = ""
 
                 self.msgs.append(("user", command_output))
 

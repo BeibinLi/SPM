@@ -11,15 +11,15 @@ SAFE_MESSAGE = "SAFE"
 
 class LeaveoutOption:
 
-    def __init__(self, files_must_contain: list, leaveout_fraction: float):
+    def __init__(self, files_must_contain: list, leaveout_prob: float):
         """
         Args:
         - `files_must_contain` (list): The list of files that must be included.
-        - `leaveout_fraction` (float): The probability of leaving out unrelated
+        - `leaveout_prob` (float): The probability of leaving out unrelated
         files.
         """
         self.files_must_contain = files_must_contain
-        self.leaveout_fraction = leaveout_fraction
+        self.leaveout_prob = leaveout_prob
 
     def __call__(self, file: str) -> bool:
         """
@@ -31,9 +31,9 @@ class LeaveoutOption:
         randomly chosen to be left out.
         """
         for file_must_contain in self.files_must_contain:
-            if file.startswith(file_must_contain):
+            if file_must_contain.startswith(file):
                 return False
-        return random.random() < self.leaveout_fraction
+        return random.random() < self.leaveout_prob
 
 
 class AutoExploreSandbox:
@@ -73,8 +73,9 @@ class AutoExploreSandbox:
         # files
         def ignore(directory, filenames):
             return [
-                fn for fn in filenames if fn.startswith('.')
-                or self.leaveout_option(os.path.join(directory, fn))
+                fn for fn in filenames
+                if fn.startswith('.') or self.leaveout_option(
+                    os.path.join(directory[len(self.dataset_path):], fn))
             ]
 
         shutil.copytree(self.dataset_path,

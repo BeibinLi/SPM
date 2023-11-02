@@ -79,6 +79,7 @@ for epoch in tqdm(range(script_args.max_steps)):
 
     # random sample a data
     data = random.choice(cur_dataset)
+    #data = cur_dataset[0]
 
     generation_config = GenerationConfig(
         max_length=script_args.max_seq_length,
@@ -92,24 +93,28 @@ for epoch in tqdm(range(script_args.max_steps)):
     )
 
     # setup the copilot
-    copilot = AutoExploreCopilot(root=root,
-                                 temperature=temperature,
-                                 top_p=top_p,
-                                 max_token_length=script_args.max_seq_length,
-                                 max_new_tokens=script_args.max_new_tokens,
-                                 file_save_path="new_and_changed_files/",
-                                 interaction_type="train",
-                                 model_type="local",
-                                 model=model,
-                                 tokenizer=tokenizer,
-                                 cost_function=step_cost,
-                                 terminate_criteria=IdentifyFileTerminate(
-                                     data["filename"]),
-                                 leaveout_fraction=0.5,
-                                 need_output_msgs=False)
+    copilot = AutoExploreCopilot(
+        root=root,
+        temperature=temperature,
+        top_p=top_p,
+        max_token_length=script_args.max_seq_length,
+        max_new_tokens=script_args.max_new_tokens,
+        file_save_path="new_and_changed_files/",
+        interaction_type="train",
+        model_type="local",
+        model=model,
+        tokenizer=tokenizer,
+        cost_function=step_cost,
+        terminate_criteria=IdentifyFileTerminate(data["filename"]),
+        leaveout_prob=0.5,
+    #leaveout_prob=0,
+        easy_mode=script_args.easy,
+        need_output_msgs=False)
 
     # rollout a trajectory
-    copilot.answer(question=data["question"], target_file=data["filename"])
+    question = f"Find {data['filename']}" if script_args.easy else data[
+        "question"]
+    copilot.answer(question=question, target_file=data["filename"])
 
     logs = copilot.get_generation_logs()
 
