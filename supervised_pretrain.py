@@ -54,8 +54,9 @@ dataset = load_dataset(
     split="train").shuffle(seed=42)
 
 collator = DataCollatorForCompletionOnlyLM(
-    response_template=[5103, 29901, 13]
-    if "llama" in script_args.model_name.lower() else RESPONSE_TEMPLATE,
+    #response_template=[5103, 29901, 13]
+    #if "llama" in script_args.model_name.lower() else RESPONSE_TEMPLATE,
+    response_template=RESPONSE_TEMPLATE,
     tokenizer=tokenizer)
 
 trainer = SFTTrainer(

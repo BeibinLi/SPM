@@ -38,6 +38,15 @@ class ScriptArguments:
                 "latest for latest checkpoint. directory for loading from a "
                 "directory."
         })
+    task_file: Optional[str] = field(
+        default="data/tasks/file_search_coffee.json",
+    #default="data/tasks/*",
+        metadata={
+            "help": "The path to the task file. Could be a directory or a "
+                    "specific file. All files should contain the path of "
+                    "associated repositories."
+        },
+    )
     ckpt_path: Optional[str] = field(
         default="results/",
         metadata={
@@ -130,7 +139,6 @@ class ScriptArguments:
     use_critic: Optional[bool] = field(
         default=False,
         metadata={"help": "Whether use critic in RL finetuning."})
-
     easy: Optional[bool] = field(
         default=False,
         metadata={"help": "Whether use easy task (file finding)."})

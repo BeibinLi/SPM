@@ -304,7 +304,7 @@ class AutoExploreCopilot():
                  EXEC_RES="\n".join([msg[1] for msg in self.msgs]),
                  CMD_LIST="\n".join([
                      CHOICES[i] + ". " + cmd for i, cmd in enumerate(cmd_list)
-                 ])) + RESPONSE_TEMPLATE)
+                 ])) + " " + RESPONSE_TEMPLATE)
         ]
         self.msgs = []
 

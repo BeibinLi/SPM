@@ -117,6 +117,7 @@ def create_and_prepare_model(
         trust_remote_code=True,
         cache_dir=args.cache_dir,
         model_max_length=model.config.max_position_embeddings,
+        add_prefix_space=False,
     )
     tokenizer.pad_token = tokenizer.eos_token
 

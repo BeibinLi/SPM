@@ -1,4 +1,4 @@
-# Task:
+# Task
 {TASK}
 
 # Current working directory
