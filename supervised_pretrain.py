@@ -1,15 +1,17 @@
 import glob
 import os
+
 import torch
 from accelerate import Accelerator
 from datasets import load_dataset
 from peft.tuners.lora import LoraLayer
 from transformers import HfArgumentParser, TrainingArguments
+from transformers.trainer_callback import TrainerCallback
+from trl import DataCollatorForCompletionOnlyLM, SFTTrainer
 
 from auto_explore_copilot import RESPONSE_TEMPLATE
 from experiment_args import ScriptArguments
-from trl import SFTTrainer, DataCollatorForCompletionOnlyLM
-from model_utils import load_script_args, create_and_prepare_model
+from model_utils import create_and_prepare_model, load_script_args
 from utils import get_exp_id
 
 accelerator = Accelerator()
@@ -58,17 +60,31 @@ collator = DataCollatorForCompletionOnlyLM(
     if "llama" in script_args.model_name.lower() else RESPONSE_TEMPLATE,
     tokenizer=tokenizer)
 
-trainer = SFTTrainer(
-    model=model,
-    train_dataset=dataset,
-    dataset_text_field="text",
-    peft_config=peft_config,
-    max_seq_length=script_args.max_seq_length,
-    tokenizer=tokenizer,
-    data_collator=collator,
-    args=training_arguments,
+
+class PeftSavingCallback(TrainerCallback):
+
+    def on_train_end(self, args, state, control, **kwargs):
+        peft_model_path = os.path.join(state.best_model_checkpoint,
+                                       "adapter_model")
+        kwargs["model"].save_pretrained(peft_model_path)
+
+        pytorch_model_path = os.path.join(state.best_model_checkpoint,
+                                          "pytorch_model.bin")
+        os.remove(pytorch_model_path) if os.path.exists(
+            pytorch_model_path) else None
+
+
+trainer = SFTTrainer(model=model,
+                     train_dataset=dataset,
+                     dataset_text_field="text",
+                     peft_config=peft_config,
+                     max_seq_length=script_args.max_seq_length,
+                     tokenizer=tokenizer,
+                     data_collator=collator,
+                     args=training_arguments,
+                     callbacks=[PeftSavingCallback]
     #packing=script_args.packing
-)
+                    )
 
 for name, module in trainer.model.named_modules():
     if isinstance(module, LoraLayer):

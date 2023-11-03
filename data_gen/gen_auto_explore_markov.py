@@ -1,8 +1,9 @@
 import json
-from transformers import (HfArgumentParser, AutoTokenizer)
-from experiment_args import ScriptArguments
+
+from transformers import AutoTokenizer, HfArgumentParser
 
 from auto_explore_copilot import AutoExploreCopilot
+from experiment_args import ScriptArguments
 from functions.terminate import AnytimeTerminate
 
 
@@ -15,8 +16,7 @@ parser = HfArgumentParser(ScriptArguments)
 script_args = parser.parse_args_into_dataclasses()[0]
 
 dataset = json.load(
-    open("/home/vectorzhou/Coffee_Roasting_Dataset/file_search_coffee.json",
-         "r"))
+    open("/home/beibinli/Coffee_Roasting_Dataset/file_search_coffee.json", "r"))
 
 tokenizer = AutoTokenizer.from_pretrained(script_args.model_name,
                                           trust_remote_code=True,
@@ -33,7 +33,7 @@ for data in dataset:
         cmds.append("exit")
 
         copilot = AutoExploreCopilot(
-            root="/home/vectorzhou/Coffee_Roasting_Dataset/data/",
+            root="/home/beibinli/Coffee_Roasting_Dataset/data/",
             temperature=0.6,
             top_p=0.9,
             max_token_length=32768,

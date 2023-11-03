@@ -13,13 +13,13 @@ from functions.cost import AutoExploreCostFunction
 from functions.terminate import AnytimeTerminate, AutoExploreTerminateCriteria
 from gpt_api import get_llm
 from model_utils import transformer_text_completion
-from utils import (SUPPORTED_CMDS, colored_string, wrap_path, extract_commands,
-                   list_all_actions)
+from utils import (SUPPORTED_CMDS, colored_string, extract_commands,
+                   list_all_actions, wrap_path)
 
 DEBUG_MSG = True
 WAIT_FOR_INPUT = "<<<Wait for input>>>"
 CHOICES = string.digits + string.ascii_letters
-RESPONSE_TEMPLATE = "Response:\n"
+RESPONSE_TEMPLATE = "\nResponse:\n"
 
 
 def get_args():

@@ -134,26 +134,6 @@ def optimal_action(curr_dir: str, target_file: str, actions: List[str]) -> int:
     return actions.index(optimal_action)
 
 
-def action_prompt(action_list: List[str]) -> str:
-    """
-    Format a list of actions into a string where each action is prefixed by its
-        index.
-
-    Args:
-        action_list (List[str]): A list of actions ('cd ...', 'cat ...').
-
-    Returns:
-        str: A formatted string where each line is an index followed by the
-            corresponding action.
-    """
-    formatted_actions = "\n" + "-" * 10 + "\n"
-    formatted_actions += "You can choose one action below:\n"
-    for i, action in enumerate(action_list):
-        formatted_actions += f"{i+1}: {action}\n"
-    formatted_actions += "Give me your action (an integer): "
-    return formatted_actions
-
-
 # Common programming language suffixes
 CODE_SUFFIXES = (".py", ".c", ".cpp", ".cxx", ".cc", ".h", ".hpp", ".hxx",
                  ".cs", ".java", ".go")
