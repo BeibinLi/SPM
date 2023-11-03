@@ -1,24 +1,25 @@
-import torch
-from torch import nn
-import glob
-import os
 import copy
+import glob
 import inspect
-from termcolor import colored
-import yaml
+import os
 import pdb
-from utils import extract_command_blocks
+
+import torch
+import yaml
 from accelerate import Accelerator
+from llama.generation import (B_INST, B_SYS, E_INST, E_SYS, SPECIAL_TAGS,
+                              UNSAFE_ERROR, Dialog, Message)
+from peft import LoraConfig, PeftConfig, PeftModel
+from termcolor import colored
+from torch import nn
 from transformers import (AutoModelForCausalLM, AutoTokenizer,
                           BitsAndBytesConfig, GenerationConfig)
-from transformers.generation.logits_process import (LogitsProcessorList)
+from transformers.generation.logits_process import LogitsProcessorList
 from transformers.generation.stopping_criteria import (
     StoppingCriteriaList, validate_stopping_criteria)
-from peft import PeftConfig, LoraConfig, PeftModel
-from llama.generation import (Message, Dialog, B_INST, E_INST, B_SYS, E_SYS,
-                              SPECIAL_TAGS, UNSAFE_ERROR)
 
 from experiment_args import ScriptArguments
+from utils import extract_command_blocks
 
 
 def load_script_args(script_args: ScriptArguments) -> ScriptArguments:
@@ -103,6 +104,7 @@ def create_and_prepare_model(
 
     if args.load_dir:
         print(colored("Loading from " + args.load_dir, "green"))
+        pdb.set_trace()
         model = PeftModel.from_pretrained(model=base_model,
                                           model_id=args.load_dir,
                                           is_trainable=True,

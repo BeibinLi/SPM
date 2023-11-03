@@ -1,8 +1,10 @@
 import json
-from transformers import (HfArgumentParser, AutoTokenizer)
-from experiment_args import ScriptArguments
+import os
+
+from transformers import AutoTokenizer, HfArgumentParser
 
 from auto_explore_copilot import AutoExploreCopilot
+from experiment_args import ScriptArguments
 from functions.terminate import AnytimeTerminate
 
 
@@ -14,9 +16,8 @@ def dump(data: list, filename: str):
 parser = HfArgumentParser(ScriptArguments)
 script_args = parser.parse_args_into_dataclasses()[0]
 
-dataset = json.load(
-    open("/home/vectorzhou/Coffee_Roasting_Dataset/file_search_coffee.json",
-         "r"))
+data_dir = os.path.expandusr("~/Coffee_Roasting_Dataset/")
+dataset = json.load(os.path.join(data_dir, "file_search_coffee.json"), "r")
 
 tokenizer = AutoTokenizer.from_pretrained(script_args.model_name,
                                           trust_remote_code=True,
@@ -32,20 +33,19 @@ for data in dataset:
         cmds.append(cmds[-1].replace("cat", "id"))
         cmds.append("exit")
 
-        copilot = AutoExploreCopilot(
-            root="/home/vectorzhou/Coffee_Roasting_Dataset/data/",
-            temperature=0.6,
-            top_p=0.9,
-            max_token_length=32768,
-            max_new_tokens=32768,
-            file_save_path="new_and_changed_files/",
-            interaction_type="debug",
-            model_type="null",
-            model=None,
-            tokenizer=None,
-            cost_function=None,
-            terminate_criteria=AnytimeTerminate(),
-            need_output_msgs=False)
+        copilot = AutoExploreCopilot(root=os.path.join(data_dir, "data/"),
+                                     temperature=0.6,
+                                     top_p=0.9,
+                                     max_token_length=32768,
+                                     max_new_tokens=32768,
+                                     file_save_path="new_and_changed_files/",
+                                     interaction_type="debug",
+                                     model_type="null",
+                                     model=None,
+                                     tokenizer=None,
+                                     cost_function=None,
+                                     terminate_criteria=AnytimeTerminate(),
+                                     need_output_msgs=False)
 
         for _ in range(10):
             copilot.easy_mode = False
