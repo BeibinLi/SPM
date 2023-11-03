@@ -49,10 +49,6 @@ if script_args.use_critic:
 else:
     value_model, value_tokenizer, value_optimizer = None, None, None
 
-# Build dataset
-dataset = build_curriculum(
-    json.load(open(os.path.join(root, "..", "file_search_coffee.json"), "r")))
-
 temperature = 0.6
 top_p = 0.9
 
@@ -63,23 +59,41 @@ step_cost = StepCost()
 synthesized_cost = SynthesizedCost(
     cost_functions=[num_token_cost, keyword_cost], weights=[1, 1])
 
-step_per_curriculum = script_args.max_steps // len(dataset)
-script_args.max_steps = step_per_curriculum * len(dataset)
+# Build dataset
+dataset = json.load(
+    open(os.path.join(root, "..", "file_search_coffee.json"), "r"))
+if script_args.depth_curriculum:
+    dataset = build_curriculum(dataset)
+else:
+    dataset = [dataset]
 
-# set up first curriculum
+step_per_curriculum = script_args.max_steps * 2 // (len(dataset) *
+                                                    (len(dataset) + 1))
+script_args.max_steps = step_per_curriculum * len(dataset) * (len(dataset) +
+                                                              1) // 2
+
+# Epochs to add new curriculum
+trigger_set = [
+    i * (i + 1) // 2 * step_per_curriculum for i in range(len(dataset))
+]
+
+# Init curriculum
 cur_dataset_idx = -1
 cur_dataset = []
-losses = []
 
-for epoch in tqdm(range(script_args.max_steps)):
+# Logs
+total_loss = 0
+losses = []
+msgs = []
+
+for epoch in (pbar := tqdm(range(script_args.max_steps), desc="Epoch")):
     # move on to the next curriculum
-    if epoch % step_per_curriculum == 0:
+    if epoch in trigger_set:
         cur_dataset_idx += 1
         cur_dataset += dataset[cur_dataset_idx]
 
     # random sample a data
     data = random.choice(cur_dataset)
-    #data = cur_dataset[0]
 
     generation_config = GenerationConfig(
         max_length=script_args.max_seq_length,
@@ -93,58 +107,66 @@ for epoch in tqdm(range(script_args.max_steps)):
     )
 
     # setup the copilot
-    copilot = AutoExploreCopilot(
-        root=root,
-        temperature=temperature,
-        top_p=top_p,
-        max_token_length=script_args.max_seq_length,
-        max_new_tokens=script_args.max_new_tokens,
-        file_save_path="new_and_changed_files/",
-        interaction_type="train",
-        model_type="local",
-        model=model,
-        tokenizer=tokenizer,
-        cost_function=step_cost,
-        terminate_criteria=IdentifyFileTerminate(data["filename"]),
-        leaveout_prob=0.5,
-    #leaveout_prob=0,
-        easy_mode=script_args.easy,
-        need_output_msgs=False)
+    copilot = AutoExploreCopilot(root=root,
+                                 temperature=temperature,
+                                 top_p=top_p,
+                                 max_token_length=script_args.max_seq_length,
+                                 max_new_tokens=script_args.max_new_tokens,
+                                 file_save_path="new_and_changed_files/",
+                                 interaction_type="train",
+                                 model_type="local",
+                                 model=model,
+                                 tokenizer=tokenizer,
+                                 cost_function=step_cost,
+                                 terminate_criteria=IdentifyFileTerminate(
+                                     data["filename"]),
+                                 leaveout_prob=script_args.leaveout_prob,
+                                 easy_mode=script_args.easy,
+                                 need_output_msgs=False)
 
     # rollout a trajectory
     question = f"Find {data['filename']}" if script_args.easy else data[
         "question"]
     copilot.answer(question=question, target_file=data["filename"])
 
+    # get logs
     logs = copilot.get_generation_logs()
-
-    # calculate probs and log probs for only the bash commands
-    # masks = get_bash_only_generated_masks(logs=logs, tokenizer=tokenizer)
-    # for i in range(len(logs)):
-    #     logs[i]["generated_mask"] = masks[i]
+    msgs.append(copilot.get_whole_msgs())
 
     # update the model
-    losses.append(
-        policy_gradient_update(model=model,
-                               generation_config=generation_config,
-                               generation_results=[logs],
-                               optimizer=optimizer,
-                               scheduler=scheduler,
-                               value_model=value_model,
-                               value_tokenizer=value_tokenizer,
-                               value_optimizer=value_optimizer))
+    loss = policy_gradient_update(model=model,
+                                  generation_config=generation_config,
+                                  generation_results=[logs],
+                                  optimizer=optimizer,
+                                  scheduler=scheduler,
+                                  value_model=value_model,
+                                  value_tokenizer=value_tokenizer,
+                                  value_optimizer=value_optimizer)
+    losses.append(loss)
+    total_loss += loss
 
-    if (epoch + 1) % script_args.logging_steps == 0:
-        print(losses, sum(losses) / len(losses))
-        losses = []
+    pbar.set_description("Cost: %.2f Epoch:" % (total_loss / (epoch + 1)))
 
     if (epoch + 1) % script_args.save_steps == 0:
         ckpt_path = output_dir + "epoch_" + str(epoch + 1) + "/"
         os.makedirs(ckpt_path, exist_ok=True)
+
+        # dump the model
         model.save_pretrained(save_directory=ckpt_path)
         tokenizer.save_pretrained(save_directory=ckpt_path)
+        if script_args.use_critic:
+            critic_path = ckpt_path + "critic/"
+            os.makedirs(critic_path, exist_ok=True)
+            value_model.save_pretrained(save_directory=critic_path)
+            value_tokenizer.save_pretrained(save_directory=critic_path)
 
         # dump the messages
         with open(ckpt_path + "msgs.json", "w") as f:
             f.write("\n".join(
-                [json.dumps(line) for line in copilot.get_whole_msgs()]))
+                [json.dumps(line) for msg in msgs for line in msg]))
+        msgs = []
+
+        # dump the losses
+        with open(ckpt_path + "losses.json", "w") as f:
+            f.write("\n".join([str(loss) for loss in losses]))
+        losses = []

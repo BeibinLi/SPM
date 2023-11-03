@@ -30,13 +30,20 @@ class ScriptArguments:
                     "Face hub. E.g. gpt2, gpt2-xl, bert, etc."
         },
     )
+    load_dir: Optional[str] = field(
+        default=None,
+        metadata={
+            "help":
+                "Where to load the pretrained models. None for no loading. "
+                "latest for latest checkpoint. directory for loading from a "
+                "directory."
+        })
     ckpt_path: Optional[str] = field(
         default="results/",
         metadata={
             "help": "The location to save the experiment checkpoints. It "
                     " should be the folder with all experiments."
-        },
-    )
+        })
     use_8bit: Optional[bool] = field(
         default=False,
         metadata={"help": "Activate 8bit precision base model loading"},
@@ -120,31 +127,6 @@ class ScriptArguments:
     cache_dir: Optional[str] = field(
         default="model/",
         metadata={"help": "Where to store the pretrained models."})
-
-    load_dir: Optional[str] = field(
-        default=None,
-        metadata={
-            "help":
-                "Where to load the pretrained models. None for no loading. "
-                "latest for latest checkpoint. directory for loading from a "
-                "directory."
-        })
-
-    with_self_instruct: Optional[bool] = field(
-        default=False, metadata={"help": "Whether to use self-instruct data."})
-
-    baseline: Optional[bool] = field(
-        default=False,
-        metadata={
-            "help": "Whether be in baseline "
-                    "mode, i.e., only pretrain on raw data."
-        })
-
-    only_finetune: Optional[bool] = field(
-        default=False,
-        metadata={"help": "Whether only finetune on "
-                          "self-instruct data."})
-
     use_critic: Optional[bool] = field(
         default=False,
         metadata={"help": "Whether use critic in RL finetuning."})
@@ -152,6 +134,19 @@ class ScriptArguments:
     easy: Optional[bool] = field(
         default=False,
         metadata={"help": "Whether use easy task (file finding)."})
+    leaveout_prob: Optional[float] = field(
+        default=0.5,
+        metadata={
+            "help":
+                "The probability to leave out unrelated files when training."
+        })
+    depth_curriculum: Optional[bool] = field(
+        default=False,
+        metadata={
+            "help":
+                "Whether use depth curriculum: sort the target files by their"
+                " depth, and train in increasing order."
+        })
 
     def load(self, yaml_file: str):
         with open(yaml_file, 'r') as file:
