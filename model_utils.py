@@ -104,7 +104,6 @@ def create_and_prepare_model(
 
     if args.load_dir:
         print(colored("Loading from " + args.load_dir, "green"))
-        pdb.set_trace()
         model = PeftModel.from_pretrained(model=base_model,
                                           model_id=args.load_dir,
                                           is_trainable=True,

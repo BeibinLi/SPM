@@ -17,8 +17,6 @@ from model_utils import (load_script_args, calc_probs_log_probs,
                          create_and_prepare_model)
 from utils import build_curriculum, get_exp_id
 
-root = os.path.expanduser("~/Coffee_Roasting_Dataset/data")
-
 parser = HfArgumentParser(ScriptArguments)
 script_args = load_script_args(parser.parse_args_into_dataclasses()[0])
 
@@ -60,8 +58,17 @@ synthesized_cost = SynthesizedCost(
     cost_functions=[num_token_cost, keyword_cost], weights=[1, 1])
 
 # Build dataset
-dataset = json.load(
-    open(os.path.join(root, "..", "file_search_coffee.json"), "r"))
+if script_args.task_file.endswith(".json"):
+    task_files = [script_args.task_file]
+else:
+    task_files = [
+        os.path.join(script_args.task_file, f)
+        for f in os.listdir(script_args.task_file)
+        if f.endswith(".json")
+    ]
+dataset = []
+for task_file in task_files:
+    dataset += json.load(open(task_file, "r"))
 if script_args.depth_curriculum:
     dataset = build_curriculum(dataset)
 else:
@@ -105,6 +112,13 @@ for epoch in (pbar := tqdm(range(script_args.max_steps), desc="Epoch")):
         pad_token_id=tokenizer.pad_token_id,
         eos_token_id=tokenizer.eos_token_id,
     )
+
+    if "root" not in data.keys():
+        # Only for file_search_coffee.json
+        root = "coffee_roasting_dataset"
+    else:
+        root = data["root"]
+    root = os.path.join(script_args.repo_dir, root)
 
     # setup the copilot
     copilot = AutoExploreCopilot(root=root,
