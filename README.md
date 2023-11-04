@@ -4,50 +4,28 @@
 
 ### Model
 
-This pipeline can be equipped with both a text completion model and a chat completion model.
-Specifically, we choose GPT 2 for text completion and Llama 2 for chat completion.
-
-To use a GPT 2 model, set `--model_name=gpt2-xl` when running.
-
-To use a Llama 2 model, set `--model_name=model/llama2/xB` after downloading and converting a Llama 2 model.
-To load a downloaded Llama 2 model, you may need to convert it to Hugging Face.
-The below instructions could be find at [llama-recipes](https://github.com/facebookresearch/llama-recipes/).
-Take using 7B as example, make sure you have all the weights in `<WEIGHT_PATH>/7B` and you want to put the converted weights in `<REPO_PATH>/model/llama2/7B`.
-
-```
-## Install HuggingFace Transformers from source
-
-```bash
-pip install "transformers>=4.34"
-pip install "tokenizers>=0.13.3"
-```
-
-git clone git@github.com:huggingface/transformers.git
-# Or: git clone http://github.com/huggingface/transformers
-cd transformers
-pip install protobuf
-python src/transformers/models/llama/convert_llama_weights_to_hf.py \
-   --input_dir <WEIGHT_PATH> --model_size 7B --output_dir <REPO_PATH>/model/llama2/7B
-
-
-# Note: you may need to change the "main" function in "src/transformers/models/llama/convert_llama_weights_to_hf.py"
-```
-
-If you received tokenizer warnings, you can try to change the line to `tokenizer = tokenizer_class(input_tokenizer_path, legacy=False)`
-
-Then set `model_name = "model/llama2/7B"` in `config.py`.
-
-**Note:** To use xB-chat, you still need to put the weights under the folder `<WEIGHT_PATH>/xB` and call with `--model_size xB`.
-
+Install `transformers` by `pip install transformers`.
+You can use any text completion model by setting `--model_name`.
 
 ### Data
 
-Place the `json` data file at `data/file_search_coffee.json`.
+The data contains two parts: repo and task.
+Place the repos at `<REPO_PATH>/`, e.g. `data/repos/auto_explore/` and `data/repos/coffee_roasting_dataset`
+Place the `.json` task data files at `<TASK_PATH>/*.json`, e.g., `data/tasks/auto_explore.json` and `data/repos/coffee.json`.
+There should be a `root` key in the task files specifying which repo it is using.
 Then, run
 ```bash
-python -m data_gen.gen_auto_explore_markov
+python -m data_gen.gen_auto_explore_markov --task_file=<TASK_PATH> --repo_dir=<REPO_PATH>
 ```
 to generate data for supervised pretraining.
+In the same example,
+```bash
+python -m data_gen.gen_auto_explore_markov --task_file=data/tasks/ --repo_dir=data/repos/
+```
+You can generate data for a single task file by
+```bash
+python -m data_gen.gen_auto_explore_markov --task_file=data/tasks/coffee.json --repo_dir=data/repos/
+```
 
 
 ## Run the code
