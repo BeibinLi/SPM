@@ -40,11 +40,17 @@ class ScriptArguments:
         })
     task_file: Optional[str] = field(
         default="data/tasks/file_search_coffee.json",
-    #default="data/tasks/*",
+    #default="data/tasks/",
         metadata={
             "help": "The path to the task file. Could be a directory or a "
                     "specific file. All files should contain the path of "
                     "associated repositories."
+        },
+    )
+    repo_dir: Optional[str] = field(
+        default="data/repos/",
+        metadata={
+            "help": "The path to the directory containing the repositories."
         },
     )
     ckpt_path: Optional[str] = field(
