@@ -14,7 +14,7 @@ from functions.cost import StepCost, KeywordCost, NumTokenCost, SynthesizedCost
 from functions.terminate import IdentifyFileTerminate
 from functions.training import policy_gradient_update
 from model_utils import (load_script_args, calc_probs_log_probs,
-                         create_and_prepare_model)
+                         create_and_prepare_model, transformer_text_completion)
 from utils import build_curriculum, get_exp_id
 
 parser = HfArgumentParser(ScriptArguments)
@@ -85,7 +85,7 @@ trigger_set = [
 ]
 
 # Init curriculum
-cur_dataset_idx = -1
+curriculum_idx = -1
 cur_dataset = []
 
 # Logs
@@ -96,11 +96,17 @@ msgs = []
 for epoch in (pbar := tqdm(range(script_args.max_steps), desc="Epoch")):
     # move on to the next curriculum
     if epoch in trigger_set:
-        cur_dataset_idx += 1
-        cur_dataset += dataset[cur_dataset_idx]
+        curriculum_idx += 1
+        cur_dataset += dataset[curriculum_idx]
+        idx = 0
+        random.shuffle(cur_dataset)
 
-    # random sample a data
-    data = random.choice(cur_dataset)
+    # sample current batch
+    batch = cur_dataset[idx:idx + script_args.per_device_train_batch_size]
+    idx += script_args.per_device_train_batch_size
+    if idx >= len(cur_dataset):
+        idx = 0
+        random.shuffle(cur_dataset)
 
     generation_config = GenerationConfig(
         max_length=script_args.max_seq_length,
@@ -113,35 +119,67 @@ for epoch in (pbar := tqdm(range(script_args.max_steps), desc="Epoch")):
         eos_token_id=tokenizer.eos_token_id,
     )
 
-    if "root" not in data.keys():
-        # Only for file_search_coffee.json
-        root = "coffee_roasting_dataset"
-    else:
-        root = data["root"]
-    root = os.path.join(script_args.repo_dir, root)
+    # init copilots
+    copilots = []
+    for i in range(len(batch)):
+        data = batch[i]
+        if "root" not in data.keys():
+            # Only for file_search_coffee.json
+            root = "coffee_roasting_dataset"
+        else:
+            root = data["root"]
+        root = os.path.join(script_args.repo_dir, root)
 
-    # setup the copilot
-    copilot = AutoExploreCopilot(root=root,
-                                 temperature=temperature,
-                                 top_p=top_p,
-                                 max_token_length=script_args.max_seq_length,
-                                 max_new_tokens=script_args.max_new_tokens,
-                                 file_save_path="new_and_changed_files/",
-                                 interaction_type="train",
-                                 model_type="local",
-                                 model=model,
-                                 tokenizer=tokenizer,
-                                 cost_function=step_cost,
-                                 terminate_criteria=IdentifyFileTerminate(
-                                     data["filename"]),
-                                 leaveout_prob=script_args.leaveout_prob,
-                                 easy_mode=script_args.easy,
-                                 need_output_msgs=False)
+        copilots.append(
+            AutoExploreCopilot(root=root,
+                               temperature=temperature,
+                               top_p=top_p,
+                               max_token_length=script_args.max_seq_length,
+                               max_new_tokens=script_args.max_new_tokens,
+                               file_save_path="new_and_changed_files/",
+                               interaction_type="train",
+                               model_type="local",
+                               model=model,
+                               tokenizer=tokenizer,
+                               cost_function=step_cost,
+                               terminate_criteria=IdentifyFileTerminate(
+                                   data["filename"]),
+                               leaveout_prob=script_args.leaveout_prob,
+                               easy_mode=script_args.easy,
+                               need_output_msgs=False))
+        question = f"Find {data['filename']}" if script_args.easy else data[
+            "question"]
+        copilots[-1].set_question(question=question,
+                                  target_file=data["filename"])
 
-    # rollout a trajectory
-    question = f"Find {data['filename']}" if script_args.easy else data[
-        "question"]
-    copilot.answer(question=question, target_file=data["filename"])
+    while True:
+        prompts = []
+        for i in range(len(batch)):
+            if not copilots[i].is_finished:
+                copilots[i].build_cur_msgs()
+                prompts.append("\n".join(
+                    [msg[1] for msg in copilots[i].cur_msgs]))
+
+        if len(prompts) == 0:
+            break
+
+        ret = transformer_text_completion(
+            model=model,
+            tokenizer=tokenizer,
+            prompts=prompts,
+            generation_config=copilots[0].generation_config)
+
+        j = 0
+        for i in range(len(batch)):
+            if not copilots[i].is_finished:
+                response = copilots[i].use_lm_ret(ret[j])
+                copilots[i].act_with_response(response)
+                j += 1
+
+    for copilot in copilots:
+        copilot.wrap_up()
+
+    continue
 
     # get logs
     logs = copilot.get_generation_logs()

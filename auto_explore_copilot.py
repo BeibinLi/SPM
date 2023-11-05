@@ -17,7 +17,6 @@ from utils import (SUPPORTED_CMDS, colored_string, extract_commands,
                    list_all_actions, wrap_path)
 
 DEBUG_MSG = True
-WAIT_FOR_INPUT = "<<<Wait for input>>>"
 CHOICES = string.digits + string.ascii_letters
 RESPONSE_TEMPLATE = "# Response:\n"
 
@@ -164,6 +163,18 @@ class AutoExploreCopilot():
             self.tokenizer = tokenizer
             if interaction_type == "train":
                 self.cost_function = cost_function
+
+            self.generation_config = GenerationConfig(
+                max_length=max_token_length,
+            # `max_new_tokens` will override `max_token_length`
+                max_new_tokens=max_new_tokens,
+                do_sample=True,
+                num_beams=1,
+                temperature=temperature,
+                top_p=top_p,
+                pad_token_id=tokenizer.pad_token_id,
+                eos_token_id=tokenizer.eos_token_id,
+            )
         elif model_type == "remote":
             self.model_name = model_name
             self.api = get_llm()
@@ -172,6 +183,48 @@ class AutoExploreCopilot():
         self.leaveout_prob = leaveout_prob
         self.easy_mode = easy_mode
         self.need_output_msgs = need_output_msgs
+
+    def set_question(self, question: str, target_file: str = ""):
+        """
+        Set the question to answer in the copilot.
+
+        Args:
+        - `question` (str): The question to answer.
+        - `target_file` (str): The target file to answer the question. Only used
+        when `self.interaction_type` is 'train'.
+        """
+        self.question = question
+        if self.interaction_type != "train":
+            assert target_file == "", "Only support target file for training."
+
+        self.start_prompt = open(
+            "data_gen/prompt_templates/auto_explore/explore_prompt_rl_markov.md",
+            "r").read()
+
+        # Store the generation logs for training
+        self.sys_infos = []
+        self.generation_logs = []
+        self.whole_msgs = []
+        self.cmd_hisotry = []
+
+        # Initialize the files that have been visited for command filtering
+        self._catted_files = []
+        self._ided_files = []
+
+        # Create sandbox environment
+        if self.interaction_type == "train":
+            self.supported_cmds = [
+                "cd", "ls", "cat", "head", "tail", "id", "exit"
+            ]
+        else:
+            self.supported_cmds = SUPPORTED_CMDS
+        self.sandbox = AutoExploreSandbox(
+            dataset_path=self.root,
+            supported_cmds=self.supported_cmds,
+            leaveout_option=LeaveoutOption([target_file], self.leaveout_prob))
+
+        self.is_finished = False
+        self.step = 0
 
     def answer(self, question: str, target_file: str = "", ans_cmds: list = []):
         """
@@ -184,58 +237,70 @@ class AutoExploreCopilot():
         - `ans_cmds` (list): The commands of answer, can be either optimal or
         random (but still correct). Only used when debug.
         """
-        self.question = question
-        if self.interaction_type != "train":
-            assert target_file == "", "Only support target file for training."
+        self.set_question(question=question, target_file=target_file)
 
-        self.start_prompt = open(
-            "data_gen/prompt_templates/auto_explore/explore_prompt_rl_markov.md",
-            "r").read()
+        self.ans_cmds = ans_cmds
 
-        # store the generation logs for training
-        self.msgs = []
-        self.generation_logs = []
-        self.whole_msgs = []
-        self.cmd_hisotry = []
+        while not self.is_finished:
+            self.build_cur_msgs()
+            response = self.get_response()
+            self.act_with_response(response)
 
-        # Initialize the files that have been visited for command filtering
-        self._catted_files = []
-        self._ided_files = []
+        self.wrap_up()
 
-        # 2. Create sandbox environment
-        if self.interaction_type == "train":
-            self.supported_cmds = [
-                "cd", "ls", "cat", "head", "tail", "id", "exit"
-            ]
-        else:
-            self.supported_cmds = SUPPORTED_CMDS
-        self.sandbox = AutoExploreSandbox(
-            dataset_path=self.root,
-            supported_cmds=self.supported_cmds,
-            leaveout_option=LeaveoutOption([target_file], self.leaveout_prob))
-
-        # 3. Act
-        self.step = 0
+    def get_response(self) -> str:
+        # Case 1: in debug mode, commands are provided
         if self.interaction_type == "debug":
-            # Directly use inner function _act()
-            if ans_cmds == []:
-                while True:
-                    ret = self._act(WAIT_FOR_INPUT)
-                    if ret == "Exit":
-                        break
+            if self.ans_cmds == []:
+                response = input("Input a command:")
             else:
-                for cmd in ans_cmds:
-                    self._act(cmd)
-        else:
-            self.act()
+                cmd = self.ans_cmds.pop(0)
+                response = CHOICES[self.cmd_list.index(cmd)]
 
+        # Case 2: in other modes, use the language model
+        if self.model_type == "local":
+            # Get response from local model
+            # Use multinomial sampling to generate the next token:
+            # Set do_sample = True, num_beams = 1
+            ret = transformer_text_completion(
+                model=self.model,
+                tokenizer=self.tokenizer,
+                prompts=["\n".join([msg[1] for msg in self.cur_msgs])],
+                generation_config=self.generation_config)[0]
+            response = self.use_lm_ret(ret)
+
+        elif self.model_type == "remote":
+            # Get response from remote model
+            response = self.api.reply(agent_name=self.cur_msgs[-1][0],
+                                      msg=self.cur_msgs[-1][1],
+                                      num_response=1,
+                                      temperature=self.temperature,
+                                      top_p=self.top_p,
+                                      prev_msgs=self.cur_msgs[:-1],
+                                      model=self.model_name)[0]
+
+        return response
+
+    def use_lm_ret(self, ret: dict) -> str:
+        response = ret["generation"]["content"].strip(" ")
+        if response == "":
+            response = " "
+
+        ret.update({"cost": 0, "step": self.step})
+        self.generation_logs.append(ret)
+        return response
+
+    def wrap_up(self):
+        """
+        Wrap up after answering a question.
+        """
         if self.interaction_type == "train":
             if self.terminate_criteria.can_terminate():
                 self.generation_logs[-1]["cost"] -= 15
             else:
                 self.generation_logs[-1]["cost"] += 15
 
-        # 4. Save the new or changed files
+        # Save the new or changed files
         os.makedirs(self.file_save_path, exist_ok=True)
         for file_name, content in self.sandbox.get_changed_files().items():
             os.makedirs(self.file_save_path + os.path.dirname(file_name),
@@ -243,10 +308,8 @@ class AutoExploreCopilot():
             with open(self.file_save_path + file_name, "wb") as f:
                 f.write(content)
 
-        # 5. Cleanup sandbox and environment
+        # Cleanup sandbox and environment
         del self.sandbox
-
-        # TODO: find the final answer
 
     def flush_msgs(self):
         pass
@@ -261,126 +324,74 @@ class AutoExploreCopilot():
 
         return self.whole_msgs
 
-    def act(self):
+    def build_cur_msgs(self):
         """
-        Wrapper function to interact with the language model for one step
-        and call the possible next act().
+        Build current messages to send to the language model.
         """
-        # try:
-        #     ret = self._act()
-        # except Exception as e:
-        #     self.msgs.append(("user", str(e)))
-        #     ret = "Continue"
-        ret = self._act()
-
-        if self.interaction_type == "train":
-            self.generation_logs[-1]["cost"] = self.cost_function.call(
-                user_msgs=self.msgs)
-
-        if ret == "Continue" and self.step < 15:
-            self.act()
-
-    def _act(self, cmd: str = None) -> str:
-        """
-        Args:
-        - `cmd` (str): The command to use for debugging.
-        """
-        cwd = os.path.relpath(self.sandbox.cwd, self.sandbox.sandbox_dir)
+        self.cwd = os.path.relpath(self.sandbox.cwd, self.sandbox.sandbox_dir)
         files_under_cwd = os.listdir(self.sandbox.cwd)
-        cmd_list = self._filter_commands(sandbox_cwd=cwd,
-                                         commands=list_all_actions(
-                                             root=self.sandbox.sandbox_dir,
-                                             curr_dir=self.sandbox.cwd,
-                                             shuffle=False,
-                                         ))
-        cur_msgs = [
+        self.cmd_list = self._filter_commands(sandbox_cwd=self.cwd,
+                                              commands=list_all_actions(
+                                                  root=self.sandbox.sandbox_dir,
+                                                  curr_dir=self.sandbox.cwd,
+                                                  shuffle=False,
+                                              ))
+        self.cur_msgs = [
             ("system",
              self.start_prompt.format(
                  TASK=self.question,
-                 CWD=cwd,
+                 CWD=self.cwd,
                  FILES_UNDER_CWD="\n".join(
                      [wrap_path(f) for f in files_under_cwd]),
                  CMD_HIST="\n".join(self.cmd_hisotry),
-                 EXEC_RES="\n".join([msg[1] for msg in self.msgs]),
+                 EXEC_RES="\n".join([r[1] for r in self.sys_infos]),
                  CMD_LIST="\n".join([
-                     CHOICES[i] + ". " + cmd for i, cmd in enumerate(cmd_list)
+                     CHOICES[i] + ". " + cmd
+                     for i, cmd in enumerate(self.cmd_list)
                  ])) + " " + RESPONSE_TEMPLATE)
         ]
-        self.msgs = []
+        self.sys_infos = []
 
         if self.need_output_msgs:
-            print(colored_string(cur_msgs[0]))
+            print(colored_string(self.cur_msgs[0]))
 
-        if self.model_type == "local":
-            # Get response from local model
-            # Use multinomial sampling to generate the next token:
-            # Set do_sample = True, num_beams = 1
-            generation_config = GenerationConfig(
-                max_length=self.max_token_length,
-            # the `max_new_tokens` will override the `max_token_length`
-                max_new_tokens=self.max_new_tokens,
-                do_sample=True,
-                num_beams=1,
-                temperature=self.temperature,
-                top_p=self.top_p,
-                pad_token_id=self.tokenizer.pad_token_id,
-                eos_token_id=self.tokenizer.eos_token_id,
-            )
+    def act_with_response(self, response: str) -> str:
+        """
 
-            ret = transformer_text_completion(
-                model=self.model,
-                tokenizer=self.tokenizer,
-                prompts=["\n".join([msg[1] for msg in cur_msgs])],
-                generation_config=generation_config)[0]
-            response = ret["generation"]["content"]
+        """
+        try:
+            ret = self._act_with_response(response)
+        except Exception as e:
+            ret = "Continue"
+            self.sys_infos.append(("system", f"Runtime Error: {e}"))
 
-            response = response.strip(" ")
-            if response == "":
-                response = " "
+        if self.interaction_type == "train":
+            self.generation_logs[-1]["cost"] = self.cost_function.call(
+                user_msgs=self.cur_msgs + self.sys_infos)
 
-            ret.update({"cost": 0, "step": self.step})
-            self.generation_logs.append(ret)
-        elif self.model_type == "remote":
-            # Get response from remote model
-            response = self.api.reply(agent_name=cur_msgs[-1][0],
-                                      msg=cur_msgs[-1][1],
-                                      num_response=1,
-                                      temperature=self.temperature,
-                                      top_p=self.top_p,
-                                      prev_msgs=cur_msgs[:-1],
-                                      model=self.model_name)[0]
-        else:
-            # Use provided response
-            assert cmd is not None, ("Must provide a response when "
-                                     "debugging.")
-            if cmd == WAIT_FOR_INPUT:
-                response = input("Input a command:")
-            else:
-                response = CHOICES[cmd_list.index(cmd)]
+        if ret == "Exit" or self.step == 15:
+            self.is_finished = True
 
-        # Increment step after querying the language model
         self.step += 1
 
-        cur_msgs.append(("assistant", response))
-        self.whole_msgs.append(cur_msgs)
-
-        if self.need_output_msgs:
-            print(colored_string(cur_msgs[1]))
+    def _act_with_response(self, response: str) -> str:
+        self.cur_msgs.append(("assistant", response))
+        self.whole_msgs.append(self.cur_msgs)
 
         # Only consider the first command
         if response[0] in CHOICES:
             idx = CHOICES.index(response[0])
-            if idx >= len(cmd_list):
+            if idx >= len(self.cmd_list):
                 self.msgs.append(("user", "Error: Invalid choice."))
                 return "Continue"
-            commands = extract_commands(f"```bash\n{cmd_list[idx]}\n```",
+            commands = extract_commands(f"```bash\n{self.cmd_list[idx]}\n```",
                                         only_first=True)
         else:
             commands = []
 
         for cmd in commands:
             self.msgs.append(("user", "Executing: " + " ".join(cmd)))
-            self._update_cmd_history(cwd, " ".join(cmd))
+            self._update_cmd_history(self.cwd, " ".join(cmd))
 
             if cmd[0] == "exit":
                 if len(commands) > 1:
@@ -395,14 +406,6 @@ class AutoExploreCopilot():
                         return "Exit"
 
                     return "Exit"
-                    # if self.terminate_criteria.can_terminate():
-                    #     # Success! save the result
-                    #     return "Exit"
-                    # else:
-                    #     self.msgs.append(
-                    #         ("user",
-                    #          "Error: The terminate criteria is not met. " +
-                    #          self.terminate_criteria.describe_criteria()))
             else:
                 command_output, status = self.sandbox.run_command(cmd)
                 self.terminate_criteria.update_status(**status)

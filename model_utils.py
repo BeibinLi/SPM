@@ -109,17 +109,20 @@ def create_and_prepare_model(
                                           is_trainable=True,
                                           config=peft_config)
         del base_model
+
+        tokenizer = AutoTokenizer.from_pretrained(args.load_dir)
     else:
         #model = PeftModel(model=base_model, peft_config=peft_config)
         model = base_model
+        tokenizer = AutoTokenizer.from_pretrained(
+            args.model_name,
+            trust_remote_code=True,
+            cache_dir=args.cache_dir,
+            model_max_length=model.config.max_position_embeddings,
+            add_prefix_space=False,
+        )
 
-    tokenizer = AutoTokenizer.from_pretrained(
-        args.model_name,
-        trust_remote_code=True,
-        cache_dir=args.cache_dir,
-        model_max_length=model.config.max_position_embeddings,
-        add_prefix_space=False,
-    )
+    tokenizer.padding_side = "left"
     tokenizer.pad_token = tokenizer.eos_token
 
     return tokenizer, peft_config, model
@@ -238,23 +241,15 @@ def transformer_text_completion(model: PeftModel, tokenizer: AutoTokenizer,
         "generated_mask": list,
     }, ...]
     """
-    assert len(
-        prompts) == 1, "Currently do not support batched prompts for training."
+    inputs = tokenizer(prompts,
+                       padding=True,
+                       truncation=True,
+                       return_tensors="pt")["input_ids"]
 
-    # Clip to max_length-20
-    prompt_tokens = [
-        tokenizer.encode(x)[-generation_config.max_length + 20:]
-        for x in prompts
-    ]
+    max_len = inputs.shape[1]
 
-    max_len = max([len(x) for x in prompt_tokens])
-    inputs = torch.Tensor([(x + [tokenizer.pad_token_id] * (max_len - len(x)))
-                           for x in prompt_tokens]).long()
-
-    outputs = model.generate(
-        inputs=inputs.to(model.device),
-        generation_config=generation_config,
-    )
+    outputs = model.generate(inputs=inputs.to(model.device),
+                             generation_config=generation_config)
 
     # outputs contain an EOS token in the end
     # remove it when decoding
