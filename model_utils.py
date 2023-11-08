@@ -3,12 +3,11 @@ import glob
 import inspect
 import os
 import pdb
-
 import torch
 import yaml
 from accelerate import Accelerator
-from llama.generation import (B_INST, B_SYS, E_INST, E_SYS, SPECIAL_TAGS,
-                              UNSAFE_ERROR, Dialog, Message)
+#from llama.generation import (B_INST, B_SYS, E_INST, E_SYS, SPECIAL_TAGS,
+#                              UNSAFE_ERROR, Dialog, Message)
 from peft import LoraConfig, PeftConfig, PeftModel
 from termcolor import colored
 from torch import nn
@@ -270,199 +269,197 @@ def transformer_text_completion(model: PeftModel, tokenizer: AutoTokenizer,
     return res
 
 
-def GPT_msgs_to_Llama_dialog(messages: list) -> Dialog:
-    """
-    Convert GPT messages to Llama dialog.
+# def GPT_msgs_to_Llama_dialog(messages: list) -> Dialog:
+#     """
+#     Convert GPT messages to Llama dialog.
 
-    Args:
-    - `messages` (list[dict]): List of messages from GPT, with format:
-    [(agent_name, message_content), ...] or
-    [{
-        "role": agent_name,
-        "content": message_content
-    }, ...]
-        - `role` taking only ['system', 'user', 'assistant']
+#     Args:
+#     - `messages` (list[dict]): List of messages from GPT, with format:
+#     [(agent_name, message_content), ...] or
+#     [{
+#         "role": agent_name,
+#         "content": message_content
+#     }, ...]
+#         - `role` taking only ['system', 'user', 'assistant']
 
-    Returns:
-    - Dialog: Llama dialog, with same format, but:
-        - `role` starts with 'system', then 'user' and 'assistant' alternate
-        (u/a/u/a/u...)
-    """
+#     Returns:
+#     - Dialog: Llama dialog, with same format, but:
+#         - `role` starts with 'system', then 'user' and 'assistant' alternate
+#         (u/a/u/a/u...)
+#     """
 
-    if not isinstance(messages[0], dict):
-        # convert the first format to the second
-        messages = [{
-            "role": agent_name,
-            "content": message_content
-        } for agent_name, message_content in messages]
+#     if not isinstance(messages[0], dict):
+#         # convert the first format to the second
+#         messages = [{
+#             "role": agent_name,
+#             "content": message_content
+#         } for agent_name, message_content in messages]
 
-    def predict_role(pos, system):
-        if system:
-            if pos == 0:
-                return "system"
-            else:
-                return ["assistant", "user"][pos % 2]
-        else:
-            return ["user", "assistant"][pos % 2]
+#     def predict_role(pos, system):
+#         if system:
+#             if pos == 0:
+#                 return "system"
+#             else:
+#                 return ["assistant", "user"][pos % 2]
+#         else:
+#             return ["user", "assistant"][pos % 2]
 
-    for message in messages:
-        message["role"] = message["role"].lower()
-        assert message["role"] in [
-            "system", "user", "assistant"
-        ], "Role must be in ['system', 'user', 'assistant']."
+#     for message in messages:
+#         message["role"] = message["role"].lower()
+#         assert message["role"] in [
+#             "system", "user", "assistant"
+#         ], "Role must be in ['system', 'user', 'assistant']."
 
-    pos = 0
-    system = messages[0]["role"] == "system"
-    content = ""
-    dialog = []
+#     pos = 0
+#     system = messages[0]["role"] == "system"
+#     content = ""
+#     dialog = []
 
-    for message in messages:
-        role = predict_role(pos, system)
-        if message["role"] == role:
-            content += "\n" + message["content"]
-        else:
-            dialog.append(Message(role=role, content=content.strip()))
-            pos += 1
-            content = message["content"]
-    dialog.append(
-        Message(role=predict_role(pos, system), content=content.strip()))
+#     for message in messages:
+#         role = predict_role(pos, system)
+#         if message["role"] == role:
+#             content += "\n" + message["content"]
+#         else:
+#             dialog.append(Message(role=role, content=content.strip()))
+#             pos += 1
+#             content = message["content"]
+#     dialog.append(
+#         Message(role=predict_role(pos, system), content=content.strip()))
 
-    return dialog
+#     return dialog
 
+# def build_Llama_prompt_from_dialogs(
+#         tokenizer: AutoTokenizer,
+#         dialogs: list,
+#         check_last_user: bool = True) -> (list, list):
+#     """
+#     Build Llama prompt from dialogs.
 
-def build_Llama_prompt_from_dialogs(
-        tokenizer: AutoTokenizer,
-        dialogs: list,
-        check_last_user: bool = True) -> (list, list):
-    """
-    Build Llama prompt from dialogs.
+#     Args:
+#     - `tokenizer` (AutoTokenizer): Llama tokenizer.
+#     - `dialogs` (list[Dialog]): List of dialogs, with format:
+#     [{
+#         "role": agent_name,
+#         "content": message_content
+#     }, ...]
+#         - `role` taking only ['system', 'user', 'assistant']
+#         - `role` starts with 'system', then 'user' and 'assistant' alternate
+#         (u/a/u/a/u...)
+#     - `check_last_user` (bool): Whether to check last message from user.
 
-    Args:
-    - `tokenizer` (AutoTokenizer): Llama tokenizer.
-    - `dialogs` (list[Dialog]): List of dialogs, with format:
-    [{
-        "role": agent_name,
-        "content": message_content
-    }, ...]
-        - `role` taking only ['system', 'user', 'assistant']
-        - `role` starts with 'system', then 'user' and 'assistant' alternate
-        (u/a/u/a/u...)
-    - `check_last_user` (bool): Whether to check last message from user.
+#     Returns:
+#     - tuple: A tuple containing:
+#         - `prompt_tokens` (list): List of prompt tokens.
+#         - `unsafe_requests` (list): List of bools indicating whether the
+#         request is unsafe.
+#     """
+#     prompt_tokens = []
+#     unsafe_requests = []
 
-    Returns:
-    - tuple: A tuple containing:
-        - `prompt_tokens` (list): List of prompt tokens.
-        - `unsafe_requests` (list): List of bools indicating whether the
-        request is unsafe.
-    """
-    prompt_tokens = []
-    unsafe_requests = []
+#     for dialog in dialogs:
+#         unsafe_requests.append(
+#             any([
+#                 tag in msg["content"] for tag in SPECIAL_TAGS for msg in dialog
+#             ]))
+#         if dialog[0]["role"] == "system":
+#             dialog = [{
+#                 "role":
+#                     dialog[1]["role"],
+#                 "content":
+#                     B_SYS + dialog[0]["content"] + E_SYS + dialog[1]["content"],
+#             }] + dialog[2:]
+#         assert all([msg["role"] == "user" for msg in dialog[::2]]) and all([
+#             msg["role"] == "assistant" for msg in dialog[1::2]
+#         ]), (
+#             "model only supports 'system', 'user' and 'assistant' roles, "
+#             "starting with 'system', then 'user' and alternating (u/a/u/a/u...)"
+#         )
+#         dialog_tokens = sum(
+#             [
+#                 tokenizer.encode(f"{B_INST} {(prompt['content']).strip()} "
+#                                  f"{E_INST} {(answer['content']).strip()} ") +
+#                 [tokenizer.eos_token_id] for prompt, answer in zip(
+#                     dialog[::2],
+#                     dialog[1::2],
+#                 )
+#             ],
+#             [],
+#         )
+#         if check_last_user:
+#             assert (
+#                 dialog[-1]["role"] == "user"
+#             ), f"Last message must be from user, got {dialog[-1]['role']}"
+#         if dialog[-1]["role"] == "user":
+#             dialog_tokens += tokenizer.encode(
+#                 f"{B_INST} {(dialog[-1]['content']).strip()} {E_INST}")
+#         prompt_tokens.append(dialog_tokens)
 
-    for dialog in dialogs:
-        unsafe_requests.append(
-            any([
-                tag in msg["content"] for tag in SPECIAL_TAGS for msg in dialog
-            ]))
-        if dialog[0]["role"] == "system":
-            dialog = [{
-                "role":
-                    dialog[1]["role"],
-                "content":
-                    B_SYS + dialog[0]["content"] + E_SYS + dialog[1]["content"],
-            }] + dialog[2:]
-        assert all([msg["role"] == "user" for msg in dialog[::2]]) and all([
-            msg["role"] == "assistant" for msg in dialog[1::2]
-        ]), (
-            "model only supports 'system', 'user' and 'assistant' roles, "
-            "starting with 'system', then 'user' and alternating (u/a/u/a/u...)"
-        )
-        dialog_tokens = sum(
-            [
-                tokenizer.encode(f"{B_INST} {(prompt['content']).strip()} "
-                                 f"{E_INST} {(answer['content']).strip()} ") +
-                [tokenizer.eos_token_id] for prompt, answer in zip(
-                    dialog[::2],
-                    dialog[1::2],
-                )
-            ],
-            [],
-        )
-        if check_last_user:
-            assert (
-                dialog[-1]["role"] == "user"
-            ), f"Last message must be from user, got {dialog[-1]['role']}"
-        if dialog[-1]["role"] == "user":
-            dialog_tokens += tokenizer.encode(
-                f"{B_INST} {(dialog[-1]['content']).strip()} {E_INST}")
-        prompt_tokens.append(dialog_tokens)
+#     return prompt_tokens, unsafe_requests
 
-    return prompt_tokens, unsafe_requests
+# def Llama_chat_completion(model: PeftModel, tokenizer: AutoTokenizer,
+#                           dialogs: list,
+#                           generation_config: GenerationConfig) -> list:
+#     """
+#     Chat completion for Llama 2.
 
+#     Args:
+#     - `model` (PeftModel): Llama model.
+#     - `tokenizer` (AutoTokenizer): Llama tokenizer.
+#     - `dialogs` (list[Dialog]): List of dialogs, with format:
+#     [{
+#         "role": agent_name,
+#         "content": message_content
+#     }, ...]
+#         - `role` taking only ['system', 'user', 'assistant']
+#         - `role` starts with 'system', then 'user' and 'assistant' alternate
+#         (u/a/u/a/u...)
+#     - `generation_config` (GenerationConfig): Generation config for the model.
 
-def Llama_chat_completion(model: PeftModel, tokenizer: AutoTokenizer,
-                          dialogs: list,
-                          generation_config: GenerationConfig) -> list:
-    """
-    Chat completion for Llama 2.
+#     Returns:
+#     - list: List of generated messages, with format:
+#     [{
+#         "generation": {
+#             "role": str,
+#             "content": str
+#         },
+#         "tokens": torch.Tensor,
+#         "generated_mask": list
+#     }, ...]
+#     """
+#     assert len(
+#         dialogs) == 1, "Currently do not support batched dialogs for training."
 
-    Args:
-    - `model` (PeftModel): Llama model.
-    - `tokenizer` (AutoTokenizer): Llama tokenizer.
-    - `dialogs` (list[Dialog]): List of dialogs, with format:
-    [{
-        "role": agent_name,
-        "content": message_content
-    }, ...]
-        - `role` taking only ['system', 'user', 'assistant']
-        - `role` starts with 'system', then 'user' and 'assistant' alternate
-        (u/a/u/a/u...)
-    - `generation_config` (GenerationConfig): Generation config for the model.
+#     prompt_tokens, unsafe_requests = build_Llama_prompt_from_dialogs(
+#         tokenizer=tokenizer, dialogs=dialogs)
 
-    Returns:
-    - list: List of generated messages, with format:
-    [{
-        "generation": {
-            "role": str,
-            "content": str
-        },
-        "tokens": torch.Tensor,
-        "generated_mask": list
-    }, ...]
-    """
-    assert len(
-        dialogs) == 1, "Currently do not support batched dialogs for training."
+#     # left-padding
+#     max_len = max([len(x) for x in prompt_tokens])
+#     inputs = torch.Tensor([([tokenizer.pad_token_id] * (max_len - len(x)) + x)
+#                            for x in prompt_tokens]).long()
 
-    prompt_tokens, unsafe_requests = build_Llama_prompt_from_dialogs(
-        tokenizer=tokenizer, dialogs=dialogs)
+#     outputs = model.generate(
+#         inputs=inputs.to(model.device),
+#         generation_config=generation_config,
+#     )
 
-    # left-padding
-    max_len = max([len(x) for x in prompt_tokens])
-    inputs = torch.Tensor([([tokenizer.pad_token_id] * (max_len - len(x)) + x)
-                           for x in prompt_tokens]).long()
+#     # outputs contain an EOS token in the end
+#     # remove it when decoding
+#     res = []
+#     for t, unsafe in zip(outputs, unsafe_requests):
+#         newly_generated = t[max_len:]
+#         res.append({
+#             "generation": {
+#                 "role":
+#                     "assistant",
+#                 "content":
+#                     tokenizer.decode(newly_generated)
+#                     if not unsafe else UNSAFE_ERROR,
+#             },
+#             "tokens": t,
+#             "generated_mask": [False] * max_len + [True] * len(newly_generated),
+#         })
 
-    outputs = model.generate(
-        inputs=inputs.to(model.device),
-        generation_config=generation_config,
-    )
-
-    # outputs contain an EOS token in the end
-    # remove it when decoding
-    res = []
-    for t, unsafe in zip(outputs, unsafe_requests):
-        newly_generated = t[max_len:]
-        res.append({
-            "generation": {
-                "role":
-                    "assistant",
-                "content":
-                    tokenizer.decode(newly_generated)
-                    if not unsafe else UNSAFE_ERROR,
-            },
-            "tokens": t,
-            "generated_mask": [False] * max_len + [True] * len(newly_generated),
-        })
-
-    return res
+#     return res
 
 
 # A new function for PeftModel to support calc prob and log prob WITH GRADIENTS
