@@ -18,7 +18,7 @@ from utils import (SUPPORTED_CMDS, colored_string, extract_commands,
 
 DEBUG_MSG = True
 CHOICES = string.digits + string.ascii_letters
-RESPONSE_TEMPLATE = "# Response:\n"
+RESPONSE_TEMPLATE = " # Response:\n"
 
 
 def get_args():

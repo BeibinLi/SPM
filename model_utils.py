@@ -122,6 +122,7 @@ def create_and_prepare_model(
             add_prefix_space=False,
         )
 
+    tokenizer.truncation_side = "left"
     tokenizer.padding_side = "left"
     tokenizer.pad_token = tokenizer.eos_token
 

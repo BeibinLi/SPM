@@ -179,16 +179,16 @@ for epoch in (pbar := tqdm(range(script_args.max_steps), desc="Epoch")):
     for copilot in copilots:
         copilot.wrap_up()
 
-    continue
-
     # get logs
-    logs = copilot.get_generation_logs()
-    msgs.append(copilot.get_whole_msgs())
+    logs = []
+    for copilot in copilots:
+        logs.append(copilot.get_generation_logs())
+        msgs.append(copilot.get_whole_msgs())
 
     # update the model
     loss = policy_gradient_update(model=model,
                                   generation_config=generation_config,
-                                  generation_results=[logs],
+                                  generation_results=logs,
                                   optimizer=optimizer,
                                   scheduler=scheduler,
                                   value_model=value_model,
