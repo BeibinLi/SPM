@@ -1,12 +1,7 @@
-import glob
 import os
 
-import torch
-from accelerate import Accelerator
 from datasets import load_dataset
-from peft.tuners.lora import LoraLayer
 from transformers import HfArgumentParser, TrainingArguments
-from transformers.trainer_callback import TrainerCallback
 from trl import DataCollatorForCompletionOnlyLM, SFTTrainer
 
 from auto_explore_copilot import RESPONSE_TEMPLATE
@@ -14,10 +9,6 @@ from experiment_args import ScriptArguments
 from model_utils import create_and_prepare_model, load_script_args
 from utils import get_exp_id
 
-accelerator = Accelerator()
-local_rank = accelerator.process_index
-
-# Distributed
 parser = HfArgumentParser(ScriptArguments)
 script_args = load_script_args(parser.parse_args_into_dataclasses()[0])
 
@@ -61,45 +52,17 @@ collator = DataCollatorForCompletionOnlyLM(
     response_template=RESPONSE_TEMPLATE,
     tokenizer=tokenizer)
 
-
-class PeftSavingCallback(TrainerCallback):
-
-    def on_train_end(self, args, state, control, **kwargs):
-        peft_model_path = os.path.join(state.best_model_checkpoint,
-                                       "adapter_model")
-        kwargs["model"].save_pretrained(peft_model_path)
-
-        pytorch_model_path = os.path.join(state.best_model_checkpoint,
-                                          "pytorch_model.bin")
-        os.remove(pytorch_model_path) if os.path.exists(
-            pytorch_model_path) else None
-
-
-trainer = SFTTrainer(model=model,
-                     train_dataset=dataset,
-                     dataset_text_field="text",
-                     peft_config=peft_config,
-                     max_seq_length=script_args.max_seq_length,
-                     tokenizer=tokenizer,
-                     data_collator=collator,
-                     args=training_arguments,
-                     callbacks=[PeftSavingCallback]
-    #packing=script_args.packing
-                    )
-
-for name, module in trainer.model.named_modules():
-    if isinstance(module, LoraLayer):
-        if script_args.bf16:
-            module = module.to(torch.bfloat16)
-    if "norm" in name:
-        module = module.to(torch.float32)
-    if "lm_head" in name or "embed_tokens" in name:
-        if hasattr(module, "weight"):
-            if script_args.bf16 and module.weight.dtype == torch.float32:
-                module = module.to(torch.bfloat16)
+trainer = SFTTrainer(
+    model=model,
+    train_dataset=dataset,
+    dataset_text_field="text",
+    peft_config=peft_config,
+    max_seq_length=script_args.max_seq_length,
+    tokenizer=tokenizer,
+    data_collator=collator,
+    args=training_arguments,
+)
 
 trainer.train()
-script_args.load_dir = max(glob.glob(
-    os.path.join(training_arguments.output_dir, "checkpoint-*")),
-                           key=os.path.getctime)
+
 del model, trainer

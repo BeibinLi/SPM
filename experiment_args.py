@@ -93,10 +93,6 @@ class ScriptArguments:
         default=False,
         metadata={"help": "Enables bf16 training."},
     )
-    packing: Optional[bool] = field(
-        default=False,
-        metadata={"help": "Use packing dataset creating."},
-    )
     gradient_checkpointing: Optional[bool] = field(
         default=True,
         metadata={"help": "Enables gradient checkpointing."},
