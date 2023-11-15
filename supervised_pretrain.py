@@ -30,7 +30,9 @@ training_arguments = TrainingArguments(
     warmup_ratio=script_args.warmup_ratio,
     group_by_length=script_args.group_by_length,
     lr_scheduler_type=script_args.lr_scheduler_type,
-    ddp_find_unused_parameters=False)
+    ddp_find_unused_parameters=False,
+    gradient_checkpointing=script_args.gradient_checkpointing,
+)
 
 # Saving the arguments for reference in the future
 os.makedirs(training_arguments.output_dir, exist_ok=True)
