@@ -47,8 +47,9 @@ if script_args.use_critic:
 else:
     value_model, value_tokenizer, value_optimizer = None, None, None
 
-temperature = 0.6
-top_p = 0.9
+# Sampling unchanged logits
+temperature = 1
+top_p = 1
 
 # build the cost function
 num_token_cost = NumTokenCost(tokenizer)
@@ -101,7 +102,7 @@ for epoch in (pbar := tqdm(range(script_args.max_steps), desc="Epoch")):
         idx = 0
         random.shuffle(cur_dataset)
 
-    # sample current batch
+    # get current batch
     batch = cur_dataset[idx:idx + script_args.per_device_train_batch_size]
     idx += script_args.per_device_train_batch_size
     if idx >= len(cur_dataset):
@@ -151,6 +152,9 @@ for epoch in (pbar := tqdm(range(script_args.max_steps), desc="Epoch")):
             "question"]
         copilots[-1].set_question(question=question,
                                   target_file=data["filename"])
+
+        ###
+        #copilots[-1].set_answer(ans_cmd=data["optimal_path"][1])
 
     while True:
         prompts = []

@@ -12,6 +12,8 @@ from utils import get_exp_id
 parser = HfArgumentParser(ScriptArguments)
 script_args = load_script_args(parser.parse_args_into_dataclasses()[0])
 
+script_args.save_steps = min(script_args.save_steps, script_args.max_steps)
+
 exp_id = get_exp_id(script_args.ckpt_path)
 
 training_arguments = TrainingArguments(

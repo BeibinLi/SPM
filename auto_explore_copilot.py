@@ -1,8 +1,6 @@
 import argparse
-import json
 import os
 import pdb
-import pickle
 import string
 
 from peft import PeftModel
@@ -225,6 +223,10 @@ class AutoExploreCopilot():
 
         self.is_finished = False
         self.step = 0
+        # self.ans_cmd = ""
+
+    # def set_answer(self, ans_cmd: str):
+    #     self.ans_cmd = ans_cmd
 
     def answer(self, question: str, target_file: str = "", ans_cmds: list = []):
         """
@@ -336,6 +338,9 @@ class AutoExploreCopilot():
                                                   curr_dir=self.sandbox.cwd,
                                                   shuffle=False,
                                               ))
+
+        # self.ans_cmd = CHOICES[self.cmd_list.index(self.ans_cmd)]
+
         self.cur_msgs = [
             ("system",
              self.start_prompt.format(
@@ -368,6 +373,9 @@ class AutoExploreCopilot():
         if self.interaction_type == "train":
             self.generation_logs[-1]["cost"] = self.cost_function.call(
                 user_msgs=self.cur_msgs + self.sys_infos)
+
+        # if response == self.ans_cmd:
+        #     self.generation_logs[-1]["cost"] = -115
 
         if ret == "Exit" or self.step == 15:
             self.is_finished = True
@@ -424,29 +432,29 @@ class AutoExploreCopilot():
 
         return "Continue"
 
-    def dump(self):
-        """
-        Dump the current state of the agent to a pickle file specified by
-        `self.data_path`.
-        """
-        ckpts = os.listdir(self.data_path)
-        ckpts = [x.replace(".pickle", "") for x in ckpts]
-        ckpt_num_list = [int(x) for x in ckpts if x.isdigit()]
-        ckpt_id = max(ckpt_num_list) + 1 if ckpt_num_list != [] else 0
-        ckpt = str(ckpt_id).zfill(5)
-        out_loc = os.path.join(self.data_path, ckpt + ".pickle")
-        with open(out_loc, "wb") as f:
-            pickle.dump([
-                self.msgs, self.temperature, self.top_p, self.max_token_length,
-                self.model, self.data_path
-            ], f)
-        with open(out_loc.replace(".pickle", ".json"), "w") as f:
-            json.dump([
-                self.msgs, self.temperature, self.top_p, self.max_token_length,
-                self.model, self.data_path
-            ],
-                      f,
-                      indent=4)
+    # def dump(self):
+    #     """
+    #     Dump the current state of the agent to a pickle file specified by
+    #     `self.data_path`.
+    #     """
+    #     ckpts = os.listdir(self.data_path)
+    #     ckpts = [x.replace(".pickle", "") for x in ckpts]
+    #     ckpt_num_list = [int(x) for x in ckpts if x.isdigit()]
+    #     ckpt_id = max(ckpt_num_list) + 1 if ckpt_num_list != [] else 0
+    #     ckpt = str(ckpt_id).zfill(5)
+    #     out_loc = os.path.join(self.data_path, ckpt + ".pickle")
+    #     with open(out_loc, "wb") as f:
+    #         pickle.dump([
+    #             self.msgs, self.temperature, self.top_p, self.max_token_length,
+    #             self.model, self.data_path
+    #         ], f)
+    #     with open(out_loc.replace(".pickle", ".json"), "w") as f:
+    #         json.dump([
+    #             self.msgs, self.temperature, self.top_p, self.max_token_length,
+    #             self.model, self.data_path
+    #         ],
+    #                   f,
+    #                   indent=4)
 
     def get_generation_logs(self):
         """

@@ -251,8 +251,6 @@ def transformer_text_completion(model: PeftModel, tokenizer: AutoTokenizer,
     outputs = model.generate(inputs=inputs.to(model.device),
                              generation_config=generation_config)
 
-    # outputs contain an EOS token in the end
-    # remove it when decoding
     res = []
     for p, t in zip(prompts, outputs):
         newly_generated = t[max_len:]
@@ -463,6 +461,7 @@ def transformer_text_completion(model: PeftModel, tokenizer: AutoTokenizer,
 
 
 # A new function for PeftModel to support calc prob and log prob WITH GRADIENTS
+# copied from transformers.generation.utils.py
 def calc_probs_log_probs(
     self,
     inputs: torch.Tensor,
