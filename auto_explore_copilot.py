@@ -390,7 +390,7 @@ class AutoExploreCopilot():
         if response[0] in CHOICES:
             idx = CHOICES.index(response[0])
             if idx >= len(self.cmd_list):
-                self.msgs.append(("user", "Error: Invalid choice."))
+                self.sys_infos.append(("user", "Error: Invalid choice."))
                 return "Continue"
             commands = extract_commands(f"```bash\n{self.cmd_list[idx]}\n```",
                                         only_first=True)
@@ -398,12 +398,12 @@ class AutoExploreCopilot():
             commands = []
 
         for cmd in commands:
-            self.msgs.append(("user", "Executing: " + " ".join(cmd)))
+            self.sys_infos.append(("user", "Executing: " + " ".join(cmd)))
             self._update_cmd_history(self.cwd, " ".join(cmd))
 
             if cmd[0] == "exit":
                 if len(commands) > 1:
-                    self.msgs.append((
+                    self.sys_infos.append((
                         "user", "Error: There are other commands. "
                         "You could only use exit standalone in a single response."
                     ))
@@ -422,39 +422,15 @@ class AutoExploreCopilot():
                     if cmd[0] == "cat":
                         command_output = ""
 
-                self.msgs.append(("user", command_output))
+                self.sys_infos.append(("user", command_output))
 
         if commands == []:
-            self.msgs.append(
+            self.sys_infos.append(
                 ("user", "Warning: You didn't give me any command. "
                  "Further explore the repo by sending me system commands: "
                  f"{', '.join(self.supported_cmds)}."))
 
         return "Continue"
-
-    # def dump(self):
-    #     """
-    #     Dump the current state of the agent to a pickle file specified by
-    #     `self.data_path`.
-    #     """
-    #     ckpts = os.listdir(self.data_path)
-    #     ckpts = [x.replace(".pickle", "") for x in ckpts]
-    #     ckpt_num_list = [int(x) for x in ckpts if x.isdigit()]
-    #     ckpt_id = max(ckpt_num_list) + 1 if ckpt_num_list != [] else 0
-    #     ckpt = str(ckpt_id).zfill(5)
-    #     out_loc = os.path.join(self.data_path, ckpt + ".pickle")
-    #     with open(out_loc, "wb") as f:
-    #         pickle.dump([
-    #             self.msgs, self.temperature, self.top_p, self.max_token_length,
-    #             self.model, self.data_path
-    #         ], f)
-    #     with open(out_loc.replace(".pickle", ".json"), "w") as f:
-    #         json.dump([
-    #             self.msgs, self.temperature, self.top_p, self.max_token_length,
-    #             self.model, self.data_path
-    #         ],
-    #                   f,
-    #                   indent=4)
 
     def get_generation_logs(self):
         """
