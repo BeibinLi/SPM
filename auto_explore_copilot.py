@@ -223,10 +223,13 @@ class AutoExploreCopilot():
 
         self.is_finished = False
         self.step = 0
-        # self.ans_cmd = ""
 
-    # def set_answer(self, ans_cmd: str):
-    #     self.ans_cmd = ans_cmd
+        ###
+        self.ans_cmd = ""
+
+    ###
+    def set_answer(self, ans_cmd: str):
+        self.ans_cmd = ans_cmd
 
     def answer(self, question: str, target_file: str = "", ans_cmds: list = []):
         """
@@ -336,10 +339,11 @@ class AutoExploreCopilot():
                                               commands=list_all_actions(
                                                   root=self.sandbox.sandbox_dir,
                                                   curr_dir=self.sandbox.cwd,
-                                                  shuffle=False,
+                                                  shuffle=True,
                                               ))
 
-        # self.ans_cmd = CHOICES[self.cmd_list.index(self.ans_cmd)]
+        ###
+        self.ans_cmd = CHOICES[self.cmd_list.index(self.ans_cmd)]
 
         self.cur_msgs = [
             ("system",
@@ -374,8 +378,9 @@ class AutoExploreCopilot():
             self.generation_logs[-1]["cost"] = self.cost_function.call(
                 user_msgs=self.cur_msgs + self.sys_infos)
 
-        # if response == self.ans_cmd:
-        #     self.generation_logs[-1]["cost"] = -115
+        ###
+        if response == self.ans_cmd:
+            self.generation_logs[-1]["cost"] = -115
 
         if ret == "Exit" or self.step == 15:
             self.is_finished = True

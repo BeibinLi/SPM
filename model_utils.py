@@ -2,7 +2,6 @@ import copy
 import glob
 import inspect
 import os
-import pdb
 import torch
 import yaml
 from accelerate import Accelerator
@@ -20,15 +19,18 @@ from transformers.generation.stopping_criteria import (
 from experiment_args import ScriptArguments
 from utils import extract_command_blocks
 
+OVERRIDE_KEYS = ["model_name", "lora_r", "bf16", "fp16", "use_8bit", "use_4bit"]
 
-def load_script_args(script_args: ScriptArguments) -> ScriptArguments:
+
+def load_script_args(script_args: ScriptArguments,
+                     override_keys: list = OVERRIDE_KEYS) -> ScriptArguments:
     """
     If `script_args.load_dir` is not None, load the setting.yml from this
-    directory if possible. After loading, override the `model_name` and
-    `lora_r` from the loaded setting.yml.
+    directory if possible. After loading, override the keys in `override_keys`.
 
     Args:
     - `script_args` (ScriptArguments): the arguments for training.
+    - `override_keys` (list): the keys to override.
 
     Returns:
     - ScriptArguments: The updated script arguments.
@@ -38,8 +40,10 @@ def load_script_args(script_args: ScriptArguments) -> ScriptArguments:
         file = os.path.join(script_args.load_dir, "../setting.yml")
         if os.path.exists(file):
             old_script_args = yaml.safe_load(open(file, "r"))
-            script_args.model_name = old_script_args["model_name"]
-            script_args.lora_r = old_script_args["lora_r"]
+
+            for key, value in old_script_args.items():
+                if key in override_keys and hasattr(script_args, key):
+                    setattr(script_args, key, value)
         else:
             print(
                 colored(
@@ -486,8 +490,8 @@ def calc_probs_log_probs(
 
     Returns:
     - dict: A dictionary of {
-        "probs": list of probabilities for each generated text span,
-        "log_probs": list of log probabilities for each generated text span,
+        "probs": torch.tensor,
+        "log_probs": torch.tensor,
     }
     """
     # 1. Handle `generation_config` and kwargs that might update it,
@@ -609,8 +613,8 @@ def calc_probs_log_probs(
     batch_size = outputs.logits.shape[0]
     axis = torch.arange(batch_size, device=self.device)
 
-    probs = [[] for _ in range(batch_size)]
-    log_probs = [[] for _ in range(batch_size)]
+    probs = torch.ones(batch_size, device=self.device)
+    log_probs = torch.zeros(batch_size, device=self.device)
 
     accumulated_probs = torch.ones(batch_size, device=self.device)
     accumulated_log_probs = torch.zeros(batch_size, device=self.device)
@@ -640,10 +644,9 @@ def calc_probs_log_probs(
             if not generated_mask[i][pos]:
                 if accumulating[i]:
                     if calc_probs:
-                        probs[i].append(accumulated_probs[i].clone())
-                        pdb.set_trace()
+                        probs[i] *= accumulated_probs[i].clone()
                     if calc_log_probs:
-                        log_probs[i].append(accumulated_log_probs[i].clone())
+                        log_probs[i] += accumulated_log_probs[i].clone()
                     accumulated_probs[i] = 1
                     accumulated_log_probs[i] = 0
                     accumulating[i] = False
@@ -658,9 +661,9 @@ def calc_probs_log_probs(
     for i in range(batch_size):
         if accumulating[i]:
             if calc_probs:
-                probs[i].append(accumulated_probs[i])
+                probs[i] *= accumulated_probs[i]
             if calc_log_probs:
-                log_probs[i].append(accumulated_log_probs[i])
+                log_probs[i] += accumulated_log_probs[i]
 
     return {
         "probs": probs if calc_probs else None,
