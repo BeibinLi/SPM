@@ -1,9 +1,8 @@
 import json
 import os
 import random
-import types
-
 import torch
+
 from tqdm import tqdm
 from transformers import (GenerationConfig, HfArgumentParser, GPT2Tokenizer,
                           GPT2ForSequenceClassification)
@@ -12,9 +11,9 @@ from auto_explore_copilot import AutoExploreCopilot
 from experiment_args import ScriptArguments
 from functions.cost import StepCost, KeywordCost, NumTokenCost, SynthesizedCost
 from functions.terminate import IdentifyFileTerminate
-from functions.training import policy_gradient_update
-from model_utils import (load_script_args, calc_probs_log_probs,
-                         create_and_prepare_model, transformer_text_completion)
+from functions.training import compute_policy_gradient
+from model_utils import (load_script_args, create_and_prepare_model,
+                         transformer_text_completion)
 from utils import build_curriculum, get_exp_id
 
 parser = HfArgumentParser(ScriptArguments)
@@ -29,8 +28,6 @@ script_args.dump(os.path.join(output_dir, "setting.yml"))
 
 # Setup policy network
 tokenizer, peft_config, model = create_and_prepare_model(script_args)
-# Add our customized calculation function to the model
-model.calc_probs_log_probs = types.MethodType(calc_probs_log_probs, model)
 
 optimizer = torch.optim.Adam(model.parameters(), lr=script_args.learning_rate)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.9)
@@ -94,10 +91,10 @@ losses = []
 msgs = []
 
 for epoch in (pbar := tqdm(range(script_args.max_steps), desc="Epoch")):
-    # if epoch % script_args.gradient_accumulation_steps == 0:
-    #     optimizer.zero_grad()
-    #     if script_args.use_critic:
-    #         critic_optimizer.zero_grad()
+    if epoch % script_args.gradient_accumulation_steps == 0:
+        optimizer.zero_grad()
+        if script_args.use_critic:
+            critic_optimizer.zero_grad()
 
     # move on to the next curriculum
     if epoch in trigger_set:
@@ -150,7 +147,8 @@ for epoch in (pbar := tqdm(range(script_args.max_steps), desc="Epoch")):
                                terminate_criteria=IdentifyFileTerminate(
                                    data["filename"]),
                                leaveout_prob=script_args.leaveout_prob,
-                               easy_mode=script_args.easy,
+                               shuffle_action=script_args.shuffle_action,
+                               easy=script_args.easy,
                                need_output_msgs=False))
         question = f"Find {data['filename']}" if script_args.easy else data[
             "question"]
@@ -158,7 +156,7 @@ for epoch in (pbar := tqdm(range(script_args.max_steps), desc="Epoch")):
                                   target_file=data["filename"])
 
         ###
-        copilots[-1].set_answer(ans_cmd=data["optimal_path"][1])
+        # copilots[-1].set_answer(ans_cmd=data["optimal_path"][1])
 
     while True:
         prompts = []
@@ -185,7 +183,7 @@ for epoch in (pbar := tqdm(range(script_args.max_steps), desc="Epoch")):
                 j += 1
 
         ###
-        break
+        # break
 
     for copilot in copilots:
         copilot.wrap_up()
@@ -197,22 +195,29 @@ for epoch in (pbar := tqdm(range(script_args.max_steps), desc="Epoch")):
         msgs.append(copilot.get_whole_msgs())
 
     # update the model
-    loss = policy_gradient_update(
+    loss = compute_policy_gradient(
         model=model,
         generation_config=generation_config,
         generation_results=logs,
         optimizer=optimizer,
         scheduler=scheduler,
-    #   critic_model=critic_model,
-    #   critic_tokenizer=critic_tokenizer,
-    #   critic_optimizer=critic_optimizer,)
-        value_model=critic_model,
-        value_tokenizer=critic_tokenizer,
-        value_optimizer=critic_optimizer,
+        critic_model=critic_model,
+        critic_tokenizer=critic_tokenizer,
+        critic_optimizer=critic_optimizer,
     )
-    #update = (epoch + 1) % script_args.gradient_accumulation_steps == 0,)
     losses.append(loss)
     total_loss += loss
+
+    if (epoch + 1) % script_args.gradient_accumulation_steps == 0:
+        torch.nn.utils.clip_grad_norm_(model.parameters(),
+                                       script_args.max_grad_norm)
+        optimizer.step()
+        scheduler.step()
+
+        if script_args.use_critic:
+            torch.nn.utils.clip_grad_norm_(critic_model.parameters(),
+                                           script_args.max_grad_norm)
+            critic_optimizer.step()
 
     pbar.set_description("Cost: %.2f Epoch:" % (total_loss / (epoch + 1)))
 

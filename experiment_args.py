@@ -149,6 +149,9 @@ class ScriptArguments:
             "help":
                 "The probability to leave out unrelated files when training."
         })
+    shuffle_action: Optional[bool] = field(
+        default=True,
+        metadata={"help": "Whether to shuffle the actions in the copilot."})
     depth_curriculum: Optional[bool] = field(
         default=False,
         metadata={

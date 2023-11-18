@@ -44,10 +44,7 @@ FULL_CMDS = SUPPORTED_CMDS + [
 
 def list_all_actions(root: str,
                      curr_dir: str,
-                     allowed_file_exts: List[str] = [
-                         ".py", ".txt", ".md", ".ipynb"
-                     ],
-                     shuffle: bool = True) -> List[str]:
+                     allowed_file_exts: List[str] = None) -> List[str]:
     """
     Generate a list of actions to navigate through directories and read files
     in a directory tree.
@@ -89,12 +86,9 @@ def list_all_actions(root: str,
         # it using the "id" command if its extension is allowed
         elif os.path.isfile(entry_path):
             _, ext = os.path.splitext(entry)
-            if ext in allowed_file_exts or not allowed_file_exts:
+            if allowed_file_exts is None or ext in allowed_file_exts:
                 action_list.append(f"cat {wrap_path(entry)}")
                 action_list.append(f"id {wrap_path(entry)}")
-
-    if shuffle:
-        random.shuffle(action_list)
 
     return action_list
 

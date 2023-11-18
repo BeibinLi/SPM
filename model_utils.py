@@ -1,20 +1,15 @@
-import copy
 import glob
-import inspect
 import os
 import torch
 import yaml
+
 from accelerate import Accelerator
-#from llama.generation import (B_INST, B_SYS, E_INST, E_SYS, SPECIAL_TAGS,
-#                              UNSAFE_ERROR, Dialog, Message)
 from peft import LoraConfig, PeftConfig, PeftModel
 from termcolor import colored
 from torch import nn
 from transformers import (AutoModelForCausalLM, AutoTokenizer,
                           BitsAndBytesConfig, GenerationConfig)
 from transformers.generation.logits_process import LogitsProcessorList
-from transformers.generation.stopping_criteria import (
-    StoppingCriteriaList, validate_stopping_criteria)
 
 from experiment_args import ScriptArguments
 from utils import extract_command_blocks
@@ -245,246 +240,63 @@ def transformer_text_completion(model: PeftModel, tokenizer: AutoTokenizer,
         "generated_mask": list,
     }, ...]
     """
-    inputs = tokenizer(prompts,
-                       padding=True,
-                       truncation=True,
-                       return_tensors="pt")["input_ids"]
+    tokenized = tokenizer(prompts,
+                          padding=True,
+                          truncation=True,
+                          return_tensors="pt")
+
+    inputs = tokenized["input_ids"]
+    attention_mask = tokenized["attention_mask"]
 
     max_len = inputs.shape[1]
 
     outputs = model.generate(inputs=inputs.to(model.device),
-                             generation_config=generation_config)
+                             generation_config=generation_config,
+                             attention_mask=attention_mask.to(model.device))
 
     res = []
-    for p, t in zip(prompts, outputs):
+    for i, t in enumerate(outputs):
         newly_generated = t[max_len:]
         res.append({
-            "prompt": p,
+            "prompt":
+                prompts[i],
             "generation": {
                 "role": "assistant",
                 "content": tokenizer.decode(newly_generated)
             },
-            "tokens": t,
+            "tokens":
+                t,
+            "attention_mask":
+                torch.cat((attention_mask[i],
+                           torch.tensor([1] * len(newly_generated)))),
             "generated_mask": [False] * max_len + [True] * len(newly_generated),
         })
 
     return res
 
 
-# def GPT_msgs_to_Llama_dialog(messages: list) -> Dialog:
-#     """
-#     Convert GPT messages to Llama dialog.
-
-#     Args:
-#     - `messages` (list[dict]): List of messages from GPT, with format:
-#     [(agent_name, message_content), ...] or
-#     [{
-#         "role": agent_name,
-#         "content": message_content
-#     }, ...]
-#         - `role` taking only ['system', 'user', 'assistant']
-
-#     Returns:
-#     - Dialog: Llama dialog, with same format, but:
-#         - `role` starts with 'system', then 'user' and 'assistant' alternate
-#         (u/a/u/a/u...)
-#     """
-
-#     if not isinstance(messages[0], dict):
-#         # convert the first format to the second
-#         messages = [{
-#             "role": agent_name,
-#             "content": message_content
-#         } for agent_name, message_content in messages]
-
-#     def predict_role(pos, system):
-#         if system:
-#             if pos == 0:
-#                 return "system"
-#             else:
-#                 return ["assistant", "user"][pos % 2]
-#         else:
-#             return ["user", "assistant"][pos % 2]
-
-#     for message in messages:
-#         message["role"] = message["role"].lower()
-#         assert message["role"] in [
-#             "system", "user", "assistant"
-#         ], "Role must be in ['system', 'user', 'assistant']."
-
-#     pos = 0
-#     system = messages[0]["role"] == "system"
-#     content = ""
-#     dialog = []
-
-#     for message in messages:
-#         role = predict_role(pos, system)
-#         if message["role"] == role:
-#             content += "\n" + message["content"]
-#         else:
-#             dialog.append(Message(role=role, content=content.strip()))
-#             pos += 1
-#             content = message["content"]
-#     dialog.append(
-#         Message(role=predict_role(pos, system), content=content.strip()))
-
-#     return dialog
-
-# def build_Llama_prompt_from_dialogs(
-#         tokenizer: AutoTokenizer,
-#         dialogs: list,
-#         check_last_user: bool = True) -> (list, list):
-#     """
-#     Build Llama prompt from dialogs.
-
-#     Args:
-#     - `tokenizer` (AutoTokenizer): Llama tokenizer.
-#     - `dialogs` (list[Dialog]): List of dialogs, with format:
-#     [{
-#         "role": agent_name,
-#         "content": message_content
-#     }, ...]
-#         - `role` taking only ['system', 'user', 'assistant']
-#         - `role` starts with 'system', then 'user' and 'assistant' alternate
-#         (u/a/u/a/u...)
-#     - `check_last_user` (bool): Whether to check last message from user.
-
-#     Returns:
-#     - tuple: A tuple containing:
-#         - `prompt_tokens` (list): List of prompt tokens.
-#         - `unsafe_requests` (list): List of bools indicating whether the
-#         request is unsafe.
-#     """
-#     prompt_tokens = []
-#     unsafe_requests = []
-
-#     for dialog in dialogs:
-#         unsafe_requests.append(
-#             any([
-#                 tag in msg["content"] for tag in SPECIAL_TAGS for msg in dialog
-#             ]))
-#         if dialog[0]["role"] == "system":
-#             dialog = [{
-#                 "role":
-#                     dialog[1]["role"],
-#                 "content":
-#                     B_SYS + dialog[0]["content"] + E_SYS + dialog[1]["content"],
-#             }] + dialog[2:]
-#         assert all([msg["role"] == "user" for msg in dialog[::2]]) and all([
-#             msg["role"] == "assistant" for msg in dialog[1::2]
-#         ]), (
-#             "model only supports 'system', 'user' and 'assistant' roles, "
-#             "starting with 'system', then 'user' and alternating (u/a/u/a/u...)"
-#         )
-#         dialog_tokens = sum(
-#             [
-#                 tokenizer.encode(f"{B_INST} {(prompt['content']).strip()} "
-#                                  f"{E_INST} {(answer['content']).strip()} ") +
-#                 [tokenizer.eos_token_id] for prompt, answer in zip(
-#                     dialog[::2],
-#                     dialog[1::2],
-#                 )
-#             ],
-#             [],
-#         )
-#         if check_last_user:
-#             assert (
-#                 dialog[-1]["role"] == "user"
-#             ), f"Last message must be from user, got {dialog[-1]['role']}"
-#         if dialog[-1]["role"] == "user":
-#             dialog_tokens += tokenizer.encode(
-#                 f"{B_INST} {(dialog[-1]['content']).strip()} {E_INST}")
-#         prompt_tokens.append(dialog_tokens)
-
-#     return prompt_tokens, unsafe_requests
-
-# def Llama_chat_completion(model: PeftModel, tokenizer: AutoTokenizer,
-#                           dialogs: list,
-#                           generation_config: GenerationConfig) -> list:
-#     """
-#     Chat completion for Llama 2.
-
-#     Args:
-#     - `model` (PeftModel): Llama model.
-#     - `tokenizer` (AutoTokenizer): Llama tokenizer.
-#     - `dialogs` (list[Dialog]): List of dialogs, with format:
-#     [{
-#         "role": agent_name,
-#         "content": message_content
-#     }, ...]
-#         - `role` taking only ['system', 'user', 'assistant']
-#         - `role` starts with 'system', then 'user' and 'assistant' alternate
-#         (u/a/u/a/u...)
-#     - `generation_config` (GenerationConfig): Generation config for the model.
-
-#     Returns:
-#     - list: List of generated messages, with format:
-#     [{
-#         "generation": {
-#             "role": str,
-#             "content": str
-#         },
-#         "tokens": torch.Tensor,
-#         "generated_mask": list
-#     }, ...]
-#     """
-#     assert len(
-#         dialogs) == 1, "Currently do not support batched dialogs for training."
-
-#     prompt_tokens, unsafe_requests = build_Llama_prompt_from_dialogs(
-#         tokenizer=tokenizer, dialogs=dialogs)
-
-#     # left-padding
-#     max_len = max([len(x) for x in prompt_tokens])
-#     inputs = torch.Tensor([([tokenizer.pad_token_id] * (max_len - len(x)) + x)
-#                            for x in prompt_tokens]).long()
-
-#     outputs = model.generate(
-#         inputs=inputs.to(model.device),
-#         generation_config=generation_config,
-#     )
-
-#     # outputs contain an EOS token in the end
-#     # remove it when decoding
-#     res = []
-#     for t, unsafe in zip(outputs, unsafe_requests):
-#         newly_generated = t[max_len:]
-#         res.append({
-#             "generation": {
-#                 "role":
-#                     "assistant",
-#                 "content":
-#                     tokenizer.decode(newly_generated)
-#                     if not unsafe else UNSAFE_ERROR,
-#             },
-#             "tokens": t,
-#             "generated_mask": [False] * max_len + [True] * len(newly_generated),
-#         })
-
-#     return res
-
-
 # A new function for PeftModel to support calc prob and log prob WITH GRADIENTS
 # copied from transformers.generation.utils.py
 def calc_probs_log_probs(
-    self,
-    inputs: torch.Tensor,
+    model: PeftModel,
+    tokens: torch.Tensor,
+    attention_mask: torch.Tensor,
     generated_mask: torch.Tensor,
     generation_config: GenerationConfig,
     calc_probs: bool = True,
     calc_log_probs: bool = True,
-    **kwargs,
 ) -> dict:
     """
-    A member function of the Llama model.
     Calculate the probability and log probability of the generated tokens.
 
     Args:
-    - `inputs` (torch.Tensor): The complete tokens of original input + output.
+    - `model` (PeftModel): transformer model.
+    - `tokens` (torch.Tensor): The complete tokens of original input + output.
+    - `attention_mask` (torch.Tensor): The attention mask of `tokens`.
     - `generated_mask` (torch.Tensor): List of generated mask for each position.
     If the position is 1, the token was generated, otherwise it was given by the user.
     - `generation_config` (GenerationConfig): Generation config used to
-    generate `inputs`.
+    generate `tokens`.
     - `calc_probs` (bool): Whether to calculate the probability.
     - `calc_log_probs` (bool): Whether to calculate the log probability.
 
@@ -494,176 +306,56 @@ def calc_probs_log_probs(
         "log_probs": torch.tensor,
     }
     """
-    # 1. Handle `generation_config` and kwargs that might update it,
-    # and validate the `.generate()` call
-    self._validate_model_class()
+    model_kwargs = {
+        "attention_mask": attention_mask,
+        "use_cache": True,
+    }
 
-    generation_config = copy.deepcopy(generation_config)
-    model_kwargs = generation_config.update(
-        **kwargs)    # All unused kwargs must be model kwargs
-    generation_config.validate()
-    self._validate_model_kwargs(model_kwargs.copy())
-
-    if (generation_config.pad_token_id is None
-            and generation_config.eos_token_id is not None):
-        eos_token_id = generation_config.eos_token_id
-        if isinstance(eos_token_id, list):
-            eos_token_id = eos_token_id[0]
-        generation_config.pad_token_id = eos_token_id
-
-    # 3. Define model inputs
-    # inputs_tensor has to be defined
-    # model_input_name is defined if model-specific keyword input is passed
-    # otherwise model_input_name is None
-    # all model-specific keyword inputs are removed from `model_kwargs`
-    inputs_tensor, model_input_name, model_kwargs = self._prepare_model_inputs(
-        inputs, generation_config.bos_token_id, model_kwargs)
-
-    # 4. Define other model kwargs
-    model_kwargs["output_attentions"] = generation_config.output_attentions
-    model_kwargs[
-        "output_hidden_states"] = generation_config.output_hidden_states
-    # decoder-only models with inputs_embeds forwarding must use caching
-    # (otherwise we can't detect whether we are generating the first new token
-    # or not, and we only want to use the embeddings for the first new token)
-
-    if model_input_name == "inputs_embeds":
-        model_kwargs["use_cache"] = True
-    else:
-        model_kwargs["use_cache"] = generation_config.use_cache
-
-    accepts_attention_mask = "attention_mask" in set(
-        inspect.signature(self.forward).parameters.keys())
-    requires_attention_mask = "encoder_outputs" not in model_kwargs
-
-    if model_kwargs.get(
-            "attention_mask", None
-    ) is None and requires_attention_mask and accepts_attention_mask:
-        model_kwargs[
-            "attention_mask"] = self._prepare_attention_mask_for_generation(
-                inputs_tensor, generation_config.pad_token_id,
-                generation_config.eos_token_id)
-
-    # 5. Prepare `input_ids` which will be used for auto-regressive generation
-    input_ids = inputs_tensor if model_input_name == "input_ids" else model_kwargs.pop(
-        "input_ids")
-
-    # 6. Prepare `max_length` depending on other stopping criteria.
-    input_ids_length = input_ids.shape[-1]
-    has_default_max_length = kwargs.get(
-        "max_length") is None and generation_config.max_length is not None
-    if generation_config.max_new_tokens is not None:
-        generation_config.max_length = (generation_config.max_new_tokens +
-                                        input_ids_length)
-    self._validate_generated_length(generation_config, input_ids_length,
-                                    has_default_max_length)
-
-    # 8. prepare distribution pre_processing samplers
-    logits_processor = self._get_logits_processor(
+    logits_processor = model._get_logits_processor(
         generation_config=generation_config,
-        input_ids_seq_length=input_ids_length,
-        encoder_input_ids=inputs_tensor,
+        input_ids_seq_length=tokens.shape[1],
+        encoder_input_ids=tokens,
         prefix_allowed_tokens_fn=None,
         logits_processor=LogitsProcessorList(),
         model_kwargs=model_kwargs,
         negative_prompt_ids=None,
         negative_prompt_attention_mask=None,
     )
+    logits_warper = model._get_logits_warper(generation_config)
 
-    # 9. prepare stopping criteria
-    stopping_criteria = self._get_stopping_criteria(
-        generation_config=generation_config,
-        stopping_criteria=StoppingCriteriaList())
+    model_inputs = model.prepare_inputs_for_generation(tokens, **model_kwargs)
 
-    # 11. prepare logits warper
-    logits_warper = self._get_logits_warper(generation_config)
-
-    # 12. expand input_ids with `num_return_sequences` additional sequences per batch
-    input_ids, model_kwargs = self._expand_inputs_for_generation(
-        input_ids=input_ids,
-        expand_size=generation_config.num_return_sequences,
-        is_encoder_decoder=self.config.is_encoder_decoder,
-        **model_kwargs,
-    )
-
-    # init values
-    max_length = generation_config.max_length
-    if max_length is not None:
-        stopping_criteria = validate_stopping_criteria(stopping_criteria,
-                                                       max_length)
-    eos_token_id = self.generation_config.eos_token_id
-    if isinstance(eos_token_id, int):
-        eos_token_id = [eos_token_id]
-    torch.tensor(eos_token_id).to(
-        input_ids.device) if eos_token_id is not None else None
-
-    # compared to the original sample():
-    # output_scores = True
-    # output_attentions = False
-    # output_hidden_states = False
-    # return_dict_in_generate = True
-
-    # prepare model inputs
-    model_inputs = self.prepare_inputs_for_generation(input_ids, **model_kwargs)
-
-    # forward pass to get next token
-    outputs = self(**model_inputs, return_dict=True)
+    outputs = model(**model_inputs, return_dict=True)
 
     # generate the axis to gather from
     batch_size = outputs.logits.shape[0]
-    axis = torch.arange(batch_size, device=self.device)
+    axis = torch.arange(batch_size, device=model.device)
 
-    probs = torch.ones(batch_size, device=self.device)
-    log_probs = torch.zeros(batch_size, device=self.device)
-
-    accumulated_probs = torch.ones(batch_size, device=self.device)
-    accumulated_log_probs = torch.zeros(batch_size, device=self.device)
-    accumulating = torch.zeros(batch_size, dtype=torch.bool, device=self.device)
+    probs = torch.ones(batch_size, device=model.device)
+    log_probs = torch.zeros(batch_size, device=model.device)
 
     for pos in range(1, outputs.logits.shape[1]):
         # pre-process distribution
-        scores = logits_processor(input_ids, outputs.logits[:, pos - 1, :])
-        scores = logits_warper(input_ids, scores)
+        scores = logits_processor(tokens, outputs.logits[:, pos - 1, :])
+        scores = logits_warper(tokens, scores)
 
         if calc_probs:
             # get probs of current position
             step_probs = nn.functional.softmax(scores, dim=-1)
-            step_probs = step_probs[axis, input_ids[:, pos]]
+            step_probs = step_probs[axis, tokens[:, pos]]
         else:
-            step_probs = torch.zeros(batch_size, device=self.device)
+            step_probs = torch.zeros(batch_size, device=model.device)
 
         if calc_log_probs:
             # get log probs of current position
             step_log_probs = nn.functional.log_softmax(scores, dim=-1)
-            step_log_probs = step_log_probs[axis, input_ids[:, pos]]
+            step_log_probs = step_log_probs[axis, tokens[:, pos]]
         else:
-            step_log_probs = torch.zeros(batch_size, device=self.device)
+            step_log_probs = torch.zeros(batch_size, device=model.device)
 
-        # accumulate probs
-        for i in range(batch_size):
-            if not generated_mask[i][pos]:
-                if accumulating[i]:
-                    if calc_probs:
-                        probs[i] *= accumulated_probs[i].clone()
-                    if calc_log_probs:
-                        log_probs[i] += accumulated_log_probs[i].clone()
-                    accumulated_probs[i] = 1
-                    accumulated_log_probs[i] = 0
-                    accumulating[i] = False
-
-        accumulating |= generated_mask[:, pos]
-        step_probs[~accumulating] = 1
-        step_log_probs[~accumulating] = 0
-        accumulated_probs *= step_probs
-        accumulated_log_probs += step_log_probs
-
-    # update final probs and log probs
-    for i in range(batch_size):
-        if accumulating[i]:
-            if calc_probs:
-                probs[i] *= accumulated_probs[i]
-            if calc_log_probs:
-                log_probs[i] += accumulated_log_probs[i]
+        probs[generated_mask[:, pos]] *= step_probs[generated_mask[:, pos]]
+        log_probs[generated_mask[:, pos]] += step_log_probs[generated_mask[:,
+                                                                           pos]]
 
     return {
         "probs": probs if calc_probs else None,

@@ -1,6 +1,7 @@
 import argparse
 import os
 import pdb
+import random
 import string
 
 from peft import PeftModel
@@ -81,7 +82,8 @@ class AutoExploreCopilot():
             terminate_criteria: AutoExploreTerminateCriteria = AnytimeTerminate(
             ),
             leaveout_prob: float = 0,
-            easy_mode: bool = False,
+            shuffle_action: bool = False,
+            easy: bool = False,
             need_output_msgs: bool = True):
         """
         A copilot to help language models explore a repo.
@@ -113,7 +115,8 @@ class AutoExploreCopilot():
         - `leaveout_prob` (float): The probability of leaving out unrelated
         files. Only used when `interaction_type` is 'train', and passed to the
         sandbox.
-        - `easy_mode` (bool): Whether to use easy mode, which omits cat operations.
+        - `shuffle_action` (bool): Whether to shuffle the actions.
+        - `easy` (bool): Whether to use easy mode, which omits cat operations.
         - `need_output_msgs` (bool): Whether to output the messages after each act.
         """
         assert interaction_type in [
@@ -179,7 +182,8 @@ class AutoExploreCopilot():
 
         self.terminate_criteria = terminate_criteria
         self.leaveout_prob = leaveout_prob
-        self.easy_mode = easy_mode
+        self.shuffle_action = shuffle_action
+        self.easy = easy
         self.need_output_msgs = need_output_msgs
 
     def set_question(self, question: str, target_file: str = ""):
@@ -222,14 +226,14 @@ class AutoExploreCopilot():
             leaveout_option=LeaveoutOption([target_file], self.leaveout_prob))
 
         self.is_finished = False
-        self.step = 0
+        self.step = 1
 
         ###
-        self.ans_cmd = ""
+        # self.ans_cmd = ""
 
     ###
-    def set_answer(self, ans_cmd: str):
-        self.ans_cmd = ans_cmd
+    # def set_answer(self, ans_cmd: str):
+    #     self.ans_cmd = ans_cmd
 
     def answer(self, question: str, target_file: str = "", ans_cmds: list = []):
         """
@@ -260,7 +264,7 @@ class AutoExploreCopilot():
                 response = input("Input a command:")
             else:
                 cmd = self.ans_cmds.pop(0)
-                response = CHOICES[self.cmd_list.index(cmd)]
+                response = self.choices[self.cmd_list.index(cmd)]
 
         # Case 2: in other modes, use the language model
         if self.model_type == "local":
@@ -338,12 +342,14 @@ class AutoExploreCopilot():
         self.cmd_list = self._filter_commands(sandbox_cwd=self.cwd,
                                               commands=list_all_actions(
                                                   root=self.sandbox.sandbox_dir,
-                                                  curr_dir=self.sandbox.cwd,
-                                                  shuffle=True,
-                                              ))
+                                                  curr_dir=self.sandbox.cwd))
+        if self.shuffle_action:
+            self.choices = random.sample(CHOICES, len(self.cmd_list))
+        else:
+            self.choices = CHOICES
 
         ###
-        self.ans_cmd = CHOICES[self.cmd_list.index(self.ans_cmd)]
+        # self.ans_cmd = self.choices[self.cmd_list.index(self.ans_cmd)]
 
         self.cur_msgs = [
             ("system",
@@ -355,7 +361,7 @@ class AutoExploreCopilot():
                  CMD_HIST="\n".join(self.cmd_hisotry),
                  EXEC_RES="\n".join([r[1] for r in self.sys_infos]),
                  CMD_LIST="\n".join([
-                     CHOICES[i] + ". " + cmd
+                     self.choices[i] + ". " + cmd
                      for i, cmd in enumerate(self.cmd_list)
                  ])) + " " + RESPONSE_TEMPLATE)
         ]
@@ -379,8 +385,8 @@ class AutoExploreCopilot():
                 user_msgs=self.cur_msgs + self.sys_infos)
 
         ###
-        if response == self.ans_cmd:
-            self.generation_logs[-1]["cost"] = -115
+        # if response == self.ans_cmd:
+        #     self.generation_logs[-1]["cost"] = -115
 
         if ret == "Exit" or self.step == 15:
             self.is_finished = True
@@ -392,8 +398,8 @@ class AutoExploreCopilot():
         self.whole_msgs.append(self.cur_msgs)
 
         # Only consider the first command
-        if response[0] in CHOICES:
-            idx = CHOICES.index(response[0])
+        if response[0] in self.choices:
+            idx = self.choices.index(response[0])
             if idx >= len(self.cmd_list):
                 self.sys_infos.append(("user", "Error: Invalid choice."))
                 return "Continue"
@@ -423,7 +429,7 @@ class AutoExploreCopilot():
                 command_output, status = self.sandbox.run_command(cmd)
                 self.terminate_criteria.update_status(**status)
 
-                if self.easy_mode:
+                if self.easy:
                     if cmd[0] == "cat":
                         command_output = ""
 
