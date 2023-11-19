@@ -1,6 +1,8 @@
 import json
 import os
 import random
+import shutil
+import tempfile
 import torch
 
 from tqdm import tqdm
@@ -47,12 +49,19 @@ else:
 temperature = 1
 top_p = 1
 
-# build the cost function
+# Build the cost function
 num_token_cost = NumTokenCost(tokenizer)
 keyword_cost = KeywordCost(keywords=["Error", "Warning"], costs=[100, 20])
 step_cost = StepCost()
 synthesized_cost = SynthesizedCost(
     cost_functions=[num_token_cost, keyword_cost], weights=[1, 1])
+
+# Init memory file system
+sandbox_dir = os.path.abspath(
+    tempfile.mkdtemp(dir=script_args.sandbox_dir)).replace("\\", "/") + "/"
+cached_repos_dir = sandbox_dir + "cached_repos/"
+os.makedirs(cached_repos_dir, exist_ok=True)
+cached_repos = []
 
 # Build dataset
 if script_args.task_file.endswith(".json"):
@@ -76,7 +85,7 @@ step_per_curriculum = script_args.max_steps * 2 // (len(dataset) *
 script_args.max_steps = step_per_curriculum * len(dataset) * (len(dataset) +
                                                               1) // 2
 
-# Epochs to add new curriculum
+# Iters to add new curriculum
 trigger_set = [
     i * (i + 1) // 2 * step_per_curriculum for i in range(len(dataset))
 ]
@@ -90,14 +99,14 @@ total_loss = 0
 losses = []
 msgs = []
 
-for epoch in (pbar := tqdm(range(script_args.max_steps), desc="Epoch")):
-    if epoch % script_args.gradient_accumulation_steps == 0:
+for iter in (pbar := tqdm(range(script_args.max_steps), desc="Iter")):
+    if iter % script_args.gradient_accumulation_steps == 0:
         optimizer.zero_grad()
         if script_args.use_critic:
             critic_optimizer.zero_grad()
 
     # move on to the next curriculum
-    if epoch in trigger_set:
+    if iter in trigger_set:
         curriculum_idx += 1
         cur_dataset += dataset[curriculum_idx]
         idx = 0
@@ -130,10 +139,18 @@ for epoch in (pbar := tqdm(range(script_args.max_steps), desc="Epoch")):
             root = "coffee_roasting_dataset"
         else:
             root = data["root"]
-        root = os.path.join(script_args.repo_dir, root)
+
+        cached_root = os.path.join(cached_repos_dir, root)
+
+        if root not in cached_repos:
+            shutil.copytree(os.path.join(script_args.repo_dir, root),
+                            cached_root)
+            print("Cache %s to %s" % (root, cached_root))
+            cached_repos.append(root)
 
         copilots.append(
-            AutoExploreCopilot(root=root,
+            AutoExploreCopilot(repo_root=cached_root,
+                               sandbox_dir=sandbox_dir,
                                temperature=temperature,
                                top_p=top_p,
                                max_token_length=script_args.max_seq_length,
@@ -208,7 +225,9 @@ for epoch in (pbar := tqdm(range(script_args.max_steps), desc="Epoch")):
     losses.append(loss)
     total_loss += loss
 
-    if (epoch + 1) % script_args.gradient_accumulation_steps == 0:
+    pbar.set_description("Cost: %.2f Iter:" % (total_loss / (iter + 1)))
+
+    if (iter + 1) % script_args.gradient_accumulation_steps == 0:
         torch.nn.utils.clip_grad_norm_(model.parameters(),
                                        script_args.max_grad_norm)
         optimizer.step()
@@ -219,10 +238,8 @@ for epoch in (pbar := tqdm(range(script_args.max_steps), desc="Epoch")):
                                            script_args.max_grad_norm)
             critic_optimizer.step()
 
-    pbar.set_description("Cost: %.2f Epoch:" % (total_loss / (epoch + 1)))
-
-    if (epoch + 1) % script_args.save_steps == 0:
-        ckpt_path = output_dir + "epoch_" + str(epoch + 1) + "/"
+    if (iter + 1) % script_args.save_steps == 0:
+        ckpt_path = output_dir + "iter_" + str(iter + 1) + "/"
         os.makedirs(ckpt_path, exist_ok=True)
 
         # dump the model

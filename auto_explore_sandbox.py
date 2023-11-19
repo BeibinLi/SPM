@@ -1,8 +1,9 @@
-import tempfile
 import os
-import subprocess
-import shutil
 import random
+import shutil
+import subprocess
+import tempfile
+
 from utils import (display_files_recursively, list_files, hide_root, trunc_text,
                    get_file_names, handle_ls, unwrap_path, SUPPORTED_CMDS)
 
@@ -41,6 +42,7 @@ class AutoExploreSandbox:
     def __init__(
         self,
         dataset_path: str,
+        sandbox_path: str,
         supported_cmds: list = SUPPORTED_CMDS,
         leaveout_option: LeaveoutOption = None,
     ):
@@ -50,6 +52,7 @@ class AutoExploreSandbox:
 
         Args:
         - `dataset_path` (str): The path to the dataset.
+        - `sandbox_path` (str): The path to the sandbox.
         - `supported_cmds` (list): The list of supported commands. Must be a
         subset of SUPPORTED_CMDS.
         - `leaveout_fraction` (float): The probability of leaving out unrelated
@@ -65,7 +68,7 @@ class AutoExploreSandbox:
                                                                   "/") + "/"
         # Copy dataset to a temporary directory in the working directory
         self.sandbox_dir = os.path.abspath(
-            tempfile.mkdtemp(dir=os.getcwd())).replace("\\", "/") + "/"
+            tempfile.mkdtemp(dir=sandbox_path)).replace("\\", "/") + "/"
 
         self.leaveout_option = leaveout_option
 

@@ -2,11 +2,6 @@
 
 ## Preparation
 
-### Model
-
-Install `transformers` by `pip install transformers`.
-You can use any text completion model by setting `--model_name`.
-
 ### Data
 
 The data contains two parts: repo and task.
@@ -30,7 +25,7 @@ python -m data_gen.gen_auto_explore_markov --task_file=data/tasks/coffee.json --
 
 ## Run the code
 
-Install packages: `pip install termcolor trl peft bitsandbytes tiktoken`
+Install packages: `pip install transformers termcolor trl peft bitsandbytes tiktoken fs`
 
 
 ### Supervised pretraining

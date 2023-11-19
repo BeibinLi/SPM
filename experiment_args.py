@@ -52,6 +52,12 @@ class ScriptArguments:
             "help": "The path to the directory containing the repositories."
         },
     )
+    sandbox_dir: Optional[str] = field(
+        default="/dev/shm/",
+        metadata={
+            "help": "The path to the directory for sandbox emporary files."
+        },
+    )
     ckpt_path: Optional[str] = field(
         default="results/",
         metadata={

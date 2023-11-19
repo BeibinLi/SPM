@@ -1,6 +1,5 @@
 import argparse
 import os
-import pdb
 import random
 import string
 
@@ -67,7 +66,8 @@ class AutoExploreCopilot():
 
     def __init__(
             self,
-            root: str,
+            repo_root: str,
+            sandbox_dir: str,
             temperature: float,
             top_p: float,
             max_token_length: int,
@@ -89,7 +89,8 @@ class AutoExploreCopilot():
         A copilot to help language models explore a repo.
 
         Args:
-        - `root` (str): The root directory of the repo.
+        - `repo_root` (str): The root directory of the repo.
+        - `sandbox_dir` (str): The directory to store the sandbox.
         - `temperature` (float): The temperature of the language model.
         - `top_p` (float): The top_p of the language model.
         - `max_token_length` (int): The maximum total token length for chat completion.
@@ -143,14 +144,10 @@ class AutoExploreCopilot():
                                             "model name.")
 
         # replace all paths with absolute paths
-        self.root = os.path.abspath(root).replace('\\', '/')
-        try:
-            self.file_save_path = os.path.abspath(file_save_path).replace(
-                '\\', '/')
-        except Exception:
-            pdb.set_trace()
-
-        self.root_dir_name = self.root.replace(os.path.basename(self.root), '')
+        self.repo_root = os.path.abspath(repo_root).replace('\\', '/')
+        self.sandbox_dir = os.path.abspath(sandbox_dir).replace('\\', '/')
+        self.file_save_path = os.path.abspath(
+            os.path.join(self.sandbox_dir, file_save_path)).replace('\\', '/')
 
         self.temperature = temperature
         self.top_p = top_p
@@ -221,7 +218,8 @@ class AutoExploreCopilot():
         else:
             self.supported_cmds = SUPPORTED_CMDS
         self.sandbox = AutoExploreSandbox(
-            dataset_path=self.root,
+            dataset_path=self.repo_root,
+            sandbox_path=self.sandbox_dir,
             supported_cmds=self.supported_cmds,
             leaveout_option=LeaveoutOption([target_file], self.leaveout_prob))
 
@@ -509,7 +507,7 @@ class AutoExploreCopilot():
 if __name__ == "__main__":
     args = get_args()
     copilot = AutoExploreCopilot(
-        root=args.application_root,
+        repo_root=args.application_root,
         temperature=args.temperature,
         top_p=args.top_p,
         max_token_length=args.max_token_length,
