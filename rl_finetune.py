@@ -89,8 +89,8 @@ curriculum_idx = -1
 cur_dataset = []
 
 # Logs
-total_loss = 0
-losses = []
+total_cost = 0
+costs = []
 msgs = []
 
 for iter in (pbar := tqdm(range(script_args.max_steps), desc="Iter")):
@@ -141,7 +141,7 @@ for iter in (pbar := tqdm(range(script_args.max_steps), desc="Iter")):
     msgs += _msgs
 
     # update the model
-    loss = compute_policy_gradient(
+    cost = compute_policy_gradient(
         model=model,
         generation_config=generation_config,
         generation_results=logs,
@@ -151,10 +151,10 @@ for iter in (pbar := tqdm(range(script_args.max_steps), desc="Iter")):
         critic_tokenizer=critic_tokenizer,
         critic_optimizer=critic_optimizer,
     )
-    losses.append(loss)
-    total_loss += loss
+    costs.append(cost)
+    total_cost += cost
 
-    pbar.set_description("Cost: %.2f Iter:" % (total_loss / (iter + 1)))
+    pbar.set_description("Cost: %.2f Iter:" % (total_cost / (iter + 1)))
 
     if (iter + 1) % script_args.gradient_accumulation_steps == 0:
         torch.nn.utils.clip_grad_norm_(model.parameters(),
@@ -168,7 +168,7 @@ for iter in (pbar := tqdm(range(script_args.max_steps), desc="Iter")):
             critic_optimizer.step()
 
     if (iter + 1) % script_args.save_steps == 0:
-        ckpt_path = output_dir + "iter_" + str(iter + 1) + "/"
+        ckpt_path = output_dir + "checkpoint-" + str(iter + 1) + "/"
         os.makedirs(ckpt_path, exist_ok=True)
 
         # dump the model
@@ -186,7 +186,7 @@ for iter in (pbar := tqdm(range(script_args.max_steps), desc="Iter")):
                 [json.dumps(line) for msg in msgs for line in msg]))
         msgs = []
 
-        # dump the losses
-        with open(ckpt_path + "losses.json", "w") as f:
-            f.write("\n".join([str(loss) for loss in losses]))
-        losses = []
+        # dump the costs
+        with open(ckpt_path + "costs.json", "w") as f:
+            f.write("\n".join([str(cost) for cost in costs]))
+        costs = []

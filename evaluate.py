@@ -3,7 +3,7 @@ import os
 
 from peft import PeftModel
 from tqdm import tqdm
-from transformers import GenerationConfig, HfArgumentParser, AutoTokenizer
+from transformers import HfArgumentParser, AutoTokenizer
 
 from auto_explore_copilot import AutoExploreCopilot
 from auto_explore_sandbox import RepoCache
@@ -97,21 +97,43 @@ def batched_answer(
     return logs, msgs
 
 
-def evalutate():
+def evalutate(
+    dataset: list,
+    model: PeftModel,
+    tokenizer: AutoTokenizer,
+    repo_cache: RepoCache,
+    max_token_length: int,
+    max_new_tokens: int,
+    file_save_path: str,
+    cost_function: AutoExploreCostFunction,
+    leaveout_prob: float,
+    shuffle_action: bool,
+    easy: bool,
+):
+    total_cost = 0
+
     for idx in tqdm(
             range(0, len(dataset), script_args.per_device_eval_batch_size)):
-        dataset[idx:idx + script_args.per_device_eval_batch_size]
+        batch = dataset[idx:idx + script_args.per_device_eval_batch_size]
 
-        GenerationConfig(
-            max_length=script_args.max_seq_length,
-            max_new_tokens=script_args.max_new_tokens,
-            do_sample=True,
-            num_beams=1,
-            temperature=temperature,
-            top_p=top_p,
-            pad_token_id=tokenizer.pad_token_id,
-            eos_token_id=tokenizer.eos_token_id,
+        logs, msgs = batched_answer(
+            batch=batch,
+            model=model,
+            tokenizer=tokenizer,
+            repo_cache=repo_cache,
+            max_token_length=max_token_length,
+            max_new_tokens=max_new_tokens,
+            file_save_path=file_save_path,
+            cost_function=cost_function,
+            leaveout_prob=leaveout_prob,
+            shuffle_action=shuffle_action,
+            easy=easy,
         )
+
+        for log in logs:
+            total_cost += sum([step["cost"] for step in log])
+
+    return total_cost / len(dataset)
 
 
 if __name__ == "__main__":
@@ -133,7 +155,8 @@ if __name__ == "__main__":
         cost_functions=[num_token_cost, keyword_cost], weights=[1, 1])
 
     # Init repo cache
-    repo_cache = RepoCache(script_args.sandbox_dir)
+    repo_cache = RepoCache(original_root=script_args.repo_dir,
+                           dir=script_args.sandbox_dir)
 
     # Build dataset
     if script_args.task_file.endswith(".json"):
@@ -148,7 +171,15 @@ if __name__ == "__main__":
     for task_file in task_files:
         dataset += json.load(open(task_file, "r"))
 
-    # Logs
-    total_loss = 0
-    losses = []
-    msgs = []
+    print(
+        evalutate(dataset=dataset,
+                  model=model,
+                  tokenizer=tokenizer,
+                  repo_cache=repo_cache,
+                  max_token_length=script_args.max_seq_length,
+                  max_new_tokens=script_args.max_new_tokens,
+                  file_save_path="changed_files/",
+                  cost_function=step_cost,
+                  leaveout_prob=script_args.leaveout_prob,
+                  shuffle_action=script_args.shuffle_action,
+                  easy=script_args.easy))
