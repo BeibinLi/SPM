@@ -1,21 +1,18 @@
 import json
 import os
 import random
-import shutil
-import tempfile
 import torch
 
 from tqdm import tqdm
 from transformers import (GenerationConfig, HfArgumentParser, GPT2Tokenizer,
                           GPT2ForSequenceClassification)
 
-from auto_explore_copilot import AutoExploreCopilot
+from auto_explore_sandbox import RepoCache
+from evaluate import batched_answer
 from experiment_args import ScriptArguments
 from functions.cost import StepCost, KeywordCost, NumTokenCost, SynthesizedCost
-from functions.terminate import IdentifyFileTerminate
 from functions.training import compute_policy_gradient
-from model_utils import (load_script_args, create_and_prepare_model,
-                         transformer_text_completion)
+from model_utils import (load_script_args, create_and_prepare_model)
 from utils import build_curriculum, get_exp_id
 
 parser = HfArgumentParser(ScriptArguments)
@@ -56,12 +53,9 @@ step_cost = StepCost()
 synthesized_cost = SynthesizedCost(
     cost_functions=[num_token_cost, keyword_cost], weights=[1, 1])
 
-# Init memory file system
-sandbox_dir = os.path.abspath(
-    tempfile.mkdtemp(dir=script_args.sandbox_dir)).replace("\\", "/") + "/"
-cached_repos_dir = sandbox_dir + "cached_repos/"
-os.makedirs(cached_repos_dir, exist_ok=True)
-cached_repos = []
+# Init repo cache
+repo_cache = RepoCache(original_root=script_args.repo_dir,
+                       dir=script_args.sandbox_dir)
 
 # Build dataset
 if script_args.task_file.endswith(".json"):
@@ -130,86 +124,21 @@ for iter in (pbar := tqdm(range(script_args.max_steps), desc="Iter")):
         eos_token_id=tokenizer.eos_token_id,
     )
 
-    # init copilots
-    copilots = []
-    for i in range(len(batch)):
-        data = batch[i]
-        if "root" not in data.keys():
-            # Only for file_search_coffee.json
-            root = "coffee_roasting_dataset"
-        else:
-            root = data["root"]
+    logs, _msgs = batched_answer(
+        batch=batch,
+        model=model,
+        tokenizer=tokenizer,
+        repo_cache=repo_cache,
+        max_token_length=script_args.max_seq_length,
+        max_new_tokens=script_args.max_new_tokens,
+        file_save_path="changed_files/",
+        cost_function=step_cost,
+        leaveout_prob=script_args.leaveout_prob,
+        shuffle_action=script_args.shuffle_action,
+        easy=script_args.easy,
+    )
 
-        cached_root = os.path.join(cached_repos_dir, root)
-
-        if root not in cached_repos:
-            shutil.copytree(os.path.join(script_args.repo_dir, root),
-                            cached_root)
-            print("Cache %s to %s" % (root, cached_root))
-            cached_repos.append(root)
-
-        copilots.append(
-            AutoExploreCopilot(repo_root=cached_root,
-                               sandbox_dir=sandbox_dir,
-                               temperature=temperature,
-                               top_p=top_p,
-                               max_token_length=script_args.max_seq_length,
-                               max_new_tokens=script_args.max_new_tokens,
-                               file_save_path="new_and_changed_files/",
-                               interaction_type="train",
-                               model_type="local",
-                               model=model,
-                               tokenizer=tokenizer,
-                               cost_function=step_cost,
-                               terminate_criteria=IdentifyFileTerminate(
-                                   data["filename"]),
-                               leaveout_prob=script_args.leaveout_prob,
-                               shuffle_action=script_args.shuffle_action,
-                               easy=script_args.easy,
-                               need_output_msgs=False))
-        question = f"Find {data['filename']}" if script_args.easy else data[
-            "question"]
-        copilots[-1].set_question(question=question,
-                                  target_file=data["filename"])
-
-        ###
-        # copilots[-1].set_answer(ans_cmd=data["optimal_path"][1])
-
-    while True:
-        prompts = []
-        for i in range(len(batch)):
-            if not copilots[i].is_finished:
-                copilots[i].build_cur_msgs()
-                prompts.append("\n".join(
-                    [msg[1] for msg in copilots[i].cur_msgs]))
-
-        if len(prompts) == 0:
-            break
-
-        ret = transformer_text_completion(
-            model=model,
-            tokenizer=tokenizer,
-            prompts=prompts,
-            generation_config=copilots[0].generation_config)
-
-        j = 0
-        for i in range(len(batch)):
-            if not copilots[i].is_finished:
-                response = copilots[i].use_lm_ret(ret[j])
-                copilots[i].act_with_response(response)
-                j += 1
-
-        ###
-        # break
-
-    for copilot in copilots:
-        copilot.wrap_up()
-
-    # get logs
-    logs = []
-    for copilot in copilots:
-        logs.append(copilot.get_generation_logs())
-        msgs.append(copilot.get_whole_msgs())
+    msgs += _msgs
 
     # update the model
     loss = compute_policy_gradient(

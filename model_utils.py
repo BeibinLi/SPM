@@ -275,8 +275,6 @@ def transformer_text_completion(model: PeftModel, tokenizer: AutoTokenizer,
     return res
 
 
-# A new function for PeftModel to support calc prob and log prob WITH GRADIENTS
-# copied from transformers.generation.utils.py
 def calc_probs_log_probs(
     model: PeftModel,
     tokens: torch.Tensor,
@@ -287,7 +285,8 @@ def calc_probs_log_probs(
     calc_log_probs: bool = True,
 ) -> dict:
     """
-    Calculate the probability and log probability of the generated tokens.
+    Calculate the probability and log probability of the generated tokens with
+    gradients.
 
     Args:
     - `model` (PeftModel): transformer model.

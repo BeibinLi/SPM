@@ -10,6 +10,55 @@ from utils import (display_files_recursively, list_files, hide_root, trunc_text,
 SAFE_MESSAGE = "SAFE"
 
 
+def remove_dir(dir: str):
+    if os.name == "nt":
+        os.system('rmdir /S /Q "{}"'.format(dir))
+    else:
+        os.system('rm -rf "{}"'.format(dir))
+
+
+class RepoCache:
+
+    def __init__(self, original_root: str, dir: str):
+        """
+        A cache for the files used in training and evaluation.
+
+        Args:
+        - `original_root` (str): path to the original repos.
+        - `dir` (str): path to the directory containing the cache folder.
+        """
+        self.original_root = os.path.abspath(original_root).replace("\\", "/")
+        # The directory containing cached repos as well as other temp files
+        self.cache_dir = os.path.abspath(tempfile.mkdtemp(dir=dir)).replace(
+            "\\", "/") + "/"
+        self.cache_root = self.cache_dir + "cached_repos/"
+        os.makedirs(self.cache_root, exist_ok=True)
+        self.cached_repos = []
+
+    def __del__(self):
+        remove_dir(self.cache_dir)
+
+    def cache_repo(self, repo: str):
+        """
+        Copy the repo to the cache directory if not already cached.
+
+        Args:
+        - `repo` (str): The repo to be cached.
+
+        Returns:
+        - str: The path to the cached repo.
+        """
+        cache_repo_dir = os.path.join(self.cache_root, repo)
+
+        if repo not in self.cached_repos:
+            shutil.copytree(os.path.join(self.original_root, repo),
+                            cache_repo_dir)
+            # print("Cache %s to %s" % (root, cached_root))
+            self.cached_repos.append(repo)
+
+        return cache_repo_dir
+
+
 class LeaveoutOption:
 
     def __init__(self, files_must_contain: list, leaveout_prob: float):
@@ -94,13 +143,7 @@ class AutoExploreSandbox:
         self.cwd = self.sandbox_dir
 
     def __del__(self):
-        # Upon deletion, clean up the temporary directory
-        # If it is windows, run 'rmdir'
-        # otherwise, run rm -rf
-        if os.name == "nt":
-            os.system('rmdir /S /Q "{}"'.format(self.sandbox_dir))
-        else:
-            os.system('rm -rf "{}"'.format(self.sandbox_dir))
+        remove_dir(self.sandbox_dir)
 
     def safety_check(self, cmd: list) -> str:
         """

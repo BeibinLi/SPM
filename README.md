@@ -25,7 +25,7 @@ python -m data_gen.gen_auto_explore_markov --task_file=data/tasks/coffee.json --
 
 ## Run the code
 
-Install packages: `pip install transformers termcolor trl peft bitsandbytes tiktoken fs`
+Install packages: `pip install transformers termcolor trl peft bitsandbytes tiktoken`
 
 
 ### Supervised pretraining
