@@ -554,14 +554,14 @@ def split_command(command_block: str) -> list:
     - command_block (str): A command block.
 
     Returns:
-    - list: A list of arguments.
+    - list: A list of arguments, with `None` denoting a newline.
 
     Example:
     Given the command block:
         echo "Hello, World!"
         cat file.txt
     The function will return:
-        ['echo', '"Hello, World!"', 'cat', 'file.txt']
+        ['echo', '"Hello, World!"', None, 'cat', 'file.txt']
     """
     indices = []
     quote = None
@@ -623,10 +623,29 @@ def split_command(command_block: str) -> list:
     replacement_dict[replacement] = "\\ "
 
     # Split the command
-    split = shlex.split(command_block)
+    _split = shlex.split(command_block)
+    split = []
+
+    j = 0
+    for i in range(len(_split)):
+        newline = False
+        while command_block[j] != _split[i][0]:
+            if command_block[j] == "\n":
+                newline = True
+            j += 1
+
+        assert command_block[j:j + len(_split[i])] == _split[i]
+
+        if newline:
+            split.append(None)
+        split.append(_split[i])
+        j += len(_split[i])
 
     # Restore the quoted texts
     for i in range(len(split)):
+        if split[i] is None:
+            continue
+
         for j in range(len(split[i]) - L, -1, -1):
             substr = split[i][j:j + L]
             if substr in replacement_dict.keys():
@@ -655,11 +674,15 @@ def extract_commands(response: str, only_first: bool = False) -> list:
     last_keyw_pos = 0
     for command_block in command_blocks:
         split = split_command(command_block)
+        newline = True
         for i in range(len(split)):
-            if (split[i] in FULL_CMDS
+            if split[i] is None:
+                newline = True
+            if (split[i] in FULL_CMDS and newline
                     and (i == 0 or (i > 0 and split[i - 1] != "|"))):
                 parsed_commands.append(split[last_keyw_pos:i])
                 last_keyw_pos = i
+                newline = False
         parsed_commands.append(split[last_keyw_pos:])
 
     ret = []
@@ -782,6 +805,29 @@ def unwrap_path(filename: str) -> str:
     if filename[0] in ["\'", "\""] and filename[0] == filename[-1]:
         return unwrap_path(filename[1:-1])
     return filename
+
+
+def load_dataset(task_file: str) -> list:
+    if task_file.endswith(".json"):
+        task_files = [task_file]
+    else:
+        task_files = [
+            os.path.join(task_file, f)
+            for f in os.listdir(task_file)
+            if f.endswith(".json")
+        ]
+    dataset = []
+    for task_file in task_files:
+        dataset += json.load(open(task_file, "r"))
+
+    ### Temporarily filter hidden files
+    _dataset = []
+    for data in dataset:
+        if not data["filename"].startswith("."):
+            _dataset.append(data)
+    dataset = _dataset
+
+    return dataset
 
 
 def build_curriculum(dataset: list) -> list:

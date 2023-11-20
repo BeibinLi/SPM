@@ -1,6 +1,3 @@
-import json
-import os
-
 from peft import PeftModel
 from tqdm import tqdm
 from transformers import HfArgumentParser, AutoTokenizer
@@ -13,6 +10,7 @@ from functions.cost import (AutoExploreCostFunction, StepCost, KeywordCost,
 from functions.terminate import IdentifyFileTerminate
 from model_utils import (load_script_args, create_and_prepare_model,
                          transformer_text_completion)
+from utils import load_dataset
 
 
 def batched_answer(
@@ -27,6 +25,7 @@ def batched_answer(
     leaveout_prob: float,
     shuffle_action: bool,
     easy: bool,
+    first_step: bool,
 ) -> (list, list):
     # init copilots
     copilots = []
@@ -61,6 +60,9 @@ def batched_answer(
         copilots[-1].set_question(question=question,
                                   target_file=data["filename"])
 
+        if first_step:
+            copilots[-1].set_answer(data["optimal_path"][1])
+
     while True:
         prompts = []
         for i in range(len(batch)):
@@ -84,6 +86,9 @@ def batched_answer(
                 response = copilots[i].use_lm_ret(ret[j])
                 copilots[i].act_with_response(response)
                 j += 1
+
+        if first_step:
+            break
 
     for copilot in copilots:
         copilot.wrap_up()
@@ -109,6 +114,7 @@ def evalutate(
     leaveout_prob: float,
     shuffle_action: bool,
     easy: bool,
+    first_step: bool,
 ):
     total_cost = 0
 
@@ -128,6 +134,7 @@ def evalutate(
             leaveout_prob=leaveout_prob,
             shuffle_action=shuffle_action,
             easy=easy,
+            first_step=first_step,
         )
 
         for log in logs:
@@ -158,18 +165,7 @@ if __name__ == "__main__":
     repo_cache = RepoCache(original_root=script_args.repo_dir,
                            dir=script_args.sandbox_dir)
 
-    # Build dataset
-    if script_args.task_file.endswith(".json"):
-        task_files = [script_args.task_file]
-    else:
-        task_files = [
-            os.path.join(script_args.task_file, f)
-            for f in os.listdir(script_args.task_file)
-            if f.endswith(".json")
-        ]
-    dataset = []
-    for task_file in task_files:
-        dataset += json.load(open(task_file, "r"))
+    dataset = load_dataset(script_args.task_file)
 
     print(
         evalutate(dataset=dataset,
@@ -182,4 +178,5 @@ if __name__ == "__main__":
                   cost_function=step_cost,
                   leaveout_prob=script_args.leaveout_prob,
                   shuffle_action=script_args.shuffle_action,
-                  easy=script_args.easy))
+                  easy=script_args.easy,
+                  first_step=script_args.first_step))

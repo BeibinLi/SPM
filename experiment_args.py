@@ -165,6 +165,12 @@ class ScriptArguments:
                 "Whether use depth curriculum: sort the target files by their"
                 " depth, and train in increasing order."
         })
+    first_step: Optional[bool] = field(
+        default=False,
+        metadata={
+            "help": "Whether only train the first step, viewing as a contextual"
+                    " bandit problem."
+        })
 
     def load(self, yaml_file: str):
         with open(yaml_file, 'r') as file:

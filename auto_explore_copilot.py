@@ -164,7 +164,6 @@ class AutoExploreCopilot():
 
             self.generation_config = GenerationConfig(
                 max_length=max_token_length,
-            # `max_new_tokens` will override `max_token_length`
                 max_new_tokens=max_new_tokens,
                 do_sample=True,
                 num_beams=1,
@@ -226,12 +225,14 @@ class AutoExploreCopilot():
         self.is_finished = False
         self.step = 1
 
-        ###
-        # self.ans_cmd = ""
+        ### For first step training only
+        self.ans_cmd = ""
 
-    ###
-    # def set_answer(self, ans_cmd: str):
-    #     self.ans_cmd = ans_cmd
+    def set_answer(self, ans_cmd: str):
+        """
+        For first step training only
+        """
+        self.ans_cmd = ans_cmd
 
     def answer(self, question: str, target_file: str = "", ans_cmds: list = []):
         """
@@ -346,8 +347,9 @@ class AutoExploreCopilot():
         else:
             self.choices = CHOICES
 
-        ###
-        # self.ans_cmd = self.choices[self.cmd_list.index(self.ans_cmd)]
+        ### For first step training only
+        if self.ans_cmd != "":
+            self.ans_cmd = self.choices[self.cmd_list.index(self.ans_cmd)]
 
         self.cur_msgs = [
             ("system",
@@ -382,9 +384,9 @@ class AutoExploreCopilot():
             self.generation_logs[-1]["cost"] = self.cost_function.call(
                 user_msgs=self.cur_msgs + self.sys_infos)
 
-        ###
-        # if response == self.ans_cmd:
-        #     self.generation_logs[-1]["cost"] = -115
+        ### For first step training only
+        if self.ans_cmd != "" and response == self.ans_cmd:
+            self.generation_logs[-1]["cost"] = -115
 
         if ret == "Exit" or self.step == 15:
             self.is_finished = True

@@ -13,7 +13,7 @@ from experiment_args import ScriptArguments
 from functions.cost import StepCost, KeywordCost, NumTokenCost, SynthesizedCost
 from functions.training import compute_policy_gradient
 from model_utils import (load_script_args, create_and_prepare_model)
-from utils import build_curriculum, get_exp_id
+from utils import build_curriculum, get_exp_id, load_dataset
 
 parser = HfArgumentParser(ScriptArguments)
 script_args = load_script_args(parser.parse_args_into_dataclasses()[0])
@@ -58,17 +58,7 @@ repo_cache = RepoCache(original_root=script_args.repo_dir,
                        dir=script_args.sandbox_dir)
 
 # Build dataset
-if script_args.task_file.endswith(".json"):
-    task_files = [script_args.task_file]
-else:
-    task_files = [
-        os.path.join(script_args.task_file, f)
-        for f in os.listdir(script_args.task_file)
-        if f.endswith(".json")
-    ]
-dataset = []
-for task_file in task_files:
-    dataset += json.load(open(task_file, "r"))
+dataset = load_dataset(script_args.task_file)
 if script_args.depth_curriculum:
     dataset = build_curriculum(dataset)
 else:
@@ -136,6 +126,7 @@ for iter in (pbar := tqdm(range(script_args.max_steps), desc="Iter")):
         leaveout_prob=script_args.leaveout_prob,
         shuffle_action=script_args.shuffle_action,
         easy=script_args.easy,
+        first_step=script_args.first_step,
     )
 
     msgs += _msgs
