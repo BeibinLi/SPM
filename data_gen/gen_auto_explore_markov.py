@@ -6,6 +6,7 @@ from transformers import AutoTokenizer, HfArgumentParser
 from auto_explore_copilot import AutoExploreCopilot
 from experiment_args import ScriptArguments
 from functions.terminate import AnytimeTerminate
+from utils import load_dataset, unwrap_path
 
 
 def dump(data: list, filename: str):
@@ -23,68 +24,69 @@ tokenizer.pad_token = tokenizer.eos_token
 
 auto_explore_dataset, auto_explore_dataset_easy = [], []
 
-if script_args.task_file.endswith(".json"):
-    task_files = [script_args.task_file]
-else:
-    task_files = [
-        os.path.join(script_args.task_file, f)
-        for f in os.listdir(script_args.task_file)
-        if f.endswith(".json")
-    ]
+dataset = load_dataset(script_args.task_file)
 
-for task_file in task_files:
-    dataset = json.load(open(task_file, "r"))
+for data in dataset:
+    if "root" not in data.keys():
+        # Only for file_search_coffee.json
+        root = "coffee_roasting_dataset"
+    else:
+        root = data["root"]
+    root = os.path.join(script_args.repo_dir, root)
 
-    for data in dataset:
-        if "root" not in data.keys():
-            # Only for file_search_coffee.json
-            root = "coffee_roasting_dataset"
-        else:
-            root = data["root"]
-        root = os.path.join(script_args.repo_dir, root)
+    #for cmds in [data["commands"], data["optimal_path"]]:
+    for _cmds in [data["optimal_path"]]:
+        cmds = []
+        for cmd in _cmds:
+            if cmd == "ls":
+                continue
+            for op in ["cd", "cat"]:
+                if cmd.startswith(op):
+                    file = unwrap_path(cmd.replace(op, "").strip())
+                    cmd = op + " " + file
+                    break
+            cmds.append(cmd)
 
-        #for cmds in [data["commands"], data["optimal_path"]]:
-        for cmds in [data["optimal_path"]]:
-            cmds = [cmd for cmd in cmds if cmd != "ls"]
-            cmds.append(cmds[-1].replace("cat", "id"))
-            cmds.append("exit")
+        cmds.append(cmds[-1].replace("cat", "id"))
+        cmds.append("exit")
 
-            copilot = AutoExploreCopilot(
-                root=root,
-                temperature=0.6,
-                top_p=0.9,
-                max_token_length=32768,
-                max_new_tokens=32768,
-                file_save_path="new_and_changed_files/",
-                interaction_type="debug",
-                model_type="null",
-                model=None,
-                tokenizer=None,
-                cost_function=None,
-                terminate_criteria=AnytimeTerminate(),
-                need_output_msgs=False)
+        copilot = AutoExploreCopilot(repo_root=root,
+                                     sandbox_dir=script_args.sandbox_dir,
+                                     temperature=0.6,
+                                     top_p=0.9,
+                                     max_token_length=32768,
+                                     max_new_tokens=32768,
+                                     file_save_path="new_and_changed_files/",
+                                     interaction_type="debug",
+                                     model_type="null",
+                                     model=None,
+                                     tokenizer=None,
+                                     cost_function=None,
+                                     terminate_criteria=AnytimeTerminate(),
+                                     leaveout_prob=0,
+                                     need_output_msgs=False)
 
-            for _ in range(10):
-                copilot.easy_mode = False
-                copilot.answer(question=data["question"], ans_cmds=cmds)
+        copilot.easy_mode = False
+        copilot.answer(question=data["question"],
+                       target_file=data["filename"],
+                       ans_cmds=cmds)
 
-                whole_msgs = copilot.get_whole_msgs()
+        whole_msgs = copilot.get_whole_msgs()
 
-                auto_explore_dataset += [{
-                    "text":
-                        "\n".join([msg[1] for msg in msgs[:-1]]) + msgs[-1][1],
-                } for msgs in whole_msgs]
+        auto_explore_dataset += [{
+            "text": "\n".join([msg[1] for msg in msgs[:-1]]) + msgs[-1][1],
+        } for msgs in whole_msgs]
 
-                copilot.easy_mode = True
-                copilot.answer(question=f"Find {data['filename']}",
-                               ans_cmds=cmds)
+        copilot.easy = True
+        copilot.answer(question=f"Find {data['filename']}",
+                       target_file=data["filename"],
+                       ans_cmds=cmds)
 
-                whole_msgs = copilot.get_whole_msgs()
+        whole_msgs = copilot.get_whole_msgs()
 
-                auto_explore_dataset_easy += [{
-                    "text":
-                        "\n".join([msg[1] for msg in msgs[:-1]]) + msgs[-1][1],
-                } for msgs in whole_msgs]
+        auto_explore_dataset_easy += [{
+            "text": "\n".join([msg[1] for msg in msgs[:-1]]) + msgs[-1][1],
+        } for msgs in whole_msgs]
 
 dump(auto_explore_dataset, "data/auto_explore_dataset_markov.jsonl")
 dump(auto_explore_dataset_easy, "data/auto_explore_dataset_markov_easy.jsonl")

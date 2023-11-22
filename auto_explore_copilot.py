@@ -192,8 +192,6 @@ class AutoExploreCopilot():
         when `self.interaction_type` is 'train'.
         """
         self.question = question
-        if self.interaction_type != "train":
-            assert target_file == "", "Only support target file for training."
 
         self.start_prompt = open(
             "data_gen/prompt_templates/auto_explore/explore_prompt_rl_markov.md",
@@ -247,7 +245,7 @@ class AutoExploreCopilot():
         """
         self.set_question(question=question, target_file=target_file)
 
-        self.ans_cmds = ans_cmds
+        self.ans_cmds = ans_cmds.copy()
 
         while not self.is_finished:
             self.build_cur_msgs()
@@ -342,6 +340,10 @@ class AutoExploreCopilot():
                                               commands=list_all_actions(
                                                   root=self.sandbox.sandbox_dir,
                                                   curr_dir=self.sandbox.cwd))
+
+        if len(self.cmd_list) > len(CHOICES):
+            print(self.repo_root)
+
         if self.shuffle_action:
             self.choices = random.sample(CHOICES, len(self.cmd_list))
         else:

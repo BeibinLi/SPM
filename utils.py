@@ -41,10 +41,27 @@ FULL_CMDS = SUPPORTED_CMDS + [
     "scp",
 ]
 
+# Common programming language suffixes
+CODE_SUFFIXES = [
+    ".py", ".c", ".cpp", ".cxx", ".cc", ".h", ".hpp", ".hxx", ".cs", ".java",
+    ".go", ".ipynb"
+]
+
+# Common data file suffixes
+DATA_SUFFIXES = [".csv", ".tsv", ".json"]
+
+# Common text file suffixes
+TEXT_SUFFIXES = [".txt", ".md"]
+
+# Executable file suffixes
+EXEC_SUFFIXES = [".sh", ".bash", ".zsh"]
+
+ALLOWED_FILE_SUFFIXES = CODE_SUFFIXES + DATA_SUFFIXES + TEXT_SUFFIXES + EXEC_SUFFIXES
+
 
 def list_all_actions(root: str,
                      curr_dir: str,
-                     allowed_file_exts: List[str] = None) -> List[str]:
+                     file_suffixes: list = ALLOWED_FILE_SUFFIXES) -> list:
     """
     Generate a list of actions to navigate through directories and read files
     in a directory tree.
@@ -53,8 +70,8 @@ def list_all_actions(root: str,
     - `root` (str): the root directory (absolute path) of the whole project.
     - `curr_dir` (str): The current directory (absolute path) to start the
     action list.
-    - `allowed_file_exts` (List[str]): List of allowed file extensions to
-        include in the action list.
+    - `file_suffixes` (list): A list of file suffixes (extensions) to
+    consider while listing files.
     - `shuffle` (bool): should we shuffle the actions. (Default to True)
 
     Returns:
@@ -79,14 +96,14 @@ def list_all_actions(root: str,
         if os.path.isdir(entry_path):
             action_list.append(f"cd {wrap_path(entry)}")
             # action_list.extend(
-            # list_all_actions(entry_path, allowed_file_exts))
+            # list_all_actions(entry_path, file_suffixes))
             # action_list.append("cd ..")
 
         # If the entry is a file, read it using the "cat" command or identify
         # it using the "id" command if its extension is allowed
         elif os.path.isfile(entry_path):
             _, ext = os.path.splitext(entry)
-            if allowed_file_exts is None or ext in allowed_file_exts:
+            if file_suffixes is None or ext in file_suffixes:
                 action_list.append(f"cat {wrap_path(entry)}")
                 action_list.append(f"id {wrap_path(entry)}")
 
@@ -128,18 +145,9 @@ def optimal_action(curr_dir: str, target_file: str, actions: List[str]) -> int:
     return actions.index(optimal_action)
 
 
-# Common programming language suffixes
-CODE_SUFFIXES = (".py", ".c", ".cpp", ".cxx", ".cc", ".h", ".hpp", ".hxx",
-                 ".cs", ".java", ".go")
-
-# Common data file suffixes
-DATA_SUFFIXES = (".csv", ".tsv", ".json")
-
-# Common text file suffixes
-TEXT_SUFFIXES = (".txt", ".md")
-
-
-def list_files(directory: str, ignore_hidden: bool = True) -> list:
+def list_files(directory: str,
+               ignore_hidden: bool = True,
+               file_suffixes: list = ALLOWED_FILE_SUFFIXES) -> list:
     """
     List all files in a directory recursively.
 
@@ -147,6 +155,8 @@ def list_files(directory: str, ignore_hidden: bool = True) -> list:
     - `directory` (str): The path to the directory to list files from.
     - `ignore_hidden` (bool, optional): Whether to ignore hidden files.
         Defaults to True.
+    - `file_suffixes` (list of str, optional): A list of file suffixes
+        (extensions) to consider while listing files.
 
     Returns:
     - list: A list of file paths relative to the input directory.
@@ -160,7 +170,8 @@ def list_files(directory: str, ignore_hidden: bool = True) -> list:
             for file in files:
                 if ignore_hidden and file.startswith("."):
                     continue
-                yield os.path.relpath(os.path.join(root, file), directory)
+                if file.endswith(tuple(file_suffixes)):
+                    yield os.path.relpath(os.path.join(root, file), directory)
 
     return list(generator())
 
@@ -187,7 +198,7 @@ def hide_root(text, root) -> str:
 def display_files_recursively(
     folder_path: str,
     indent: str = "",
-    file_suffixes: list = [".py", ".cpp", ".cs", ".md", ".txt", ".csv"],
+    file_suffixes: list = ALLOWED_FILE_SUFFIXES,
     depth: int = 1,
 ) -> str:
     """Recursively lists files with specific suffixes from a given directory
@@ -206,8 +217,7 @@ def display_files_recursively(
         of the directory hierarchy. Defaults to an empty string.
         Typically used internally for recursive calls.
     - file_suffixes (list of str, optional): A list of file suffixes
-        (extensions) to consider while listing files. Defaults to [".py",
-        ".cpp", ".cs", ".md", ".txt"].
+        (extensions) to consider while listing files.
 
     Returns:
     - str: A string representation of the directory hierarchy with files
@@ -823,7 +833,20 @@ def load_dataset(task_file: str) -> list:
     ### Temporarily filter hidden files
     _dataset = []
     for data in dataset:
-        if not data["filename"].startswith("."):
+        keep = True
+        for cmd in data["optimal_path"]:
+            if cmd.startswith("cat"):
+                filename = cmd[4:]
+            elif cmd.startswith("cd"):
+                filename = cmd[3:]
+            else:
+                continue
+            if filename.startswith(".") or not filename.endswith(
+                    tuple(ALLOWED_FILE_SUFFIXES)):
+                keep = False
+                break
+
+        if keep:
             _dataset.append(data)
     dataset = _dataset
 
