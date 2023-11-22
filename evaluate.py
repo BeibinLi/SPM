@@ -1,6 +1,9 @@
+import multiprocessing
+
+from multiprocessing import Manager
 from peft import PeftModel
 from tqdm import tqdm
-from transformers import HfArgumentParser, AutoTokenizer
+from transformers import HfArgumentParser, AutoTokenizer, GenerationConfig
 
 from auto_explore_copilot import AutoExploreCopilot
 from auto_explore_sandbox import RepoCache
@@ -27,77 +30,135 @@ def batched_answer(
     easy: bool,
     first_step: bool,
 ) -> (list, list):
-    # init copilots
-    copilots = []
-    for i in range(len(batch)):
-        data = batch[i]
+    batch_size = len(batch)
+
+    def roll_out(index, repo_root, sandbox_dir, prompts, rets, logs, msgs,
+                 barrier):
+        data = batch[index]
+
+        copilot = AutoExploreCopilot(repo_root=repo_root,
+                                     sandbox_dir=sandbox_dir,
+                                     temperature=1,
+                                     top_p=1,
+                                     max_token_length=max_token_length,
+                                     max_new_tokens=max_new_tokens,
+                                     file_save_path=file_save_path,
+                                     interaction_type="train",
+                                     model_type="local",
+                                     model=model,
+                                     tokenizer=tokenizer,
+                                     cost_function=cost_function,
+                                     terminate_criteria=IdentifyFileTerminate(
+                                         data["filename"]),
+                                     leaveout_prob=leaveout_prob,
+                                     shuffle_action=shuffle_action,
+                                     easy=easy,
+                                     need_output_msgs=False)
+        question = f"Find {data['filename']}" if easy else data["question"]
+        copilot.set_question(question=question, target_file=data["filename"])
+
+        if first_step:
+            copilot.set_answer(data["optimal_path"][1])
+
+        while True:
+            if not copilot.is_finished:
+                copilot.build_cur_msgs()
+                prompts[index] = "\n".join([msg[1] for msg in copilot.cur_msgs])
+            else:
+                prompts[index] = None
+
+            # Wait for all processes to finish building prompts
+            barrier.wait()
+
+            if sum([1 if p else 0 for p in prompts]) == 0:
+                # All copilots finished interaction
+                break
+
+            barrier.wait()
+
+            if not copilot.is_finished:
+                response = copilot.use_lm_ret(rets[index])
+                copilot.act_with_response(response)
+
+            if first_step:
+                break
+
+        copilot.wrap_up()
+
+        logs[index] = copilot.get_generation_logs()
+        msgs[index] = copilot.get_whole_msgs()
+
+        barrier.wait()
+
+    manager = Manager()
+
+    prompts = manager.list([None] * batch_size)
+    rets = manager.list([None] * batch_size)
+    logs = manager.list([None] * batch_size)
+    msgs = manager.list([None] * batch_size)
+
+    barrier = multiprocessing.Barrier(batch_size + 1)
+
+    # Create and start a process for each directory
+    processes = []
+    for i, data in enumerate(batch):
         if "root" not in data.keys():
             # Only for file_search_coffee.json
             root = "coffee_roasting_dataset"
         else:
             root = data["root"]
+        repo_root = repo_cache.cache_repo(root)
+        sandbox_dir = repo_cache.get_cache_dir()
 
-        copilots.append(
-            AutoExploreCopilot(repo_root=repo_cache.cache_repo(root),
-                               sandbox_dir=repo_cache.cache_dir,
-                               temperature=1,
-                               top_p=1,
-                               max_token_length=max_token_length,
-                               max_new_tokens=max_new_tokens,
-                               file_save_path=file_save_path,
-                               interaction_type="train",
-                               model_type="local",
-                               model=model,
-                               tokenizer=tokenizer,
-                               cost_function=cost_function,
-                               terminate_criteria=IdentifyFileTerminate(
-                                   data["filename"]),
-                               leaveout_prob=leaveout_prob,
-                               shuffle_action=shuffle_action,
-                               easy=easy,
-                               need_output_msgs=False))
-        question = f"Find {data['filename']}" if easy else data["question"]
-        copilots[-1].set_question(question=question,
-                                  target_file=data["filename"])
-
-        if first_step:
-            copilots[-1].set_answer(data["optimal_path"][1])
+        process = multiprocessing.Process(target=roll_out,
+                                          args=(i, repo_root, sandbox_dir,
+                                                prompts, rets, logs, msgs,
+                                                barrier))
+        processes.append(process)
+        process.start()
 
     while True:
-        prompts = []
-        for i in range(len(batch)):
-            if not copilots[i].is_finished:
-                copilots[i].build_cur_msgs()
-                prompts.append("\n".join(
-                    [msg[1] for msg in copilots[i].cur_msgs]))
+        barrier.wait()
 
-        if len(prompts) == 0:
+        if sum([1 if p else 0 for p in prompts]) == 0:
+            # All copilots finished interaction
             break
 
-        ret = transformer_text_completion(
+        generation_config = GenerationConfig(
+            max_length=max_token_length,
+            max_new_tokens=max_new_tokens,
+            do_sample=True,
+            num_beams=1,
+            temperature=temperature,
+            top_p=top_p,
+            pad_token_id=tokenizer.pad_token_id,
+            eos_token_id=tokenizer.eos_token_id,
+        )
+
+        lm_return = transformer_text_completion(
             model=model,
             tokenizer=tokenizer,
-            prompts=prompts,
-            generation_config=copilots[0].generation_config)
+            prompts=[p for p in prompts if p],
+            generation_config=generation_config)
 
+        # Assign the return to the corresponding process
         j = 0
-        for i in range(len(batch)):
-            if not copilots[i].is_finished:
-                response = copilots[i].use_lm_ret(ret[j])
-                copilots[i].act_with_response(response)
+        for i in range(batch_size):
+            if prompts[i]:
+                rets[i] = lm_return[j]
                 j += 1
+            else:
+                rets[i] = None
+
+        barrier.wait()
 
         if first_step:
             break
 
-    for copilot in copilots:
-        copilot.wrap_up()
+    barrier.wait()
 
-    # get logs
-    logs, msgs = [], []
-    for copilot in copilots:
-        logs.append(copilot.get_generation_logs())
-        msgs.append(copilot.get_whole_msgs())
+    for process in processes:
+        process.join()
 
     return logs, msgs
 
@@ -117,6 +178,8 @@ def evalutate(
     first_step: bool,
 ):
     total_cost = 0
+
+    print(len(dataset))
 
     for idx in tqdm(
             range(0, len(dataset), script_args.per_device_eval_batch_size)):

@@ -265,7 +265,7 @@ def transformer_text_completion(model: PeftModel, tokenizer: AutoTokenizer,
                 "content": tokenizer.decode(newly_generated)
             },
             "tokens":
-                t,
+                t.cpu(),
             "attention_mask":
                 torch.cat((attention_mask[i],
                            torch.tensor([1] * len(newly_generated)))),

@@ -1,13 +1,28 @@
 import os
 import random
 import shutil
+import string
 import subprocess
-import tempfile
 
-from utils import (display_files_recursively, list_files, hide_root, trunc_text,
-                   get_file_names, handle_ls, unwrap_path, SUPPORTED_CMDS)
+from utils import (list_files, hide_root, trunc_text, get_file_names, handle_ls,
+                   unwrap_path, SUPPORTED_CMDS)
 
 SAFE_MESSAGE = "SAFE"
+
+
+def temp_dir(dir: str) -> str:
+    if dir == "":
+        dir = os.getcwd()
+
+    files = os.listdir(dir)
+
+    while True:
+        dirname = "tmp" + "".join(
+            random.choices(string.ascii_letters + string.digits, k=7))
+        if dirname not in files:
+            break
+
+    return os.path.join(dir, dirname)
 
 
 def remove_dir(dir: str):
@@ -19,7 +34,7 @@ def remove_dir(dir: str):
 
 class RepoCache:
 
-    def __init__(self, original_root: str, dir: str):
+    def __init__(self, original_root: str = "", dir: str = ""):
         """
         A cache for the files used in training and evaluation.
 
@@ -29,14 +44,26 @@ class RepoCache:
         """
         self.original_root = os.path.abspath(original_root).replace("\\", "/")
         # The directory containing cached repos as well as other temp files
-        self.cache_dir = os.path.abspath(tempfile.mkdtemp(dir=dir)).replace(
-            "\\", "/") + "/"
+        self.cache_dir = os.path.abspath(temp_dir(dir)).replace("\\", "/") + "/"
         self.cache_root = self.cache_dir + "cached_repos/"
-        os.makedirs(self.cache_root, exist_ok=True)
+        if original_root != "":
+            os.makedirs(self.cache_root, exist_ok=True)
         self.cached_repos = []
 
     def __del__(self):
         remove_dir(self.cache_dir)
+
+    def get_original_root(self):
+        return self.original_root
+
+    def get_cache_dir(self):
+        return self.cache_dir
+
+    def get_cache_root(self):
+        return self.cache_root
+
+    def get_cached_repos(self):
+        return self.cached_repos
 
     def cache_repo(self, repo: str):
         """
@@ -57,6 +84,12 @@ class RepoCache:
             self.cached_repos.append(repo)
 
         return cache_repo_dir
+
+    def copy_status(self, _repo_cache):
+        self.original_root = _repo_cache.get_original_root()
+        self.cache_dir = _repo_cache.get_cache_dir()
+        self.cache_root = _repo_cache.get_cache_root()
+        self.cached_repos = _repo_cache.get_cached_repos().copy()
 
 
 class LeaveoutOption:
@@ -116,8 +149,8 @@ class AutoExploreSandbox:
         self.dataset_path = os.path.abspath(dataset_path).replace("\\",
                                                                   "/") + "/"
         # Copy dataset to a temporary directory in the working directory
-        self.sandbox_dir = os.path.abspath(
-            tempfile.mkdtemp(dir=sandbox_path)).replace("\\", "/") + "/"
+        self.sandbox_dir = os.path.abspath(temp_dir(dir=sandbox_path)).replace(
+            "\\", "/") + "/"
 
         self.leaveout_option = leaveout_option
 
@@ -176,7 +209,8 @@ class AutoExploreSandbox:
         return SAFE_MESSAGE
 
     def run_command(self, cmd: list) -> (str, dict):
-        """Wrapper function for self._run_command().
+        """
+        Wrapper function for self._run_command().
         Run a bash command in the dataset sandbox.
 
         The supported tools are:
@@ -380,17 +414,3 @@ class AutoExploreSandbox:
         relative_path = os.path.relpath(absolute_path, self.sandbox_dir)
 
         return relative_path
-
-
-if __name__ == "__main__":
-    sandbox = AutoExploreSandbox(
-        dataset_path="/home/vectorzhou/Coffee_Roasting_Dataset/data/",
-        leaveout_option=LeaveoutOption(files_must_contain=["public/cafe.md"],
-                                       leaveout_fraction=0.5),
-    )
-
-    print(sandbox.run_command(["cat", "a.txt"], "zrl"))
-
-    print(display_files_recursively(sandbox.sandbox_dir))
-
-    del sandbox
