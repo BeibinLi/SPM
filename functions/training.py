@@ -6,19 +6,16 @@ from transformers import GenerationConfig, AutoTokenizer
 from model_utils import calc_probs_log_probs
 
 
-def compute_policy_gradient(model: PeftModel,
+def compute_policy_gradient(model: PeftModel, tokenizer: AutoTokenizer,
                             generation_config: GenerationConfig,
-                            generation_results: list,
-                            optimizer: torch.optim.Optimizer,
-                            scheduler: torch.optim.lr_scheduler.LambdaLR,
-                            critic_model: PeftModel,
-                            critic_tokenizer: AutoTokenizer,
-                            critic_optimizer: torch.optim.Optimizer) -> float:
+                            generation_results: list, critic_model: PeftModel,
+                            critic_tokenizer: AutoTokenizer) -> list:
     """
     Do one step policy gradient update to the model.
 
     Args:
     - `model` (PeftModel): the model to be updated
+    - `tokenizer` (AutoTokenizer): the tokenizer for `model`
     - `generation_config` (GenerationConfig): the generation config used to
     generate the dialog
     - `generation_results` (list): the generation result, which is a list
@@ -30,11 +27,8 @@ def compute_policy_gradient(model: PeftModel,
         "cost": float,
         "step": int
     }
-    - `optimizer` (torch.optim.Optimizer): the optimizer for `model`
-    - `scheduler` (torch.optim.lr_scheduler.LambdaLR): the scheduler for `model`
     - `critic_model` (PeftModel): the value model to be updated
     - `critic_tokenizer` (AutoTokenizer): the tokenizer for `critic_model`
-    - `critic_optimizer` (torch.optim.Optimizer): the optimizer for `critic_model`
 
     Returns:
     - float: the average total cost of the generation results
@@ -78,6 +72,22 @@ def compute_policy_gradient(model: PeftModel,
         Q_values = torch.tensor(Q_values,
                                 dtype=torch.float32,
                                 device=model.device)
+
+        max_len = max([x.shape[0] for x in input_tokens])
+
+        # Pad to same length
+        for i in range(len(input_tokens)):
+            input_tokens[i] = torch.cat((torch.full(
+                (max_len - input_tokens[i].shape[0],),
+                tokenizer.pad_token_id,
+                device=input_tokens[i].device), input_tokens[i]))
+            attention_mask[i] = torch.cat((torch.full(
+                (max_len - attention_mask[i].shape[0],),
+                0,
+                device=attention_mask[i].device), attention_mask[i]))
+            generated_mask[i] = [False] * (
+                max_len - len(generated_mask[i])) + generated_mask[i]
+
         input_tokens = torch.stack(input_tokens)
         attention_mask = torch.stack(attention_mask)
         generated_mask = torch.tensor(generated_mask,

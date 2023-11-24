@@ -837,12 +837,14 @@ def load_dataset(task_file: str) -> list:
         for cmd in data["optimal_path"]:
             if cmd.startswith("cat"):
                 filename = cmd[4:]
+                if not filename.endswith(tuple(ALLOWED_FILE_SUFFIXES)):
+                    keep = False
+                    break
             elif cmd.startswith("cd"):
                 filename = cmd[3:]
             else:
                 continue
-            if filename.startswith(".") or not filename.endswith(
-                    tuple(ALLOWED_FILE_SUFFIXES)):
+            if filename.startswith("."):
                 keep = False
                 break
 

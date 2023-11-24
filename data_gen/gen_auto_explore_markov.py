@@ -64,6 +64,7 @@ for data in dataset:
                                      cost_function=None,
                                      terminate_criteria=AnytimeTerminate(),
                                      leaveout_prob=0,
+                                     shuffle_action=True,
                                      need_output_msgs=False)
 
         copilot.easy_mode = False

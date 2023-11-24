@@ -15,7 +15,7 @@ from utils import (SUPPORTED_CMDS, colored_string, extract_commands,
                    list_all_actions, wrap_path)
 
 DEBUG_MSG = True
-CHOICES = string.digits + string.ascii_letters
+CHOICES = [str(i) for i in range(100)] + list(string.ascii_letters)
 RESPONSE_TEMPLATE = " # Response:\n"
 
 
@@ -341,9 +341,6 @@ class AutoExploreCopilot():
                                                   root=self.sandbox.sandbox_dir,
                                                   curr_dir=self.sandbox.cwd))
 
-        if len(self.cmd_list) > len(CHOICES):
-            print(self.repo_root)
-
         if self.shuffle_action:
             self.choices = random.sample(CHOICES, len(self.cmd_list))
         else:
@@ -400,8 +397,8 @@ class AutoExploreCopilot():
         self.whole_msgs.append(self.cur_msgs)
 
         # Only consider the first command
-        if response[0] in self.choices:
-            idx = self.choices.index(response[0])
+        if response in self.choices:
+            idx = self.choices.index(response)
             if idx >= len(self.cmd_list):
                 self.sys_infos.append(("user", "Error: Invalid choice."))
                 return "Continue"

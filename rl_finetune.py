@@ -42,16 +42,12 @@ if script_args.use_critic:
 else:
     critic_model, critic_tokenizer, critic_optimizer = None, None, None
 
-# Sampling unchanged logits
-temperature = 1
-top_p = 1
-
 # Build the cost function
 num_token_cost = NumTokenCost(tokenizer)
-keyword_cost = KeywordCost(keywords=["Error", "Warning"], costs=[100, 20])
+keyword_cost = KeywordCost(keywords=["Error", "Warning"], costs=[2, 1])
 step_cost = StepCost()
 synthesized_cost = SynthesizedCost(
-    cost_functions=[num_token_cost, keyword_cost], weights=[1, 1])
+    cost_functions=[num_token_cost, keyword_cost, step_cost], weights=[0, 1, 1])
 
 # Init repo cache
 repo_cache = RepoCache(original_root=script_args.repo_dir,
@@ -91,6 +87,7 @@ for iter in (pbar := tqdm(range(script_args.max_steps), desc="Iter")):
 
     # move on to the next curriculum
     if iter in trigger_set:
+        replay_buffer = []
         curriculum_idx += 1
         cur_dataset += dataset[curriculum_idx]
         idx = 0
@@ -108,8 +105,8 @@ for iter in (pbar := tqdm(range(script_args.max_steps), desc="Iter")):
         max_new_tokens=script_args.max_new_tokens,
         do_sample=True,
         num_beams=1,
-        temperature=temperature,
-        top_p=top_p,
+        temperature=1,
+        top_p=1,
         pad_token_id=tokenizer.pad_token_id,
         eos_token_id=tokenizer.eos_token_id,
     )
@@ -132,18 +129,30 @@ for iter in (pbar := tqdm(range(script_args.max_steps), desc="Iter")):
     msgs += _msgs
 
     # update the model
-    cost = compute_policy_gradient(
-        model=model,
-        generation_config=generation_config,
-        generation_results=logs,
-        optimizer=optimizer,
-        scheduler=scheduler,
-        critic_model=critic_model,
-        critic_tokenizer=critic_tokenizer,
-        critic_optimizer=critic_optimizer,
-    )
+    cost = compute_policy_gradient(model=model,
+                                   tokenizer=tokenizer,
+                                   generation_config=generation_config,
+                                   generation_results=logs,
+                                   critic_model=critic_model,
+                                   critic_tokenizer=critic_tokenizer)
     costs.append(cost)
     total_cost += cost
+
+    # update the replay buffer
+    replay_buffer += logs
+    replay_buffer = sorted(
+        replay_buffer,
+        key=lambda x: x[0]["Q_value"])[:script_args.replay_buffer_size]
+
+    # do one-step update using replay buffer
+    compute_policy_gradient(model=model,
+                            tokenizer=tokenizer,
+                            generation_config=generation_config,
+                            generation_results=random.sample(
+                                replay_buffer,
+                                script_args.per_device_train_batch_size),
+                            critic_model=critic_model,
+                            critic_tokenizer=critic_tokenizer)
 
     pbar.set_description("Cost: %.2f Iter:" % (total_cost / (iter + 1)))
 

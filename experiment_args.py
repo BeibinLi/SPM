@@ -14,6 +14,7 @@ class ScriptArguments:
     per_device_train_batch_size: Optional[int] = field(default=4)
     per_device_eval_batch_size: Optional[int] = field(default=1)
     gradient_accumulation_steps: Optional[int] = field(default=4)
+    replay_buffer_size: Optional[int] = field(default=50)
     learning_rate: Optional[float] = field(default=2e-4)
     max_grad_norm: Optional[float] = field(default=0.3)
     weight_decay: Optional[int] = field(default=0.001)
@@ -38,7 +39,7 @@ class ScriptArguments:
                 "directory."
         })
     task_file: Optional[str] = field(
-        default="data/tasks/file_search_coffee.json",
+        default="data/tasks/train/",
     #default="data/tasks/",
         metadata={
             "help": "The path to the task file. Could be a directory or a "
