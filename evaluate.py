@@ -10,7 +10,7 @@ from functions.cost import (AutoExploreCostFunction, StepCost, KeywordCost,
 from functions.terminate import IdentifyFileTerminate
 from model_utils import (load_script_args, create_and_prepare_model,
                          transformer_text_completion)
-from utils import load_dataset
+from utils import load_dataset, build_curriculum
 
 
 def batched_answer(
@@ -166,17 +166,26 @@ if __name__ == "__main__":
                            dir=script_args.sandbox_dir)
 
     dataset = load_dataset(script_args.task_file)
+    if script_args.depth_curriculum:
+        dataset = build_curriculum(dataset)
+    else:
+        dataset = [dataset]
+    if script_args.first_curriculum:
+        dataset = dataset[:1]
 
-    print(
-        evalutate(dataset=dataset,
-                  model=model,
-                  tokenizer=tokenizer,
-                  repo_cache=repo_cache,
-                  max_token_length=script_args.max_seq_length,
-                  max_new_tokens=script_args.max_new_tokens,
-                  file_save_path="changed_files/",
-                  cost_function=step_cost,
-                  leaveout_prob=script_args.leaveout_prob,
-                  shuffle_action=script_args.shuffle_action,
-                  easy=script_args.easy,
-                  first_step=script_args.first_step))
+    for i in range(len(dataset)):
+        depth = dataset[i][0]["filename"].count("/")
+        print(
+            "Depth %d :" % depth,
+            evalutate(dataset=dataset[i],
+                      model=model,
+                      tokenizer=tokenizer,
+                      repo_cache=repo_cache,
+                      max_token_length=script_args.max_seq_length,
+                      max_new_tokens=script_args.max_new_tokens,
+                      file_save_path="changed_files/",
+                      cost_function=step_cost,
+                      leaveout_prob=script_args.leaveout_prob,
+                      shuffle_action=script_args.shuffle_action,
+                      easy=script_args.easy,
+                      first_step=script_args.first_step))

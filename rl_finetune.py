@@ -28,8 +28,9 @@ script_args.dump(os.path.join(output_dir, "setting.yml"))
 # Setup policy network
 tokenizer, peft_config, model = create_and_prepare_model(script_args)
 
-optimizer = torch.optim.Adam(model.parameters(), lr=script_args.learning_rate)
-scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.9)
+optimizer = torch.optim.Adam(model.parameters(),
+                             lr=script_args.learning_rate,
+                             weight_decay=script_args.weight_decay)
 
 if script_args.use_critic:
     # Setup value network
@@ -38,7 +39,9 @@ if script_args.use_critic:
     critic_model.config.pad_token_id = critic_model.config.eos_token_id
     critic_tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
     critic_tokenizer.pad_token = critic_tokenizer.eos_token
-    critic_optimizer = torch.optim.Adam(critic_model.parameters(), lr=1e-4)
+    critic_optimizer = torch.optim.Adam(critic_model.parameters(),
+                                        lr=script_args.learning_rate,
+                                        weight_decay=script_args.weight_decay)
 else:
     critic_model, critic_tokenizer, critic_optimizer = None, None, None
 
@@ -75,9 +78,11 @@ curriculum_idx = -1
 cur_dataset = []
 
 # Logs
-total_cost = 0
-costs = []
+costs, latest_costs = [], []
 msgs = []
+
+if script_args.first_curriculum:
+    trigger_set = [0]
 
 for iter in (pbar := tqdm(range(script_args.max_steps), desc="Iter")):
     if iter % script_args.gradient_accumulation_steps == 0:
@@ -136,7 +141,8 @@ for iter in (pbar := tqdm(range(script_args.max_steps), desc="Iter")):
                                    critic_model=critic_model,
                                    critic_tokenizer=critic_tokenizer)
     costs.append(cost)
-    total_cost += cost
+    latest_costs.append(cost)
+    latest_costs = latest_costs[-script_args.save_steps:]
 
     # update the replay buffer
     replay_buffer += logs
@@ -154,13 +160,13 @@ for iter in (pbar := tqdm(range(script_args.max_steps), desc="Iter")):
                             critic_model=critic_model,
                             critic_tokenizer=critic_tokenizer)
 
-    pbar.set_description("Cost: %.2f Iter:" % (total_cost / (iter + 1)))
+    pbar.set_description("Cost: %.2f Iter:" %
+                         (sum(latest_costs) / len(latest_costs)))
 
     if (iter + 1) % script_args.gradient_accumulation_steps == 0:
         torch.nn.utils.clip_grad_norm_(model.parameters(),
                                        script_args.max_grad_norm)
         optimizer.step()
-        scheduler.step()
 
         if script_args.use_critic:
             torch.nn.utils.clip_grad_norm_(critic_model.parameters(),

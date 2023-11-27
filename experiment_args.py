@@ -12,7 +12,7 @@ class ScriptArguments:
     """
 
     per_device_train_batch_size: Optional[int] = field(default=4)
-    per_device_eval_batch_size: Optional[int] = field(default=1)
+    per_device_eval_batch_size: Optional[int] = field(default=4)
     gradient_accumulation_steps: Optional[int] = field(default=4)
     replay_buffer_size: Optional[int] = field(default=50)
     learning_rate: Optional[float] = field(default=2e-4)
@@ -172,6 +172,9 @@ class ScriptArguments:
             "help": "Whether only train the first step, viewing as a contextual"
                     " bandit problem."
         })
+    first_curriculum: Optional[bool] = field(
+        default=False,
+        metadata={"help": "Whether only train on the first curriculum."})
 
     def load(self, yaml_file: str):
         with open(yaml_file, 'r') as file:

@@ -108,15 +108,20 @@ def create_and_prepare_model(
                                           config=peft_config)
         del base_model
 
-        tokenizer = AutoTokenizer.from_pretrained(args.load_dir)
+        tokenizer = AutoTokenizer.from_pretrained(
+            args.load_dir,
+            trust_remote_code=True,
+            cache_dir=args.cache_dir,
+            model_max_length=model.config.max_position_embeddings - 1,
+            add_prefix_space=False,
+        )
     else:
-        #model = PeftModel(model=base_model, peft_config=peft_config)
         model = base_model
         tokenizer = AutoTokenizer.from_pretrained(
             args.model_name,
             trust_remote_code=True,
             cache_dir=args.cache_dir,
-            model_max_length=model.config.max_position_embeddings,
+            model_max_length=model.config.max_position_embeddings - 1,
             add_prefix_space=False,
         )
 
