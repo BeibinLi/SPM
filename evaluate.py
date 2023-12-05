@@ -1,6 +1,7 @@
 from peft import PeftModel
+from statistics import mean
 from tqdm import tqdm
-from transformers import HfArgumentParser, AutoTokenizer
+from transformers import AutoTokenizer, HfArgumentParser, GenerationConfig
 
 from auto_explore_copilot import AutoExploreCopilot
 from auto_explore_sandbox import RepoCache
@@ -18,8 +19,8 @@ def batched_answer(
     model: PeftModel,
     tokenizer: AutoTokenizer,
     repo_cache: RepoCache,
-    max_token_length: int,
-    max_new_tokens: int,
+    horizon: int,
+    generation_config: GenerationConfig,
     file_save_path: str,
     cost_function: AutoExploreCostFunction,
     leaveout_prob: float,
@@ -40,10 +41,8 @@ def batched_answer(
         copilots.append(
             AutoExploreCopilot(repo_root=repo_cache.cache_repo(root),
                                sandbox_dir=repo_cache.cache_dir,
-                               temperature=1,
-                               top_p=1,
-                               max_token_length=max_token_length,
-                               max_new_tokens=max_new_tokens,
+                               horizon=horizon,
+                               generation_config=generation_config,
                                file_save_path=file_save_path,
                                interaction_type="train",
                                model_type="local",
@@ -107,8 +106,8 @@ def evalutate(
     model: PeftModel,
     tokenizer: AutoTokenizer,
     repo_cache: RepoCache,
-    max_token_length: int,
-    max_new_tokens: int,
+    horizon: int,
+    generation_config: GenerationConfig,
     file_save_path: str,
     cost_function: AutoExploreCostFunction,
     leaveout_prob: float,
@@ -116,7 +115,7 @@ def evalutate(
     easy: bool,
     first_step: bool,
 ):
-    total_cost = 0
+    costs = []
 
     for idx in tqdm(
             range(0, len(dataset), script_args.per_device_eval_batch_size)):
@@ -125,10 +124,10 @@ def evalutate(
         logs, msgs = batched_answer(
             batch=batch,
             model=model,
+            horizon=horizon,
             tokenizer=tokenizer,
             repo_cache=repo_cache,
-            max_token_length=max_token_length,
-            max_new_tokens=max_new_tokens,
+            generation_config=generation_config,
             file_save_path=file_save_path,
             cost_function=cost_function,
             leaveout_prob=leaveout_prob,
@@ -137,10 +136,9 @@ def evalutate(
             first_step=first_step,
         )
 
-        for log in logs:
-            total_cost += sum([step["cost"] for step in log])
+        costs += [log[0]["Q_value"] for log in logs]
 
-    return total_cost / len(dataset)
+    return mean(costs)
 
 
 if __name__ == "__main__":
@@ -149,6 +147,7 @@ if __name__ == "__main__":
 
     # Setup policy network
     tokenizer, peft_config, model = create_and_prepare_model(script_args)
+    model.eval()
 
     # Sampling unchanged logits
     temperature = 1
@@ -173,6 +172,18 @@ if __name__ == "__main__":
     if script_args.first_curriculum:
         dataset = dataset[:1]
 
+    generation_config = GenerationConfig(
+        max_length=script_args.max_seq_length,
+        max_new_tokens=script_args.max_new_tokens,
+        do_sample=True,
+        num_beams=1,
+        temperature=script_args.temperature,
+        top_p=script_args.top_p,
+        top_k=script_args.top_k,
+        pad_token_id=tokenizer.pad_token_id,
+        eos_token_id=tokenizer.eos_token_id,
+    )
+
     for i in range(len(dataset)):
         depth = dataset[i][0]["filename"].count("/")
         print(
@@ -181,8 +192,8 @@ if __name__ == "__main__":
                       model=model,
                       tokenizer=tokenizer,
                       repo_cache=repo_cache,
-                      max_token_length=script_args.max_seq_length,
-                      max_new_tokens=script_args.max_new_tokens,
+                      horizon=script_args.horizon,
+                      generation_config=generation_config,
                       file_save_path="changed_files/",
                       cost_function=step_cost,
                       leaveout_prob=script_args.leaveout_prob,

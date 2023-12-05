@@ -1,101 +1,61 @@
+import random
 import torch
 
-from peft import PeftModel
-from transformers import GenerationConfig, AutoTokenizer
+from statistics import mean
 
 from model_utils import calc_probs_log_probs
 
 
-def compute_policy_gradient(model: PeftModel, tokenizer: AutoTokenizer,
-                            generation_config: GenerationConfig,
-                            generation_results: list, critic_model: PeftModel,
-                            critic_tokenizer: AutoTokenizer) -> list:
-    """
-    Do one step policy gradient update to the model.
+def compile_from_log(generation_result_steps, pad_token_id):
+    STACK_KEYS = ["tokens", "attention_mask"]
+    TENSOR_KEYS = [("Q_value", torch.float32), ("generated_mask", torch.bool),
+                   ("advantage", torch.float32), ("prob", torch.float32)]
+    LIST_KEYS = ["prompt", "scores"]
+    KEYS = STACK_KEYS + [k[0] for k in TENSOR_KEYS] + LIST_KEYS
 
-    Args:
-    - `model` (PeftModel): the model to be updated
-    - `tokenizer` (AutoTokenizer): the tokenizer for `model`
-    - `generation_config` (GenerationConfig): the generation config used to
-    generate the dialog
-    - `generation_results` (list): the generation result, which is a list
-    consisting of `batch_size` lists. Each inner list contains dicts in the
-    following format:
-    {
-        "tokens": torch.Tensor,
-        "generated_mask": list,
-        "cost": float,
-        "step": int
-    }
-    - `critic_model` (PeftModel): the value model to be updated
-    - `critic_tokenizer` (AutoTokenizer): the tokenizer for `critic_model`
+    ret = {k: [] for k in KEYS}
+    for step in generation_result_steps:
+        for key in KEYS:
+            if key in step:
+                ret[key].append(step[key])
 
-    Returns:
-    - float: the average total cost of the generation results
-    """
-    use_critic = critic_model is not None
+    # Must contain 'tokens'
+    device = ret["tokens"][0].device
+    max_len = max([x.shape[0] for x in ret["tokens"]])
 
-    costs = []
+    # Pad to same length
+    for i in range(len(ret["tokens"])):
+        cur_len = ret["tokens"][i].shape[0]
+        ret["tokens"][i] = torch.cat(
+            (torch.full((max_len - cur_len,),
+                        pad_token_id,
+                        device=ret["tokens"][i].device), ret["tokens"][i]))
+        ret["attention_mask"][i] = torch.cat((torch.full(
+            (max_len - cur_len,), 0,
+            device=ret["attention_mask"][i].device), ret["attention_mask"][i]))
+        ret["generated_mask"][i] = [False] * (
+            max_len - cur_len) + ret["generated_mask"][i]
 
-    # Calculate the Q values for all steps
-    for generation_result in generation_results:
-        # sort the generation results by reversed time order
-        generation_result = sorted(generation_result, key=lambda x: -x["step"])
-        tot_cost = 0
+    for key in STACK_KEYS:
+        if key in ret:
+            ret[key] = torch.stack(ret[key])
 
-        for i, step in enumerate(generation_result):
-            # update total future cost
-            tot_cost += step["cost"]
-            step["Q_value"] = tot_cost
+    for key, dtype in TENSOR_KEYS:
+        if key in ret:
+            ret[key] = torch.tensor(ret[key], dtype=dtype, device=device)
 
-        costs.append(tot_cost)
+    return ret
 
-    max_step = 0
-    for i, generation_result in enumerate(generation_results):
-        # sort the generation results by time order
-        generation_result = sorted(generation_result, key=lambda x: x["step"])
-        max_step = max(max_step, generation_result[-1]["step"])
 
-    for i in range(max_step):
+def compute_advantage(data, batch_size, critic_model, tokenizer):
+    for i in range(0, len(data), batch_size):
         # Get the input batch for this step
-        Q_values, input_tokens, attention_mask = [], [], []
-        generated_mask, prompts = [], []
-        for generation_result in generation_results:
-            if i < len(generation_result):
-                step = generation_result[i]
-                Q_values.append(step["Q_value"])
-                input_tokens.append(step["tokens"])
-                attention_mask.append(step["attention_mask"])
-                generated_mask.append(step["generated_mask"])
-                prompts.append(step["prompt"])
+        keyword_dict = compile_from_log(data[i:i + batch_size],
+                                        tokenizer.pad_token_id)
+        prompts = keyword_dict["prompt"]
 
-        Q_values = torch.tensor(Q_values,
-                                dtype=torch.float32,
-                                device=model.device)
-
-        max_len = max([x.shape[0] for x in input_tokens])
-
-        # Pad to same length
-        for i in range(len(input_tokens)):
-            input_tokens[i] = torch.cat((torch.full(
-                (max_len - input_tokens[i].shape[0],),
-                tokenizer.pad_token_id,
-                device=input_tokens[i].device), input_tokens[i]))
-            attention_mask[i] = torch.cat((torch.full(
-                (max_len - attention_mask[i].shape[0],),
-                0,
-                device=attention_mask[i].device), attention_mask[i]))
-            generated_mask[i] = [False] * (
-                max_len - len(generated_mask[i])) + generated_mask[i]
-
-        input_tokens = torch.stack(input_tokens)
-        attention_mask = torch.stack(attention_mask)
-        generated_mask = torch.tensor(generated_mask,
-                                      dtype=torch.bool,
-                                      device=model.device)
-
-        if use_critic:
-            value_inputs = critic_tokenizer.batch_encode_plus(
+        if critic_model is not None:
+            value_inputs = tokenizer.batch_encode_plus(
                 prompts,
                 truncation=True,
                 padding=True,
@@ -104,32 +64,267 @@ def compute_policy_gradient(model: PeftModel, tokenizer: AutoTokenizer,
             value_inputs = {
                 k: v.to(critic_model.device) for k, v in value_inputs.items()
             }
-            values = critic_model(**value_inputs).logits.squeeze(-1)
+
+            with torch.no_grad():
+                values = critic_model(**value_inputs).logits.squeeze(-1)
         else:
-            values = torch.zeros(len(Q_values),
-                                 dtype=torch.float32,
-                                 device=model.device)
+            values = torch.zeros(len(prompts))
 
-        # policy gradient uses log probs
-        probs_log_probs = calc_probs_log_probs(model,
-                                               input_tokens,
-                                               attention_mask,
-                                               generated_mask,
-                                               generation_config,
-                                               calc_probs=False,
-                                               calc_log_probs=True)
-        log_probs = probs_log_probs["log_probs"]
+        j = 0
+        for d in data[i:i + batch_size]:
+            d["advantage"] = d["Q_value"] - values[j].item()
+            j += 1
 
-        if len(log_probs) == 0:
-            continue
 
-        # Policy network update
-        (torch.mean(
-            (Q_values - values.detach()) * log_probs) / max_step).backward()
+def update_critic(data, critic_model, critic_optimizer, tokenizer, batch_size,
+                  max_grad_norm):
+    losses = []
+    for i in range(0, len(data), batch_size):
+        # Get the input batch for this step
+        keyword_dict = compile_from_log(data[i:i + batch_size],
+                                        tokenizer.pad_token_id)
+        Q_values = keyword_dict["Q_value"]
+        prompts = keyword_dict["prompt"]
 
-        if use_critic:
-            # Value network update
-            (torch.nn.MSELoss()(Q_values.to(critic_model.device), values) /
-             max_step).backward()
+        value_inputs = tokenizer.batch_encode_plus(
+            prompts,
+            truncation=True,
+            padding=True,
+            max_length=critic_model.config.max_length,
+            return_tensors="pt")
+        value_inputs = {
+            k: v.to(critic_model.device) for k, v in value_inputs.items()
+        }
+        values = critic_model(**value_inputs).logits.squeeze(-1)
 
-    return sum(costs) / len(costs)
+        critic_optimizer.zero_grad()
+
+        loss = torch.nn.MSELoss()(Q_values.to(critic_model.device), values)
+        loss.backward()
+        losses.append(loss.item())
+
+        torch.nn.utils.clip_grad_norm_(critic_model.score.parameters(),
+                                       max_grad_norm)
+        critic_optimizer.step()
+
+    return mean(losses)
+
+
+class PolicyTrainer:
+
+    def __init__(self, model, tokenizer, optimizer, gradient_accumulation_steps,
+                 generation_config, critic_model, critic_optimizer,
+                 critic_update_steps, batch_size, max_grad_norm, **kwargs):
+        """
+        Compute gradient for proximal policy optimization.
+
+        Args:
+        - `model` (PeftModel): the model to be updated
+        - `tokenizer` (AutoTokenizer): the tokenizer for `model`
+        - `optimizer` (torch.optim.Optimizer): the optimizer for `model`
+        - `generation_config` (GenerationConfig): the generation config used to
+        generate the dialog
+        - `generation_results` (list): the generation result, which is a list
+        consisting of `batch_size` lists. Each inner list contains dicts in the
+        following format:
+        {
+            "tokens": torch.Tensor,
+            "generated_mask": list,
+            "attention_mask": torch.Tensor,
+            "cost": float,
+            "Q_value": float,
+            "step": int
+        }
+        - `critic_model` (PeftModel): the value model to be updated
+        - `critic_tokenizer` (AutoTokenizer): the tokenizer for `critic_model`
+        - `critic_optimizer` (torch.optim.Optimizer): the optimizer for
+        `critic_model`
+        - `clip_coef` (float): the clipping coefficient for PPO
+        - `max_grad_norm` (float): the maximum gradient norm for gradient clipping
+        """
+
+        self.model = model
+        self.tokenizer = tokenizer
+        self.optimizer = optimizer
+        self.generation_config = generation_config
+        self.batch_size = batch_size
+        self.max_grad_norm = max_grad_norm
+        self.critic_model = critic_model
+        self.critic_optimizer = critic_optimizer
+        self.use_critic = critic_model is not None
+
+        self.gradient_accumulation_steps = gradient_accumulation_steps
+        self.data = []
+        self.gradient_accumulated_steps = 0
+
+        self.critic_update_steps = critic_update_steps
+        self.critic_data = []
+        self.critic_accumulated_steps = 0
+
+
+class PGTrainer(PolicyTrainer):
+
+    def train(self, generation_results):
+        if generation_results == []:
+            return None
+
+        self.data += generation_results
+        self.gradient_accumulated_steps += 1
+        if self.gradient_accumulated_steps < self.gradient_accumulation_steps:
+            return None
+
+        self.critic_data += generation_results
+        self.critic_accumulated_steps += 1
+
+        self.optimizer.zero_grad()
+
+        losses = []
+        data = [x for r in self.data for x in r]
+
+        compute_advantage(data=data,
+                          batch_size=self.batch_size,
+                          critic_model=self.critic_model,
+                          tokenizer=self.tokenizer)
+
+        random.shuffle(data)
+        for i in range(0, len(data), self.batch_size):
+            # Get the input batch for this step
+            keyword_dict = compile_from_log(
+                generation_result_steps=data[i:i + self.batch_size],
+                pad_token_id=self.tokenizer.pad_token_id)
+            input_tokens = keyword_dict["tokens"]
+            attention_mask = keyword_dict["attention_mask"]
+            generated_mask = keyword_dict["generated_mask"]
+            advantages = keyword_dict["advantage"]
+
+            # PG uses log probs
+            probs_log_probs = calc_probs_log_probs(
+                model=self.model,
+                tokens=input_tokens,
+                attention_mask=attention_mask,
+                generated_mask=generated_mask,
+                generation_config=self.generation_config,
+                calc_probs=True,
+                calc_log_probs=False)
+            log_probs = probs_log_probs["probs"]
+
+            # Policy network update
+            loss = torch.sum(advantages * log_probs) / len(data)
+            loss.backward()
+            losses.append(loss.item())
+
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(),
+                                       self.max_grad_norm)
+        self.optimizer.step()
+
+        self.gradient_accumulated_steps = 0
+        self.data = []
+
+        if (self.use_critic
+                and self.critic_accumulated_steps == self.critic_update_steps):
+            update_critic(data=[x for r in self.critic_data for x in r],
+                          critic_model=self.critic_model,
+                          critic_optimizer=self.critic_optimizer,
+                          tokenizer=self.tokenizer,
+                          batch_size=self.batch_size,
+                          max_grad_norm=self.max_grad_norm)
+
+            self.critic_accumulated_steps = 0
+            self.critic_data = []
+
+        # in fact equal to average per step loss
+        return sum(losses)
+
+
+class PPOTrainer(PolicyTrainer):
+
+    def __init__(self, ppo_clip_coef, ppo_update_iter, **kwargs):
+        super().__init__(**kwargs)
+
+        assert self.use_critic, "For PPO, critic model must be provided."
+
+        self.ppo_clip_coef = ppo_clip_coef
+        self.ppo_update_iter = ppo_update_iter
+
+    def train(self, generation_results):
+        if generation_results == []:
+            return None
+
+        self.data += generation_results
+        self.gradient_accumulated_steps += 1
+        if self.gradient_accumulated_steps < self.gradient_accumulation_steps:
+            return None
+
+        self.critic_data += generation_results
+        self.critic_accumulated_steps += 1
+
+        losses = []
+        data = [x for r in self.data for x in r]
+
+        compute_advantage(data=data,
+                          batch_size=self.batch_size,
+                          critic_model=self.critic_model,
+                          tokenizer=self.tokenizer)
+
+        for iter in range(self.ppo_update_iter):
+            self.optimizer.zero_grad()
+
+            random.shuffle(data)
+            for i in range(0, len(data), self.batch_size):
+                # Get the input batch for this step
+                keyword_dict = compile_from_log(
+                    generation_result_steps=data[i:i + self.batch_size],
+                    pad_token_id=self.tokenizer.pad_token_id)
+                input_tokens = keyword_dict["tokens"]
+                attention_mask = keyword_dict["attention_mask"]
+                generated_mask = keyword_dict["generated_mask"]
+                advantages = keyword_dict["advantage"]
+                old_probs = keyword_dict["prob"]
+
+                # PPO uses probs
+                probs_log_probs = calc_probs_log_probs(
+                    model=self.model,
+                    tokens=input_tokens,
+                    attention_mask=attention_mask,
+                    generated_mask=generated_mask,
+                    generation_config=self.generation_config,
+                    calc_probs=True,
+                    calc_log_probs=False)
+                probs = probs_log_probs["probs"]
+
+                # Policy network update
+                # Advantage for minimizing cost is negative of maximizing reward
+                loss1 = probs / old_probs * (-advantages)
+                loss2 = torch.clamp(probs / old_probs, 1 - self.ppo_clip_coef,
+                                    1 + self.ppo_clip_coef) * (-advantages)
+                loss = torch.mean(-torch.min(loss1, loss2))
+                losses.append(loss.item())
+
+                loss.backward()
+
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(),
+                                           self.max_grad_norm)
+            self.optimizer.step()
+
+        self.gradient_accumulated_steps = 0
+        self.data = []
+
+        if (self.use_critic
+                and self.critic_accumulated_steps == self.critic_update_steps):
+            update_critic(data=[x for r in self.critic_data for x in r],
+                          critic_model=self.critic_model,
+                          critic_optimizer=self.critic_optimizer,
+                          tokenizer=self.tokenizer,
+                          batch_size=self.batch_size,
+                          max_grad_norm=self.max_grad_norm)
+
+            self.critic_accumulated_steps = 0
+            self.critic_data = []
+
+        return mean(losses)
+
+
+TRAINERS = {
+    "pg": PGTrainer,
+    "ppo": PPOTrainer,
+}

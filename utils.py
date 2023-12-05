@@ -59,6 +59,30 @@ EXEC_SUFFIXES = [".sh", ".bash", ".zsh"]
 ALLOWED_FILE_SUFFIXES = CODE_SUFFIXES + DATA_SUFFIXES + TEXT_SUFFIXES + EXEC_SUFFIXES
 
 
+class ReplayBuffer:
+
+    def __init__(self, max_size: int):
+        self.max_size = max_size
+        self.buffer = []
+        self.weights = []
+
+    def add(self, items: list):
+        if self.max_size == 0:
+            return
+
+        self.buffer += [item["data"] for item in items]
+        self.buffer = self.buffer[-self.max_size:]
+
+        self.weights += [item["weight"] for item in items]
+        self.weights = self.weights[-self.max_size:]
+
+    def sample(self, batch_size: int):
+        if self.max_size == 0:
+            return []
+
+        return random.choices(self.buffer, weights=self.weights, k=batch_size)
+
+
 def list_all_actions(root: str,
                      curr_dir: str,
                      file_suffixes: list = ALLOWED_FILE_SUFFIXES) -> list:

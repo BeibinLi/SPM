@@ -8,13 +8,109 @@ from peft import LoraConfig, PeftConfig, PeftModel
 from termcolor import colored
 from torch import nn
 from transformers import (AutoModelForCausalLM, AutoTokenizer,
-                          BitsAndBytesConfig, GenerationConfig)
+                          BitsAndBytesConfig, GenerationConfig, GPT2Config,
+                          LlamaConfig)
 from transformers.generation.logits_process import LogitsProcessorList
+from transformers.modeling_outputs import SequenceClassifierOutputWithPast
+from typing import Optional, Tuple, Union
 
 from experiment_args import ScriptArguments
 from utils import extract_command_blocks
 
 OVERRIDE_KEYS = ["model_name", "lora_r", "bf16", "fp16", "use_8bit", "use_4bit"]
+
+
+class CriticModel(nn.Module):
+
+    def __init__(self, main_model: PeftModel):
+        super().__init__()
+
+        self.transformer = main_model.model.transformer
+        self.config = main_model.config
+        self.device = main_model.device
+
+        config = main_model.config
+        if isinstance(config, GPT2Config):
+            hidden_size = config.n_embd
+        elif isinstance(config, LlamaConfig):
+            hidden_size = config.hidden_size
+
+        self.score = nn.Linear(hidden_size, 1).to(self.device)
+
+    def forward(
+        self,
+        input_ids: Optional[torch.LongTensor] = None,
+        past_key_values: Optional[Tuple[Tuple[torch.Tensor]]] = None,
+        attention_mask: Optional[torch.FloatTensor] = None,
+        token_type_ids: Optional[torch.LongTensor] = None,
+        position_ids: Optional[torch.LongTensor] = None,
+        head_mask: Optional[torch.FloatTensor] = None,
+        inputs_embeds: Optional[torch.FloatTensor] = None,
+        labels: Optional[torch.LongTensor] = None,
+        use_cache: Optional[bool] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        return_dict: Optional[bool] = None,
+    ) -> Union[Tuple, SequenceClassifierOutputWithPast]:
+        assert labels is None, "Do not support supervised training."
+
+        if return_dict is None:
+            return_dict = self.config.use_return_dict
+
+        with torch.no_grad():
+            transformer_outputs = self.transformer(
+                input_ids,
+                past_key_values=past_key_values,
+                attention_mask=attention_mask,
+                token_type_ids=token_type_ids,
+                position_ids=position_ids,
+                head_mask=head_mask,
+                inputs_embeds=inputs_embeds,
+                use_cache=use_cache,
+                output_attentions=output_attentions,
+                output_hidden_states=output_hidden_states,
+                return_dict=return_dict,
+            )
+        hidden_states = transformer_outputs[0]
+        logits = self.score(hidden_states.to(torch.float32))
+
+        if input_ids is not None:
+            batch_size, sequence_length = input_ids.shape[:2]
+        else:
+            batch_size, sequence_length = inputs_embeds.shape[:2]
+
+        assert (
+            self.config.pad_token_id is not None or batch_size == 1
+        ), "Cannot handle batch sizes > 1 if no padding token is defined."
+
+        if self.config.pad_token_id is None:
+            sequence_lengths = -1
+        else:
+            if input_ids is not None:
+                sequence_lengths = (torch.eq(
+                    input_ids, self.config.pad_token_id).long().argmax(-1) -
+                                    1).to(logits.device)
+            else:
+                sequence_lengths = -1
+
+        pooled_logits = logits[torch.arange(batch_size, device=logits.device),
+                               sequence_lengths]
+
+        loss = None
+        if not return_dict:
+            output = (pooled_logits,) + transformer_outputs[1:]
+            return ((loss,) + output) if loss is not None else output
+
+        return SequenceClassifierOutputWithPast(
+            loss=loss,
+            logits=pooled_logits,
+            past_key_values=transformer_outputs.past_key_values,
+            hidden_states=transformer_outputs.hidden_states,
+            attentions=transformer_outputs.attentions,
+        )
+
+    def save_pretrained(self, **kwargs):
+        pass
 
 
 def load_script_args(script_args: ScriptArguments,
@@ -124,6 +220,8 @@ def create_and_prepare_model(
             model_max_length=model.config.max_position_embeddings - 1,
             add_prefix_space=False,
         )
+
+    model.config.pad_token_id = tokenizer.eos_token_id
 
     tokenizer.truncation_side = "left"
     tokenizer.padding_side = "left"
@@ -257,11 +355,17 @@ def transformer_text_completion(model: PeftModel, tokenizer: AutoTokenizer,
 
     outputs = model.generate(inputs=inputs.to(model.device),
                              generation_config=generation_config,
-                             attention_mask=attention_mask.to(model.device))
+                             attention_mask=attention_mask.to(model.device),
+                             return_dict_in_generate=True,
+                             output_scores=True)
+    sequences, scores = outputs.sequences, outputs.scores
 
     res = []
-    for i, t in enumerate(outputs):
-        newly_generated = t[max_len:]
+    for i in range(len(prompts)):
+        newly_generated = sequences[i, max_len:]
+        prob = 1
+        for j, logits in enumerate(scores):
+            prob *= torch.softmax(logits[i], dim=-1)[newly_generated[j]]
         res.append({
             "prompt":
                 prompts[i],
@@ -270,11 +374,13 @@ def transformer_text_completion(model: PeftModel, tokenizer: AutoTokenizer,
                 "content": tokenizer.decode(newly_generated)
             },
             "tokens":
-                t,
+                sequences[i],
             "attention_mask":
                 torch.cat((attention_mask[i],
                            torch.tensor([1] * len(newly_generated)))),
             "generated_mask": [False] * max_len + [True] * len(newly_generated),
+            "prob":
+                prob.item(),
         })
 
     return res
@@ -348,7 +454,7 @@ def calc_probs_log_probs(
             step_probs = nn.functional.softmax(scores, dim=-1)
             step_probs = step_probs[axis, tokens[:, pos]]
         else:
-            step_probs = torch.zeros(batch_size, device=model.device)
+            step_probs = torch.ones(batch_size, device=model.device)
 
         if calc_log_probs:
             # get log probs of current position

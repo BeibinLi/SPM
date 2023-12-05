@@ -68,10 +68,8 @@ class AutoExploreCopilot():
             self,
             repo_root: str,
             sandbox_dir: str,
-            temperature: float,
-            top_p: float,
-            max_token_length: int,
-            max_new_tokens: int,
+            horizon: int,
+            generation_config: GenerationConfig,
             file_save_path: str,
             interaction_type: str,
             model_type: str,
@@ -91,8 +89,10 @@ class AutoExploreCopilot():
         Args:
         - `repo_root` (str): The root directory of the repo.
         - `sandbox_dir` (str): The directory to store the sandbox.
+        - `horizon` (int): The horizon (number of interactions) for each episode.
         - `temperature` (float): The temperature of the language model.
         - `top_p` (float): The top_p of the language model.
+        - `top_k` (int): The top_k of the language model.
         - `max_token_length` (int): The maximum total token length for chat completion.
         - `max_new_tokens` (int): The maximum new tokens.
         - `file_save_path` (str): The path to save the new or changed files.
@@ -149,10 +149,8 @@ class AutoExploreCopilot():
         self.file_save_path = os.path.abspath(
             os.path.join(self.sandbox_dir, file_save_path)).replace('\\', '/')
 
-        self.temperature = temperature
-        self.top_p = top_p
-        self.max_token_length = max_token_length
-        self.max_new_tokens = max_new_tokens
+        self.horizon = horizon
+        self.generation_config = generation_config
 
         self.interaction_type = interaction_type
         self.model_type = model_type
@@ -161,17 +159,6 @@ class AutoExploreCopilot():
             self.tokenizer = tokenizer
             if interaction_type == "train":
                 self.cost_function = cost_function
-
-            self.generation_config = GenerationConfig(
-                max_length=max_token_length,
-                max_new_tokens=max_new_tokens,
-                do_sample=True,
-                num_beams=1,
-                temperature=temperature,
-                top_p=top_p,
-                pad_token_id=tokenizer.pad_token_id,
-                eos_token_id=tokenizer.eos_token_id,
-            )
         elif model_type == "remote":
             self.model_name = model_name
             self.api = get_llm()
@@ -277,13 +264,14 @@ class AutoExploreCopilot():
 
         elif self.model_type == "remote":
             # Get response from remote model
-            response = self.api.reply(agent_name=self.cur_msgs[-1][0],
-                                      msg=self.cur_msgs[-1][1],
-                                      num_response=1,
-                                      temperature=self.temperature,
-                                      top_p=self.top_p,
-                                      prev_msgs=self.cur_msgs[:-1],
-                                      model=self.model_name)[0]
+            response = self.api.reply(
+                agent_name=self.cur_msgs[-1][0],
+                msg=self.cur_msgs[-1][1],
+                num_response=1,
+                temperature=self.generation_config.temperature,
+                top_p=self.generation_config.top_p,
+                prev_msgs=self.cur_msgs[:-1],
+                model=self.model_name)[0]
 
         return response
 
@@ -298,13 +286,19 @@ class AutoExploreCopilot():
 
     def wrap_up(self):
         """
-        Wrap up after answering a question.
+        Wrap up after answering a question by assigning final cost, computing Q
+        values, saving the new or changed files, and deleting the sandbox.
         """
         if self.interaction_type == "train":
             if self.terminate_criteria.can_terminate():
-                self.generation_logs[-1]["cost"] -= 15
+                self.generation_logs[-1]["cost"] -= self.horizon
             else:
-                self.generation_logs[-1]["cost"] += 15
+                self.generation_logs[-1]["cost"] += self.horizon
+
+        total_cost = 0
+        for i in range(len(self.generation_logs) - 1, -1, -1):
+            total_cost += self.generation_logs[i]["cost"]
+            self.generation_logs[i]["Q_value"] = total_cost
 
         # Save the new or changed files
         os.makedirs(self.file_save_path, exist_ok=True)
@@ -385,9 +379,9 @@ class AutoExploreCopilot():
 
         ### For first step training only
         if self.ans_cmd != "" and response == self.ans_cmd:
-            self.generation_logs[-1]["cost"] = -115
+            self.generation_logs[-1]["cost"] = -100 - self.horizon
 
-        if ret == "Exit" or self.step == 15:
+        if ret == "Exit" or self.step == self.horizon:
             self.is_finished = True
 
         self.step += 1
@@ -456,8 +450,10 @@ class AutoExploreCopilot():
             }
             "tokens": torch.Tensor,
             "generated_mask": list,
+            "attention_mask": torch.Tensor,
             "cost": float,
-            "step": int
+            "Q_value": float,
+            "step": int,
         }
         """
         return self.generation_logs
