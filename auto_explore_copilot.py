@@ -295,11 +295,6 @@ class AutoExploreCopilot():
             else:
                 self.generation_logs[-1]["cost"] += self.horizon
 
-        total_cost = 0
-        for i in range(len(self.generation_logs) - 1, -1, -1):
-            total_cost += self.generation_logs[i]["cost"]
-            self.generation_logs[i]["Q_value"] = total_cost
-
         # Save the new or changed files
         os.makedirs(self.file_save_path, exist_ok=True)
         for file_name, content in self.sandbox.get_changed_files().items():

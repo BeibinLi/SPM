@@ -23,7 +23,7 @@ class ScriptArguments:
     weight_decay: Optional[int] = field(default=0.001)
     ppo_clip_coef: Optional[float] = field(default=0.1)
     ppo_update_iter: Optional[int] = field(default=3)
-    entropy_coef: Optional[float] = field(default=0.01)
+    entropy_coef: Optional[float] = field(default=0.0)
     lora_alpha: Optional[int] = field(default=16)
     lora_dropout: Optional[float] = field(default=0.1)
     lora_r: Optional[int] = field(default=64)

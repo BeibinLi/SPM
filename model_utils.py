@@ -363,9 +363,17 @@ def transformer_text_completion(model: PeftModel, tokenizer: AutoTokenizer,
     res = []
     for i in range(len(prompts)):
         newly_generated = sequences[i, max_len:]
-        prob = 1
+        prob, log_prob, entropy = 1, 0, 0
         for j, logits in enumerate(scores):
-            prob *= torch.softmax(logits[i], dim=-1)[newly_generated[j]]
+            probs = torch.softmax(logits[i], dim=-1)
+            log_probs = torch.log_softmax(logits[i], dim=-1)
+
+            prob *= probs[newly_generated[j]]
+            log_prob += log_probs[newly_generated[j]]
+
+            log_probs[probs == 0] = 0
+            entropy -= torch.sum(probs * log_probs)
+
         res.append({
             "prompt":
                 prompts[i],
@@ -381,6 +389,10 @@ def transformer_text_completion(model: PeftModel, tokenizer: AutoTokenizer,
             "generated_mask": [False] * max_len + [True] * len(newly_generated),
             "prob":
                 prob.item(),
+            "log_prob":
+                log_prob.item(),
+            "entropy":
+                entropy.item(),
         })
 
     return res

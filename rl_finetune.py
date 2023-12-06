@@ -3,7 +3,6 @@ import os
 import random
 import torch
 
-from math import exp
 from statistics import mean
 from termcolor import colored
 from tqdm import tqdm
@@ -17,6 +16,18 @@ from functions.training import TRAINERS
 from model_utils import (CriticModel, load_script_args,
                          create_and_prepare_model)
 from utils import build_curriculum, get_exp_id, load_dataset, ReplayBuffer
+
+LOG_KEYS = ["Q_value", "prob", "entropy", "cost", "step"]
+
+
+def calc_Q_values(logs, entropy_coef):
+    for log in logs:
+        tot_cost = 0
+        for i in range(len(log) - 1, -1, -1):
+            tot_cost += log[i]["cost"] - entropy_coef * log[i]["entropy"]
+            # tot_cost += log[i]["cost"] + entropy_coef * log[i]["log_prob"]
+            log[i]["Q_value"] = tot_cost
+
 
 parser = HfArgumentParser(ScriptArguments)
 script_args = load_script_args(parser.parse_args_into_dataclasses()[0])
@@ -155,22 +166,22 @@ for iter in (pbar := tqdm(range(script_args.max_steps), desc="Iter")):
         first_step=script_args.first_step,
     )
 
+    calc_Q_values(cur_logs, script_args.entropy_coef)
+
     logs.append(cur_logs)
     msgs.append(cur_msgs)
 
     cost = mean([log[0]["Q_value"] for log in cur_logs])
-
-    # update the replay buffer
-    replay_buffer.add([{
-        "data": log,
-        "weight": exp(-log[0]["Q_value"] / script_args.horizon)
-    } for log in cur_logs])
 
     loss = trainer.train(cur_logs)
     losses.append(loss)
     costs.append(cost)
 
     # TODO: add replay buffer training
+    # replay_buffer.add([{
+    #     "data": log,
+    #     "weight": exp(-log[0]["Q_value"] / script_args.horizon)
+    # } for log in cur_logs])
     # trainer.train(replay_buffer.sample(script_args.per_device_train_batch_size))
 
     # Update tqdm
@@ -212,7 +223,7 @@ for iter in (pbar := tqdm(range(script_args.max_steps), desc="Iter")):
                         b,
                     "detail": [{
                         **{
-                            k: lg[k] for k in ["Q_value", "cost", "step"]
+                            k: lg[k] for k in LOG_KEYS
                         },
                         **{
                             "msg": m
