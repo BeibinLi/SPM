@@ -29,6 +29,11 @@ def calc_Q_values(logs, entropy_coef):
             log[i]["Q_value"] = tot_cost
 
 
+def calc_avg(arr):
+    filtered = [x for x in arr if x is not None]
+    return mean(filtered) if filtered != [] else 0
+
+
 parser = HfArgumentParser(ScriptArguments)
 script_args = load_script_args(parser.parse_args_into_dataclasses()[0])
 
@@ -54,8 +59,7 @@ if script_args.use_critic:
     # Setup value network, sharing the main body with policy network
     critic_model = CriticModel(model)
     critic_optimizer = torch.optim.Adam(critic_model.score.parameters(),
-                                        lr=script_args.learning_rate /
-                                        script_args.critic_update_steps,
+                                        lr=script_args.learning_rate,
                                         weight_decay=script_args.weight_decay)
 else:
     critic_model, critic_optimizer = None, None
@@ -78,8 +82,8 @@ if script_args.depth_curriculum:
 else:
     dataset = [dataset]
 
-if script_args.single_batch_data:
-    dataset = [dataset[0][:script_args.per_device_train_batch_size]]
+if script_args.few_data:
+    dataset = [dataset[0][:script_args.few_data]]
 
 step_per_curriculum = script_args.max_steps * 2 // (len(dataset) *
                                                     (len(dataset) + 1))
@@ -96,7 +100,7 @@ curriculum_idx = -1
 cur_dataset = []
 
 # Logs
-losses, costs = [], []
+losses, critic_losses, costs = [], [], []
 logs, msgs = [], []
 train_logs, critic_train_logs = [], []
 
@@ -131,7 +135,8 @@ trainer_kwargs = {
     "batch_size": script_args.per_device_train_batch_size,
     "entropy_coef": script_args.entropy_coef,
     "gradient_accumulation_steps": script_args.gradient_accumulation_steps,
-    "critic_update_steps": script_args.critic_update_steps,
+    "critic_update_freq": script_args.critic_update_freq,
+    "critic_update_iter": script_args.critic_update_iter,
 }
 
 trainer = TRAINERS[script_args.trainer](**trainer_kwargs)
@@ -172,10 +177,12 @@ for iter in (pbar := tqdm(range(script_args.max_steps), desc="Iter")):
     msgs.append(cur_msgs)
 
     cost = mean([log[0]["Q_value"] for log in cur_logs])
-
-    loss = trainer.train(cur_logs)
-    losses.append(loss)
     costs.append(cost)
+
+    train_result = trainer.train(cur_logs)
+    loss, critic_loss = train_result["loss"], train_result["critic_loss"]
+    losses.append(loss)
+    critic_losses.append(critic_loss)
 
     # TODO: add replay buffer training
     # replay_buffer.add([{
@@ -185,11 +192,11 @@ for iter in (pbar := tqdm(range(script_args.max_steps), desc="Iter")):
     # trainer.train(replay_buffer.sample(script_args.per_device_train_batch_size))
 
     # Update tqdm
-    display_costs = [x for x in costs[-script_args.logging_steps:] if x]
-    display_losses = [x for x in losses[-script_args.logging_steps:] if x]
-    avg_cost = mean(display_costs) if display_costs != [] else 0
-    avg_loss = mean(display_losses) if display_losses != [] else 0
-    pbar.set_description("Cost: %.2f Loss: %.2f Iter:" % (avg_cost, avg_loss))
+    avg_cost = calc_avg(costs[-script_args.logging_steps:])
+    avg_loss = calc_avg(losses[-script_args.logging_steps:])
+    avg_critic_loss = calc_avg(critic_losses[-script_args.logging_steps:])
+    pbar.set_description("Cost: %.2f Loss: %.2f Critic Loss: %.2f Iter:" %
+                         (avg_cost, avg_loss, avg_critic_loss))
 
     if (iter + 1) % script_args.save_steps == 0:
         ckpt_path = output_dir + "checkpoint-" + str(iter + 1) + "/"
@@ -207,17 +214,16 @@ for iter in (pbar := tqdm(range(script_args.max_steps), desc="Iter")):
         # dump the logs
         save_file = []
 
-        for i, log, msg, loss, cost in zip(
-                range(iter + 1 - script_args.save_steps,
-                      iter + 1), logs, msgs, losses[-script_args.save_steps:],
-                costs[-script_args.save_steps:]):
+        for i in range(iter + 1 - script_args.save_steps, iter + 1):
             save_file.append({
                 "iter":
                     i,
                 "loss":
-                    loss,
+                    losses[i],
+                "critic_loss":
+                    critic_losses[i],
                 "cost":
-                    cost,
+                    costs[i],
                 "log": [{
                     "batch":
                         b,
@@ -226,13 +232,11 @@ for iter in (pbar := tqdm(range(script_args.max_steps), desc="Iter")):
                             k: lg[k] for k in LOG_KEYS
                         },
                         **{
-                            "msg": m
+                            "msg": ms
                         }
-                    } for lg, m in zip(ll, mm)]
-                } for b, (ll, mm) in enumerate(zip(log, msg))],
+                    } for lg, ms in zip(ll, mm)]
+                } for b, (ll, mm) in enumerate(zip(logs[i], msgs[i]))],
             })
-
-        logs, msgs = [], []
 
         with open(ckpt_path + "logs.json", "w") as file:
             json.dump(save_file, file, indent=4)

@@ -11,12 +11,14 @@ class ScriptArguments:
     what their capacity, features, etc.
     """
 
-    per_device_train_batch_size: Optional[int] = field(default=4)
+    per_device_train_batch_size: Optional[int] = field(default=2)
     per_device_eval_batch_size: Optional[int] = field(default=4)
-    gradient_accumulation_steps: Optional[int] = field(default=4)
-    critic_update_steps: Optional[int] = field(
+    gradient_accumulation_steps: Optional[int] = field(default=2)
+    critic_update_freq: Optional[int] = field(
         default=5,
         metadata={"help": "Update critic model after X model update steps."})
+    critic_update_iter: Optional[int] = field(
+        default=5, metadata={"help": "Update critic model X times per update."})
     replay_buffer_size: Optional[int] = field(default=50)
     learning_rate: Optional[float] = field(default=2e-4)
     max_grad_norm: Optional[float] = field(default=0.3)
@@ -31,7 +33,7 @@ class ScriptArguments:
     max_new_tokens: Optional[int] = field(default=1)
     temperature: Optional[float] = field(default=1)
     top_p: Optional[float] = field(default=1)
-    top_k: Optional[int] = field(default=50)
+    top_k: Optional[int] = field(default=100)
     trainer: Optional[str] = field(
         default="ppo",
         metadata={
@@ -196,12 +198,9 @@ class ScriptArguments:
     first_curriculum: Optional[bool] = field(
         default=False,
         metadata={"help": "Whether only train on the first curriculum."})
-    single_batch_data: Optional[bool] = field(
-        default=False,
-        metadata={
-            "help": "Whether only use one fixed data batch from the "
-                    "dataset."
-        })
+    few_data: Optional[int] = field(
+        default=0,
+        metadata={"help": "Whether only use a small portion of fixed data."})
 
     def load(self, yaml_file: str):
         with open(yaml_file, 'r') as file:

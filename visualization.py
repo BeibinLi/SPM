@@ -3,7 +3,8 @@ import json
 import matplotlib.pyplot as plt
 import numpy as np
 
-window_size = 101
+window_size = 99
+max_steps = 5000
 
 
 # Function to calculate moving average with handling null values
@@ -18,11 +19,18 @@ def moving_average(data, window_size):
             result.append(np.mean(filtered_data))
         else:
             result.append(None)
-    return result
+    return np.array(result)
 
 
 # Experiment directories
-expdirs = ["results/015_rl_finetune/", "results/016_rl_finetune/"]
+expdirs = [
+    "results/015_rl_finetune/",
+    "results/016_rl_finetune/",
+    # "results/030_rl_finetune/", "results/032_rl_finetune/", "results/033_rl_finetune/",
+    # "results/034_rl_finetune/", "results/035_rl_finetune/", "results/037_rl_finetune/", "results/038_rl_finetune/",
+    "results/042_rl_finetune/",
+    "results/043_rl_finetune/"
+]
 
 # Initialize dictionaries to store data for plotting
 loss_data = {}
@@ -51,8 +59,9 @@ for expdir in expdirs:
                         'cost'] is not None else None
 
                     # Append data for plotting
-                    loss_data[expdir].append((iter_val, loss_val))
-                    cost_data[expdir].append((iter_val, cost_val))
+                    if iter_val < max_steps:
+                        loss_data[expdir].append((iter_val, loss_val))
+                        cost_data[expdir].append((iter_val, cost_val))
 
     loss_data[expdir].sort(key=lambda x: x[0])
     cost_data[expdir].sort(key=lambda x: x[0])
@@ -67,8 +76,8 @@ for expdir, data in loss_data.items():
     smoothed_losses = moving_average(losses, window_size)
 
     # ax[0].plot(iters[losses != None], losses[losses != None], label=f'{expdir.split("/")[-2]} - Original')
-    ax[0].plot(iters,
-               smoothed_losses,
+    ax[0].plot(iters[smoothed_losses is not None],
+               smoothed_losses[smoothed_losses is not None],
                label=f'{expdir.split("/")[-2]} - Smoothed',
                linestyle='--')
 
@@ -84,8 +93,8 @@ for expdir, data in cost_data.items():
     smoothed_costs = moving_average(costs, window_size)
 
     # ax[1].plot(iters[costs != None], costs[costs != None], label=f'{expdir.split("/")[-2]} - Original')
-    ax[1].plot(iters,
-               smoothed_costs,
+    ax[1].plot(iters[smoothed_costs is not None],
+               smoothed_costs[smoothed_costs is not None],
                label=f'{expdir.split("/")[-2]} - Smoothed',
                linestyle='--')
 

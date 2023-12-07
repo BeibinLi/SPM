@@ -77,34 +77,49 @@ def compute_advantage(data, batch_size, critic_model, tokenizer):
 
 
 def update_critic(data, critic_model, critic_optimizer, tokenizer, batch_size,
-                  max_grad_norm):
+                  max_grad_norm, gradient_accumulation_steps, update_iter):
     losses = []
-    for i in range(0, len(data), batch_size):
-        # Get the input batch for this step
-        keyword_dict = compile_from_log(data[i:i + batch_size],
-                                        tokenizer.pad_token_id)
-        Q_values = keyword_dict["Q_value"]
-        prompts = keyword_dict["prompt"]
 
-        value_inputs = tokenizer.batch_encode_plus(
-            prompts,
-            truncation=True,
-            padding=True,
-            max_length=critic_model.config.max_length,
-            return_tensors="pt")
-        value_inputs = {
-            k: v.to(critic_model.device) for k, v in value_inputs.items()
-        }
-        values = critic_model(**value_inputs).logits.squeeze(-1)
+    accumulated_steps = 0
+    critic_optimizer.zero_grad()
 
-        critic_optimizer.zero_grad()
+    for iter in range(update_iter):
+        random.shuffle(data)
+        for i in range(0, len(data), batch_size):
+            # Get the input batch for this step
+            keyword_dict = compile_from_log(data[i:i + batch_size],
+                                            tokenizer.pad_token_id)
+            Q_values = keyword_dict["Q_value"]
+            prompts = keyword_dict["prompt"]
 
-        loss = torch.nn.MSELoss()(Q_values.to(critic_model.device), values)
-        loss.backward()
-        losses.append(loss.item())
+            value_inputs = tokenizer.batch_encode_plus(
+                prompts,
+                truncation=True,
+                padding=True,
+                max_length=critic_model.config.max_length,
+                return_tensors="pt")
+            value_inputs = {
+                k: v.to(critic_model.device) for k, v in value_inputs.items()
+            }
+            values = critic_model(**value_inputs).logits.squeeze(-1)
 
-        torch.nn.utils.clip_grad_norm_(critic_model.score.parameters(),
-                                       max_grad_norm)
+            critic_optimizer.zero_grad()
+
+            loss = torch.nn.MSELoss()(Q_values.to(critic_model.device),
+                                      values) / gradient_accumulation_steps
+            loss.backward()
+            losses.append(loss.item())
+            accumulated_steps += 1
+
+            if accumulated_steps == gradient_accumulation_steps:
+                torch.nn.utils.clip_grad_norm_(critic_model.parameters(),
+                                               max_grad_norm)
+                critic_optimizer.step()
+                accumulated_steps = 0
+                critic_optimizer.zero_grad()
+
+    if accumulated_steps:
+        torch.nn.utils.clip_grad_norm_(critic_model.parameters(), max_grad_norm)
         critic_optimizer.step()
 
     return mean(losses)
@@ -114,7 +129,8 @@ class PolicyTrainer:
 
     def __init__(self, model, tokenizer, optimizer, gradient_accumulation_steps,
                  generation_config, critic_model, critic_optimizer,
-                 critic_update_steps, batch_size, max_grad_norm, **kwargs):
+                 critic_update_freq, critic_update_iter, batch_size,
+                 max_grad_norm, **kwargs):
         """
         Compute gradient for proximal policy optimization.
 
@@ -157,7 +173,8 @@ class PolicyTrainer:
         self.data = []
         self.gradient_accumulated_steps = 0
 
-        self.critic_update_steps = critic_update_steps
+        self.critic_update_freq = critic_update_freq
+        self.critic_update_iter = critic_update_iter
         self.critic_data = []
         self.critic_accumulated_steps = 0
 
@@ -166,12 +183,12 @@ class PGTrainer(PolicyTrainer):
 
     def train(self, generation_results):
         if generation_results == []:
-            return None
+            return {"loss": None, "critic_loss": None}
 
         self.data += generation_results
         self.gradient_accumulated_steps += 1
         if self.gradient_accumulated_steps < self.gradient_accumulation_steps:
-            return None
+            return {"loss": None, "critic_loss": None}
 
         self.critic_data += generation_results
         self.critic_accumulated_steps += 1
@@ -208,11 +225,11 @@ class PGTrainer(PolicyTrainer):
                 calc_log_probs=False)
             log_probs = probs_log_probs["probs"]
 
-            # Policy network update
             loss = torch.sum(advantages * log_probs) / len(data)
             loss.backward()
             losses.append(loss.item())
 
+        # Policy network update
         torch.nn.utils.clip_grad_norm_(self.model.parameters(),
                                        self.max_grad_norm)
         self.optimizer.step()
@@ -220,20 +237,24 @@ class PGTrainer(PolicyTrainer):
         self.gradient_accumulated_steps = 0
         self.data = []
 
+        critic_loss = None
         if (self.use_critic
-                and self.critic_accumulated_steps == self.critic_update_steps):
-            update_critic(data=[x for r in self.critic_data for x in r],
-                          critic_model=self.critic_model,
-                          critic_optimizer=self.critic_optimizer,
-                          tokenizer=self.tokenizer,
-                          batch_size=self.batch_size,
-                          max_grad_norm=self.max_grad_norm)
+                and self.critic_accumulated_steps == self.critic_update_freq):
+            critic_loss = update_critic(
+                data=[x for r in self.critic_data for x in r],
+                critic_model=self.critic_model,
+                critic_optimizer=self.critic_optimizer,
+                tokenizer=self.tokenizer,
+                batch_size=self.batch_size,
+                max_grad_norm=self.max_grad_norm,
+                gradient_accumulation_steps=self.gradient_accumulation_steps,
+                update_iter=self.critic_update_iter)
 
             self.critic_accumulated_steps = 0
             self.critic_data = []
 
-        # in fact equal to average per step loss
-        return sum(losses)
+        # Equal to average per step loss
+        return {"loss": sum(losses), "critic_loss": critic_loss}
 
 
 class PPOTrainer(PolicyTrainer):
@@ -248,12 +269,12 @@ class PPOTrainer(PolicyTrainer):
 
     def train(self, generation_results):
         if generation_results == []:
-            return None
+            return {"loss": None, "critic_loss": None}
 
         self.data += generation_results
         self.gradient_accumulated_steps += 1
         if self.gradient_accumulated_steps < self.gradient_accumulation_steps:
-            return None
+            return {"loss": None, "critic_loss": None}
 
         self.critic_data += generation_results
         self.critic_accumulated_steps += 1
@@ -292,16 +313,16 @@ class PPOTrainer(PolicyTrainer):
                     calc_log_probs=False)
                 probs = probs_log_probs["probs"]
 
-                # Policy network update
                 # Advantage for minimizing cost is negative of maximizing reward
                 loss1 = probs / old_probs * (-advantages)
                 loss2 = torch.clamp(probs / old_probs, 1 - self.ppo_clip_coef,
                                     1 + self.ppo_clip_coef) * (-advantages)
-                loss = torch.mean(-torch.min(loss1, loss2))
+                loss = torch.sum(-torch.min(loss1, loss2)) / len(data)
                 losses.append(loss.item())
 
                 loss.backward()
 
+            # Policy network update
             torch.nn.utils.clip_grad_norm_(self.model.parameters(),
                                            self.max_grad_norm)
             self.optimizer.step()
@@ -309,19 +330,27 @@ class PPOTrainer(PolicyTrainer):
         self.gradient_accumulated_steps = 0
         self.data = []
 
+        critic_loss = None
         if (self.use_critic
-                and self.critic_accumulated_steps == self.critic_update_steps):
-            update_critic(data=[x for r in self.critic_data for x in r],
-                          critic_model=self.critic_model,
-                          critic_optimizer=self.critic_optimizer,
-                          tokenizer=self.tokenizer,
-                          batch_size=self.batch_size,
-                          max_grad_norm=self.max_grad_norm)
+                and self.critic_accumulated_steps == self.critic_update_freq):
+            critic_loss = update_critic(
+                data=[x for r in self.critic_data for x in r],
+                critic_model=self.critic_model,
+                critic_optimizer=self.critic_optimizer,
+                tokenizer=self.tokenizer,
+                batch_size=self.batch_size,
+                max_grad_norm=self.max_grad_norm,
+                gradient_accumulation_steps=self.gradient_accumulation_steps,
+                update_iter=self.critic_update_iter)
 
             self.critic_accumulated_steps = 0
             self.critic_data = []
 
-        return mean(losses)
+        # Equal to average per step loss
+        return {
+            "loss": sum(losses) / self.ppo_update_iter,
+            "critic_loss": critic_loss
+        }
 
 
 TRAINERS = {
