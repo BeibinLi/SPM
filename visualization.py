@@ -15,7 +15,7 @@ def moving_average(data, window_size):
                                2, 0):min(i + window_size // 2 + 1, len(data))]
         # Filter out null values
         filtered_data = [x for x in window_data if x is not None]
-        if filtered_data:
+        if filtered_data != []:
             result.append(np.mean(filtered_data))
         else:
             result.append(None)
@@ -24,12 +24,11 @@ def moving_average(data, window_size):
 
 # Experiment directories
 expdirs = [
-    "results/015_rl_finetune/",
-    "results/016_rl_finetune/",
+    # "results/015_rl_finetune/", "results/016_rl_finetune/",
     # "results/030_rl_finetune/", "results/032_rl_finetune/", "results/033_rl_finetune/",
     # "results/034_rl_finetune/", "results/035_rl_finetune/", "results/037_rl_finetune/", "results/038_rl_finetune/",
-    "results/042_rl_finetune/",
-    "results/043_rl_finetune/"
+    # "results/042_rl_finetune/", "results/043_rl_finetune/", "results/044_rl_finetune/", "results/045_rl_finetune/",
+    "results/050_rl_finetune/"
 ]
 
 # Initialize dictionaries to store data for plotting
@@ -75,9 +74,10 @@ for expdir, data in loss_data.items():
     iters, losses = data[:, 0], data[:, 1]
     smoothed_losses = moving_average(losses, window_size)
 
-    # ax[0].plot(iters[losses != None], losses[losses != None], label=f'{expdir.split("/")[-2]} - Original')
-    ax[0].plot(iters[smoothed_losses is not None],
-               smoothed_losses[smoothed_losses is not None],
+    indexes = np.where(smoothed_losses != None)[0]
+
+    ax[0].plot(iters[indexes],
+               smoothed_losses[indexes],
                label=f'{expdir.split("/")[-2]} - Smoothed',
                linestyle='--')
 
@@ -92,9 +92,10 @@ for expdir, data in cost_data.items():
     iters, costs = data[:, 0], data[:, 1]
     smoothed_costs = moving_average(costs, window_size)
 
-    # ax[1].plot(iters[costs != None], costs[costs != None], label=f'{expdir.split("/")[-2]} - Original')
-    ax[1].plot(iters[smoothed_costs is not None],
-               smoothed_costs[smoothed_costs is not None],
+    indexes = np.where(smoothed_costs != None)[0]
+
+    ax[1].plot(iters[indexes],
+               smoothed_costs[indexes],
                label=f'{expdir.split("/")[-2]} - Smoothed',
                linestyle='--')
 

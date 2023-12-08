@@ -1,3 +1,4 @@
+import pdb
 import random
 import torch
 
@@ -5,6 +6,7 @@ from statistics import mean
 
 from model_utils import calc_probs_log_probs
 
+MAX_VAL = 100
 
 def compile_from_log(generation_result_steps, pad_token_id):
     STACK_KEYS = ["tokens", "attention_mask"]
@@ -105,21 +107,23 @@ def update_critic(data, critic_model, critic_optimizer, tokenizer, batch_size,
 
             critic_optimizer.zero_grad()
 
-            loss = torch.nn.MSELoss()(Q_values.to(critic_model.device),
-                                      values) / gradient_accumulation_steps
+            loss = torch.nn.MSELoss()(Q_values.to(critic_model.device) / MAX_VAL,
+                                      values / MAX_VAL) / gradient_accumulation_steps
+            if torch.isnan(loss).any() or torch.isinf(loss).any():
+                pdb.set_trace()
             loss.backward()
             losses.append(loss.item())
             accumulated_steps += 1
 
             if accumulated_steps == gradient_accumulation_steps:
-                torch.nn.utils.clip_grad_norm_(critic_model.parameters(),
+                torch.nn.utils.clip_grad_norm_(critic_model.score.parameters(),
                                                max_grad_norm)
                 critic_optimizer.step()
                 accumulated_steps = 0
                 critic_optimizer.zero_grad()
 
     if accumulated_steps:
-        torch.nn.utils.clip_grad_norm_(critic_model.parameters(), max_grad_norm)
+        torch.nn.utils.clip_grad_norm_(critic_model.score.parameters(), max_grad_norm)
         critic_optimizer.step()
 
     return mean(losses)
@@ -318,6 +322,8 @@ class PPOTrainer(PolicyTrainer):
                 loss2 = torch.clamp(probs / old_probs, 1 - self.ppo_clip_coef,
                                     1 + self.ppo_clip_coef) * (-advantages)
                 loss = torch.sum(-torch.min(loss1, loss2)) / len(data)
+                if torch.isnan(loss).any() or torch.isinf(loss).any():
+                    pdb.set_trace()
                 losses.append(loss.item())
 
                 loss.backward()

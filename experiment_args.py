@@ -19,6 +19,12 @@ class ScriptArguments:
         metadata={"help": "Update critic model after X model update steps."})
     critic_update_iter: Optional[int] = field(
         default=5, metadata={"help": "Update critic model X times per update."})
+    critic_layer_type: Optional[str] = field(
+        default="linear",
+        metadata={
+            "help": "The type of critic layer. Could be linear or mlp."
+        },
+    )
     replay_buffer_size: Optional[int] = field(default=50)
     learning_rate: Optional[float] = field(default=2e-4)
     max_grad_norm: Optional[float] = field(default=0.3)

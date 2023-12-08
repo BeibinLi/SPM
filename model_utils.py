@@ -20,9 +20,30 @@ from utils import extract_command_blocks
 OVERRIDE_KEYS = ["model_name", "lora_r", "bf16", "fp16", "use_8bit", "use_4bit"]
 
 
+class MLPWithLayerNorm(nn.Module):
+    def __init__(self, input_size, hidden_size):
+        super(MLPWithLayerNorm, self).__init__()
+        self.fc1 = nn.Linear(input_size, hidden_size)
+        self.layer_norm = nn.LayerNorm(hidden_size)
+        self.relu = nn.ReLU()
+        self.fc2 = nn.Linear(hidden_size, 1)
+
+        # Use Xavier initialization
+        nn.init.xavier_uniform_(self.fc1.weight)
+        nn.init.xavier_uniform_(self.fc2.weight)
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.layer_norm(x)
+        x = self.relu(x)
+        x = self.fc2(x)
+        return x
+
 class CriticModel(nn.Module):
 
-    def __init__(self, main_model: PeftModel):
+    def __init__(self, main_model: PeftModel, layer_type: str):
+        assert layer_type in ["linear", "mlp"]
+
         super().__init__()
 
         self.transformer = main_model.model.transformer
@@ -35,7 +56,13 @@ class CriticModel(nn.Module):
         elif isinstance(config, LlamaConfig):
             hidden_size = config.hidden_size
 
-        self.score = nn.Linear(hidden_size, 1).to(self.device)
+        if layer_type == "linear":
+            self.score = nn.Linear(hidden_size, 1).to(self.device)
+            
+            # Use Xavier initialization
+            nn.init.xavier_uniform_(self.score.weight)
+        elif layer_type == "mlp":
+            self.score = MLPWithLayerNorm(hidden_size, hidden_size).to(self.device)
 
     def forward(
         self,

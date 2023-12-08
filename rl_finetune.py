@@ -57,7 +57,8 @@ optimizer = torch.optim.Adam(model.parameters(),
 
 if script_args.use_critic:
     # Setup value network, sharing the main body with policy network
-    critic_model = CriticModel(model)
+    critic_model = CriticModel(main_model=model,
+                               layer_type=script_args.critic_layer_type)
     critic_optimizer = torch.optim.Adam(critic_model.score.parameters(),
                                         lr=script_args.learning_rate,
                                         weight_decay=script_args.weight_decay)
