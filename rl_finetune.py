@@ -3,6 +3,7 @@ import os
 import random
 import torch
 
+from math import exp
 from statistics import mean
 from termcolor import colored
 from tqdm import tqdm
@@ -30,7 +31,10 @@ def calc_Q_values(logs, entropy_coef):
 
 
 def calc_avg(arr):
-    filtered = [x for x in arr if x is not None]
+    _arr = arr.copy()
+    if isinstance(arr[0], list):
+        _arr = sum(_arr, [])
+    filtered = [x for x in _arr if x is not None]
     return mean(filtered) if filtered != [] else 0
 
 
@@ -57,11 +61,15 @@ optimizer = torch.optim.Adam(model.parameters(),
 
 if script_args.use_critic:
     # Setup value network, sharing the main body with policy network
-    critic_model = CriticModel(main_model=model,
-                               layer_type=script_args.critic_layer_type)
-    critic_optimizer = torch.optim.Adam(critic_model.score.parameters(),
-                                        lr=script_args.learning_rate,
-                                        weight_decay=script_args.weight_decay)
+    if script_args.shared_critic:
+        critic_model = CriticModel(main_model=model,
+                                   layer_type=script_args.critic_layer_type)
+        critic_optimizer = torch.optim.Adam(critic_model.score.parameters(),
+                                            lr=script_args.learning_rate,
+                                            weight_decay=script_args.weight_decay)
+    else:
+        create_and_prepare_model(script_args)
+        
 else:
     critic_model, critic_optimizer = None, None
 
@@ -79,22 +87,30 @@ repo_cache = RepoCache(original_root=script_args.repo_dir,
 # Build dataset
 dataset = load_dataset(script_args.task_file)
 if script_args.depth_curriculum:
-    dataset = build_curriculum(dataset)
+    dataset = build_curriculum(dataset, first_k=3)
 else:
     dataset = [dataset]
 
 if script_args.few_data:
     dataset = [dataset[0][:script_args.few_data]]
 
-step_per_curriculum = script_args.max_steps * 2 // (len(dataset) *
-                                                    (len(dataset) + 1))
-script_args.max_steps = step_per_curriculum * len(dataset) * (len(dataset) +
-                                                              1) // 2
+if script_args.skip_first_curriculum:
+    dataset = dataset[1:]
+
+# tot_visits = sum([len(d) * (len(dataset) - i) for i, d in enumerate(dataset)])
+tot_visits = sum([len(d) for d in dataset])
+step_per_data = script_args.max_steps // tot_visits
+script_args.max_steps = step_per_data * tot_visits
 
 # Iters to add new curriculum
 trigger_set = [
-    i * (i + 1) // 2 * step_per_curriculum for i in range(len(dataset))
+    step_per_data * sum([len(d) for d in dataset[:i]]) for i in range(len(dataset))
 ]
+
+print(colored("Curriculum:", "green"))
+for i, d in enumerate(dataset):
+    print(colored(f"Level {i}: {len(d)} data", "green"))
+print(colored("Iters to increase level:" + ", ".join([str(x) for x in trigger_set]), "green"))
 
 # Init curriculum
 curriculum_idx = -1
@@ -143,10 +159,11 @@ trainer_kwargs = {
 trainer = TRAINERS[script_args.trainer](**trainer_kwargs)
 
 for iter in (pbar := tqdm(range(script_args.max_steps), desc="Iter")):
-    # move on to the next curriculum
+    # Move on to the next curriculum
     if iter in trigger_set:
         curriculum_idx += 1
-        cur_dataset += dataset[curriculum_idx]
+        # Replace dataset
+        cur_dataset = dataset[curriculum_idx]
         idx = 0
         random.shuffle(cur_dataset)
 
@@ -180,17 +197,20 @@ for iter in (pbar := tqdm(range(script_args.max_steps), desc="Iter")):
     cost = mean([log[0]["Q_value"] for log in cur_logs])
     costs.append(cost)
 
-    train_result = trainer.train(cur_logs)
-    loss, critic_loss = train_result["loss"], train_result["critic_loss"]
-    losses.append(loss)
-    critic_losses.append(critic_loss)
-
-    # TODO: add replay buffer training
-    # replay_buffer.add([{
-    #     "data": log,
-    #     "weight": exp(-log[0]["Q_value"] / script_args.horizon)
-    # } for log in cur_logs])
-    # trainer.train(replay_buffer.sample(script_args.per_device_train_batch_size))
+    replay_buffer.add([{
+        "data": log,
+        "weight": exp(-log[0]["Q_value"] / script_args.horizon)
+    } for log in cur_logs])
+    
+    # Train
+    cur_loss, cur_critic_loss = [], []
+    for data in [cur_logs, replay_buffer.sample(script_args.per_device_train_batch_size)]:
+        train_result = trainer.train(data)
+        loss, critic_loss = train_result["loss"], train_result["critic_loss"]
+        cur_loss.append(loss)
+        cur_critic_loss.append(critic_loss)
+    losses.append(cur_loss)
+    critic_losses.append(cur_critic_loss)
 
     # Update tqdm
     avg_cost = calc_avg(costs[-script_args.logging_steps:])

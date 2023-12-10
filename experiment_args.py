@@ -19,6 +19,9 @@ class ScriptArguments:
         metadata={"help": "Update critic model after X model update steps."})
     critic_update_iter: Optional[int] = field(
         default=5, metadata={"help": "Update critic model X times per update."})
+    shared_critic: Optional[bool] = field(
+        default=False,
+        metadata={"help": "Whether to share the critic model with the actor."})
     critic_layer_type: Optional[str] = field(
         default="linear",
         metadata={
@@ -85,7 +88,7 @@ class ScriptArguments:
     sandbox_dir: Optional[str] = field(
         default="/dev/shm/",
         metadata={
-            "help": "The path to the directory for sandbox emporary files."
+            "help": "The path to the directory for sandbox temporary files."
         },
     )
     ckpt_path: Optional[str] = field(
@@ -204,6 +207,9 @@ class ScriptArguments:
     first_curriculum: Optional[bool] = field(
         default=False,
         metadata={"help": "Whether only train on the first curriculum."})
+    skip_first_curriculum: Optional[bool] = field(
+        default=False,
+        metadata={"help": "Whether skip the first curriculum."})
     few_data: Optional[int] = field(
         default=0,
         metadata={"help": "Whether only use a small portion of fixed data."})

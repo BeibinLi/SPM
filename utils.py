@@ -879,13 +879,15 @@ def load_dataset(task_file: str) -> list:
     return dataset
 
 
-def build_curriculum(dataset: list) -> list:
+def build_curriculum(dataset: list, first_k: int) -> list:
     """
     Build a curriculum for the dataset.
     The curriculum increases in the depth of the target file.
 
     Args:
     - `dataset` (list): The dataset.
+    - `first_k` (int): The first k depths to put in the curriculum. For the
+    rest, we put them in the last curriculum.
 
     Returns:
     - list: The curriculum, which is a list of datasets with increasing depth.
@@ -901,5 +903,8 @@ def build_curriculum(dataset: list) -> list:
             dataset_by_depth.append([dataset[i]])
         else:
             dataset_by_depth[-1].append(dataset[i])
+    
+    curriculum = dataset_by_depth[:first_k]
+    curriculum.append(sum(dataset_by_depth[first_k:], []))
 
-    return dataset_by_depth
+    return curriculum

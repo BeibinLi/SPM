@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 window_size = 99
-max_steps = 5000
+max_steps = 99999
 
 
 # Function to calculate moving average with handling null values
@@ -14,6 +14,8 @@ def moving_average(data, window_size):
         window_data = data[max(i - window_size //
                                2, 0):min(i + window_size // 2 + 1, len(data))]
         # Filter out null values
+        if isinstance(window_data[0], list):
+            window_data = sum(window_data, [])
         filtered_data = [x for x in window_data if x is not None]
         if filtered_data != []:
             result.append(np.mean(filtered_data))
@@ -28,7 +30,7 @@ expdirs = [
     # "results/030_rl_finetune/", "results/032_rl_finetune/", "results/033_rl_finetune/",
     # "results/034_rl_finetune/", "results/035_rl_finetune/", "results/037_rl_finetune/", "results/038_rl_finetune/",
     # "results/042_rl_finetune/", "results/043_rl_finetune/", "results/044_rl_finetune/", "results/045_rl_finetune/",
-    "results/050_rl_finetune/"
+    "results/054_rl_finetune/", "results/057_rl_finetune/"
 ]
 
 # Initialize dictionaries to store data for plotting
@@ -70,8 +72,8 @@ fig, ax = plt.subplots(2, 1, figsize=(10, 12))
 
 # Plotting loss vs iter
 for expdir, data in loss_data.items():
-    data = np.array(data)
-    iters, losses = data[:, 0], data[:, 1]
+    iters = np.array([x[0] for x in data])
+    losses = [x[1] for x in data]
     smoothed_losses = moving_average(losses, window_size)
 
     indexes = np.where(smoothed_losses != None)[0]

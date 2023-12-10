@@ -58,7 +58,7 @@ class CriticModel(nn.Module):
 
         if layer_type == "linear":
             self.score = nn.Linear(hidden_size, 1).to(self.device)
-            
+
             # Use Xavier initialization
             nn.init.xavier_uniform_(self.score.weight)
         elif layer_type == "mlp":
@@ -172,6 +172,91 @@ def load_script_args(script_args: ScriptArguments,
 
 
 def create_and_prepare_model(
+        args: ScriptArguments) -> (AutoTokenizer, PeftConfig, PeftModel):
+    """
+    Create and prepare model for PEFT training.
+
+    Args:
+    - `args` (ScriptArguments): the arguments for training.
+
+    Returns:
+    - tuple: A tuple containing:
+        - `tokenizer` (AutoTokenizer): Tokenizer associated with the model.
+        - `config` (PeftConfig): Configuration of the model.
+        - `model` (PeftModel): Loaded model for inference.
+    """
+    compute_dtype = getattr(torch, args.bnb_4bit_compute_dtype)
+
+    bnb_config = BitsAndBytesConfig(
+        load_in_8bit=args.use_8bit,
+        load_in_4bit=args.use_4bit,
+        bnb_4bit_quant_type=args.bnb_4bit_quant_type,
+        bnb_4bit_compute_dtype=compute_dtype,
+        bnb_4bit_use_double_quant=args.use_nested_quant,
+    )
+
+    if compute_dtype == torch.float16 and args.use_4bit:
+        major, _ = torch.cuda.get_device_capability()
+        if major >= 8:
+            print("=" * 80)
+            print(
+                "Your GPU supports bfloat16, you can accelerate training with "
+                "the argument --bf16")
+            print("=" * 80)
+
+    accelerator = Accelerator()
+    local_rank = accelerator.process_index
+    device_map = {"": local_rank}
+
+    base_model = AutoModelForCausalLM.from_pretrained(
+        args.model_name,
+        quantization_config=bnb_config,
+        device_map=device_map,
+        trust_remote_code=True,
+        cache_dir=args.cache_dir)
+
+    peft_config = LoraConfig(
+        lora_alpha=args.lora_alpha,
+        lora_dropout=args.lora_dropout,
+        r=args.lora_r,
+        bias="none",
+        task_type="CAUSAL_LM",
+    )
+
+    if args.load_dir:
+        print(colored("Loading from " + args.load_dir, "green"))
+        model = PeftModel.from_pretrained(model=base_model,
+                                          model_id=args.load_dir,
+                                          is_trainable=True,
+                                          config=peft_config)
+        del base_model
+
+        tokenizer = AutoTokenizer.from_pretrained(
+            args.load_dir,
+            trust_remote_code=True,
+            cache_dir=args.cache_dir,
+            model_max_length=model.config.max_position_embeddings - 1,
+            add_prefix_space=False,
+        )
+    else:
+        model = base_model
+        tokenizer = AutoTokenizer.from_pretrained(
+            args.model_name,
+            trust_remote_code=True,
+            cache_dir=args.cache_dir,
+            model_max_length=model.config.max_position_embeddings - 1,
+            add_prefix_space=False,
+        )
+
+    model.config.pad_token_id = tokenizer.eos_token_id
+
+    tokenizer.truncation_side = "left"
+    tokenizer.padding_side = "left"
+    tokenizer.pad_token = tokenizer.eos_token
+
+    return tokenizer, peft_config, model
+
+def create_and_prepare_critic_model(
         args: ScriptArguments) -> (AutoTokenizer, PeftConfig, PeftModel):
     """
     Create and prepare model for PEFT training.
