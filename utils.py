@@ -1,4 +1,4 @@
-"""Utility functions"""
+import heapq
 import json
 import os
 import random
@@ -82,6 +82,13 @@ class ReplayBuffer:
 
         return random.choices(self.buffer, weights=self.weights, k=batch_size)
 
+    def print(self, top_k: int = 10):
+        print(f"Replay buffer top {top_k}:")
+        top_k_items = heapq.nlargest(top_k, enumerate(self.weights), key=lambda x: x[1])
+        sum_weights = sum(self.weights)
+        for i, w in top_k_items:
+            print(f"({self.buffer[i][0]['Q_value']}, {w / sum_weights:.2f})", end="")
+        print()
 
 def list_all_actions(root: str,
                      curr_dir: str,

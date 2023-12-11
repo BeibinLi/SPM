@@ -219,23 +219,25 @@ class PGTrainer(PolicyTrainer):
             advantages = keyword_dict["advantage"]
 
             # PG uses log probs
-            probs_log_probs = calc_probs_log_probs(
-                model=self.model,
-                tokens=input_tokens,
-                attention_mask=attention_mask,
-                generated_mask=generated_mask,
-                generation_config=self.generation_config,
-                calc_probs=True,
-                calc_log_probs=False)
-            log_probs = probs_log_probs["probs"]
+            with torch.autocast(device_type="cuda"):
+                probs_log_probs = calc_probs_log_probs(
+                    model=self.model,
+                    tokens=input_tokens,
+                    attention_mask=attention_mask,
+                    generated_mask=generated_mask,
+                    generation_config=self.generation_config,
+                    calc_probs=True,
+                    calc_log_probs=False)
+                log_probs = probs_log_probs["probs"]
 
-            loss = torch.sum(advantages * log_probs) / len(data)
+                loss = torch.sum(advantages * log_probs) / len(data)
             loss.backward()
             losses.append(loss.item())
 
         # Policy network update
         torch.nn.utils.clip_grad_norm_(self.model.parameters(),
                                        self.max_grad_norm)
+            
         self.optimizer.step()
 
         self.gradient_accumulated_steps = 0

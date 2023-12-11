@@ -7,6 +7,7 @@ from peft import PeftModel
 from transformers import AutoTokenizer, GenerationConfig
 
 from auto_explore_sandbox import AutoExploreSandbox, LeaveoutOption
+from constants import CHOICES, RESPONSE_TEMPLATE
 from functions.cost import AutoExploreCostFunction
 from functions.terminate import AnytimeTerminate, AutoExploreTerminateCriteria
 from gpt_api import get_llm
@@ -15,8 +16,6 @@ from utils import (SUPPORTED_CMDS, colored_string, extract_commands,
                    list_all_actions, wrap_path)
 
 DEBUG_MSG = True
-CHOICES = [str(i) for i in range(100)] + list(string.ascii_letters)
-RESPONSE_TEMPLATE = " # Response:\n"
 
 
 def get_args():

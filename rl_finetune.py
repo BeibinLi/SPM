@@ -1,5 +1,6 @@
 import json
 import os
+import pdb
 import random
 import torch
 
@@ -10,6 +11,7 @@ from tqdm import tqdm
 from transformers import (GenerationConfig, HfArgumentParser)
 
 from auto_explore_sandbox import RepoCache
+from constants import CHOICES
 from evaluate import batched_answer
 from experiment_args import ScriptArguments
 from functions.cost import StepCost, KeywordCost, NumTokenCost, SynthesizedCost
@@ -19,7 +21,6 @@ from model_utils import (CriticModel, load_script_args,
 from utils import build_curriculum, get_exp_id, load_dataset, ReplayBuffer
 
 LOG_KEYS = ["Q_value", "prob", "entropy", "cost", "step"]
-
 
 def calc_Q_values(logs, entropy_coef):
     for log in logs:
@@ -45,6 +46,20 @@ assert script_args.trainer in TRAINERS, f"Invalid trainer: {script_args.trainer}
 
 # Setup policy network
 tokenizer, peft_config, model = create_and_prepare_model(script_args)
+
+
+# Freeze the main body, train only the head
+for n, p in model.named_parameters():
+    p.requires_grad = False
+# Create a new lm_head, with only necessary tokens
+new_lm_head = torch.nn.Linear(model.config.n_embd,
+                              len(CHOICES), bias=False).to(model.device)
+# Copy the weights from the previous lm_head
+with torch.no_grad():
+    for i, c in enumerate(CHOICES):
+        id = tokenizer.convert_tokens_to_ids(c)
+        new_lm_head.weight.data[i] = model.base_model.model.lm_head.weight.data[id]
+model.base_model.model.lm_head = new_lm_head
 
 exp_id = get_exp_id(script_args.ckpt_path)
 output_dir = script_args.ckpt_path + exp_id + "_rl_finetune/"
@@ -201,10 +216,18 @@ for iter in (pbar := tqdm(range(script_args.max_steps), desc="Iter")):
         "data": log,
         "weight": exp(-log[0]["Q_value"] / script_args.horizon)
     } for log in cur_logs])
+
+    # replay_buffer.print()
     
     # Train
     cur_loss, cur_critic_loss = [], []
-    for data in [cur_logs, replay_buffer.sample(script_args.per_device_train_batch_size)]:
+    datas = [cur_logs, replay_buffer.sample(script_args.per_device_train_batch_size)]
+    
+    # for log in datas[1]:
+    #     print(log[0]["Q_value"], end=" ")
+    # print()
+    
+    for data in datas:
         train_result = trainer.train(data)
         loss, critic_loss = train_result["loss"], train_result["critic_loss"]
         cur_loss.append(loss)
