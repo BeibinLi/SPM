@@ -4,7 +4,7 @@ import torch
 
 from statistics import mean
 
-from model_utils import calc_probs_log_probs
+from model_utils import calc_probs_log_probs, grad_norm
 
 MAX_VAL = 100
 
@@ -232,6 +232,8 @@ class PGTrainer(PolicyTrainer):
             loss = torch.sum(advantages * log_probs) / len(data)
             loss.backward()
             losses.append(loss.item())
+
+        print(grad_norm(self.model))
 
         # Policy network update
         torch.nn.utils.clip_grad_norm_(self.model.parameters(),

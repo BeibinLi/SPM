@@ -140,6 +140,13 @@ class CriticModel(nn.Module):
         pass
 
 
+def grad_norm(model, pow=2):
+    total_norm = 0
+    for p in model.parameters():
+        if p.grad is not None:
+            total_norm += torch.sum(p.grad.data**pow)
+    return total_norm**(1/pow)
+
 def load_script_args(script_args: ScriptArguments,
                      override_keys: list = OVERRIDE_KEYS) -> ScriptArguments:
     """
