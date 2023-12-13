@@ -30,7 +30,7 @@ expdirs = [
     # "results/030_rl_finetune/", "results/032_rl_finetune/", "results/033_rl_finetune/",
     # "results/034_rl_finetune/", "results/035_rl_finetune/", "results/037_rl_finetune/", "results/038_rl_finetune/",
     # "results/042_rl_finetune/", "results/043_rl_finetune/", "results/044_rl_finetune/", "results/045_rl_finetune/",
-    # "results/057_rl_finetune/",
+    "results/057_rl_finetune/",
     "results/066_rl_finetune/"
 ]
 

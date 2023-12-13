@@ -47,13 +47,11 @@ assert script_args.trainer in TRAINERS, f"Invalid trainer: {script_args.trainer}
 # Setup policy network
 tokenizer, peft_config, model = create_and_prepare_model(script_args)
 
-
-# Freeze the main body, train only the head
-for n, p in model.named_parameters():
-    p.requires_grad = False
 # Create a new lm_head, with only necessary tokens
-new_lm_head = torch.nn.Linear(model.config.n_embd,
-                              len(CHOICES), bias=False).to(model.device)
+new_lm_head = torch.nn.Linear(model.config.n_embd, len(CHOICES),
+                              bias=False, device=model.device,
+                              dtype=torch.float16)
+new_lm_head.requires_grad = False
 # Copy the weights from the previous lm_head
 with torch.no_grad():
     for i, c in enumerate(CHOICES):
