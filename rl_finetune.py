@@ -15,9 +15,9 @@ from constants import CHOICES
 from evaluate import batched_answer
 from experiment_args import ScriptArguments
 from functions.cost import StepCost, KeywordCost, NumTokenCost, SynthesizedCost
-from functions.training import TRAINERS
 from model_utils import (CriticModel, load_script_args,
                          create_and_prepare_model)
+from trainers import TRAINERS
 from utils import build_curriculum, get_exp_id, load_dataset, ReplayBuffer
 
 LOG_KEYS = ["Q_value", "prob", "entropy", "cost", "step"]
@@ -44,19 +44,21 @@ script_args = load_script_args(parser.parse_args_into_dataclasses()[0])
 
 assert script_args.trainer in TRAINERS, f"Invalid trainer: {script_args.trainer}."
 
+if script_args.lora_dropout != 0:
+    print(colored(f"lora_dropout is set to {script_args.lora_dropout}, we recommend 0 instead.", "yellow"))
+
 # Setup policy network
 tokenizer, peft_config, model = create_and_prepare_model(script_args)
 
 # Create a new lm_head, with only necessary tokens
 new_lm_head = torch.nn.Linear(model.config.n_embd, len(CHOICES),
                               bias=False, device=model.device,
-                              dtype=torch.float16)
-new_lm_head.requires_grad = False
+                              dtype=model.base_model.model.lm_head.weight.dtype)
+new_lm_head.weight.requires_grad = False
 # Copy the weights from the previous lm_head
-with torch.no_grad():
-    for i, c in enumerate(CHOICES):
-        id = tokenizer.convert_tokens_to_ids(c)
-        new_lm_head.weight.data[i] = model.base_model.model.lm_head.weight.data[id]
+for i, c in enumerate(CHOICES):
+    id = tokenizer.convert_tokens_to_ids(c)
+    new_lm_head.weight.data[i] = model.base_model.model.lm_head.weight.data[id]
 model.base_model.model.lm_head = new_lm_head
 
 exp_id = get_exp_id(script_args.ckpt_path)

@@ -42,7 +42,7 @@ class ScriptArguments:
     max_new_tokens: Optional[int] = field(default=1)
     temperature: Optional[float] = field(default=1)
     top_p: Optional[float] = field(default=1)
-    top_k: Optional[int] = field(default=999)
+    top_k: Optional[int] = field(default=152)
     trainer: Optional[str] = field(
         default="ppo",
         metadata={
