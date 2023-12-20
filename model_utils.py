@@ -15,15 +15,11 @@ from transformers.generation.logits_process import LogitsProcessorList
 from transformers.modeling_outputs import SequenceClassifierOutputWithPast
 from typing import Optional, Tuple, Union
 
-from constants import CHOICES
+from constants import CHOICES, DISABLE_DROPOUT_KWARGS, OVERRIDE_KEYS
 from experiment_args import ScriptArguments
 from utils import extract_command_blocks
 
-OVERRIDE_KEYS = ["model_name", "lora_r", "bf16", "fp16", "use_8bit", "use_4bit"]
 
-DROPOUT_KEYS = ["resid_pdrop", "embd_pdrop", "attn_pdrop", "summary_first_dropout"]
-
-DISABLE_DROPOUT_KWARGS = {k: 0 for k in DROPOUT_KEYS}
 
 class MLPWithLayerNorm(nn.Module):
     def __init__(self, input_size, hidden_size):
@@ -213,13 +209,15 @@ def create_and_prepare_model(
     local_rank = accelerator.process_index
     device_map = {"": local_rank}
 
+    disable_dropout_kwargs = DISABLE_DROPOUT_KWARGS if args.disable_dropout else {}
+
     base_model = AutoModelForCausalLM.from_pretrained(
         args.model_name,
         quantization_config=bnb_config,
         device_map=device_map,
         trust_remote_code=True,
         cache_dir=args.cache_dir,
-        **DISABLE_DROPOUT_KWARGS,)
+        **disable_dropout_kwargs,)
 
     peft_config = LoraConfig(
         lora_alpha=args.lora_alpha,
@@ -235,7 +233,7 @@ def create_and_prepare_model(
                                           model_id=args.load_dir,
                                           is_trainable=True,
                                           config=peft_config,
-                                          **DISABLE_DROPOUT_KWARGS,)
+                                          **disable_dropout_kwargs,)
         del base_model
 
         tokenizer = AutoTokenizer.from_pretrained(
@@ -402,19 +400,25 @@ def transformer_text_completion(model: PeftModel, tokenizer: AutoTokenizer,
         (torch.zeros((len(prompts), max_len), dtype=torch.bool),
          torch.ones((len(prompts), gen_len), dtype=torch.bool)), dim=1)
 
-    probs_log_probs = calc_probs_log_probs(
-        model=model,
-        tokens=sequences,
-        attention_mask=new_attn_mask,
-        generated_mask=generated_mask,
-        generation_config=generation_config,
-        calc_probs=False,
-        calc_log_probs=True,
-    )
+    ### DEBUG ###
+    # probs_log_probs = calc_probs_log_probs(
+    #     model=model,
+    #     tokens=sequences,
+    #     attention_mask=new_attn_mask,
+    #     generated_mask=generated_mask,
+    #     generation_config=generation_config,
+    #     calc_probs=False,
+    #     calc_log_probs=True,
+    # )
 
     res = []
     for i in range(len(prompts)):
         newly_generated = sequences[i, max_len:]
+        if model.shrink_head:
+            decoded = "".join([CHOICES[x] for x in newly_generated])
+        else:
+            decoded = tokenizer.decode(newly_generated)
+
         prob, log_prob, entropy = 1, 0, 0
         for j, logits in enumerate(scores):
             # print(colored("text completion:", "green"), newly_generated[j], torch.topk(logits, k=5))
@@ -428,15 +432,14 @@ def transformer_text_completion(model: PeftModel, tokenizer: AutoTokenizer,
             log_probs[probs == 0] = 0
             entropy -= torch.sum(probs * log_probs)
         
-        if abs(log_prob - probs_log_probs["log_probs"][i]) > 1:
-            pdb.set_trace()
+        # if abs(log_prob - probs_log_probs["log_probs"][i]) > 1:
+        #     pdb.set_trace()
 
         res.append({
             "prompt": prompts[i],
             "generation": {
                 "role": "assistant",
-                # We use only necessary tokens for generation
-                "content": "".join([CHOICES[x] for x in newly_generated])
+                "content": decoded
             },
             "tokens": sequences[i].cpu(),
             "attention_mask": new_attn_mask[i],
@@ -487,9 +490,11 @@ def calc_probs_log_probs(
     generated_mask = generated_mask.to(model.device)
 
     model_kwargs = {
-        "attention_mask": attention_mask,
+        "attention_mask": attention_mask[:, :-1],
         "use_cache": True,
     }
+
+    # TODO: now only support one token generation
 
     logits_processor = model._get_logits_processor(
         generation_config=generation_config,
@@ -503,7 +508,7 @@ def calc_probs_log_probs(
     )
     logits_warper = model._get_logits_warper(generation_config)
 
-    model_inputs = model.prepare_inputs_for_generation(tokens, **model_kwargs)
+    model_inputs = model.prepare_inputs_for_generation(tokens[:, :-1], **model_kwargs)
 
     outputs = model(**model_inputs, return_dict=True)
 
@@ -514,7 +519,7 @@ def calc_probs_log_probs(
     probs = torch.ones(batch_size, device=model.device)
     log_probs = torch.zeros(batch_size, device=model.device)
 
-    for pos in range(1, outputs.logits.shape[1]):
+    for pos in range(1, tokens.shape[1]):
         # pre-process distribution
         scores = logits_processor(tokens, outputs.logits[:, pos - 1, :])
         scores = logits_warper(tokens, scores)
@@ -541,6 +546,9 @@ def calc_probs_log_probs(
         probs[generated_mask[:, pos]] *= step_probs[generated_mask[:, pos]]
         log_probs[generated_mask[:, pos]] += step_log_probs[generated_mask[:,
                                                                            pos]]
+        
+        if torch.isinf(log_probs).any():
+            pdb.set_trace()
 
     return {
         "probs": probs if calc_probs else None,

@@ -14,21 +14,6 @@ class ScriptArguments:
     per_device_train_batch_size: Optional[int] = field(default=2)
     per_device_eval_batch_size: Optional[int] = field(default=4)
     gradient_accumulation_steps: Optional[int] = field(default=2)
-    critic_update_freq: Optional[int] = field(
-        default=5,
-        metadata={"help": "Update critic model after X model update steps."})
-    critic_update_iter: Optional[int] = field(
-        default=5, metadata={"help": "Update critic model X times per update."})
-    shared_critic: Optional[bool] = field(
-        default=False,
-        metadata={"help": "Whether to share the critic model with the actor."})
-    critic_layer_type: Optional[str] = field(
-        default="linear",
-        metadata={
-            "help": "The type of critic layer. Could be linear or mlp."
-        },
-    )
-    replay_buffer_size: Optional[int] = field(default=50)
     learning_rate: Optional[float] = field(default=2e-4)
     max_grad_norm: Optional[float] = field(default=0.3)
     weight_decay: Optional[int] = field(default=0.001)
@@ -37,25 +22,13 @@ class ScriptArguments:
     entropy_coef: Optional[float] = field(default=0.0)
     lora_alpha: Optional[int] = field(default=16)
     lora_dropout: Optional[float] = field(default=0.1)
+    disable_dropout: Optional[bool] = field(default=False)
     lora_r: Optional[int] = field(default=64)
     max_seq_length: Optional[int] = field(default=1024)
     max_new_tokens: Optional[int] = field(default=1)
     temperature: Optional[float] = field(default=1)
     top_p: Optional[float] = field(default=1)
     top_k: Optional[int] = field(default=152)
-    trainer: Optional[str] = field(
-        default="ppo",
-        metadata={
-            "help": "The RL trainer to use. Could be pg (policy gradient), ppo "
-                    "(proximal policy optimization)."
-        },
-    )
-    horizon: Optional[int] = field(
-        default=15,
-        metadata={
-            "help": "The horizon (number of interactions) for each episode."
-        },
-    )
     model_name: Optional[str] = field(
         default="meta-llama/Llama-2-7b-hf",
         metadata={
@@ -71,26 +44,6 @@ class ScriptArguments:
                 "latest for latest checkpoint. directory for loading from a "
                 "directory."
         })
-    task_file: Optional[str] = field(
-        default="data/tasks/train/",
-        metadata={
-            "help": "The path to the task file. Could be a directory or a "
-                    "specific file. All files should contain the path of "
-                    "associated repositories."
-        },
-    )
-    repo_dir: Optional[str] = field(
-        default="data/repos/",
-        metadata={
-            "help": "The path to the directory containing the repositories."
-        },
-    )
-    sandbox_dir: Optional[str] = field(
-        default="/dev/shm/",
-        metadata={
-            "help": "The path to the directory for sandbox temporary files."
-        },
-    )
     ckpt_path: Optional[str] = field(
         default="results/",
         metadata={
@@ -176,9 +129,71 @@ class ScriptArguments:
     cache_dir: Optional[str] = field(
         default="model/",
         metadata={"help": "Where to store the pretrained models."})
+    
+    # Trainer
+    trainer: Optional[str] = field(
+        default="ppo",
+        metadata={
+            "help": "The RL trainer to use. Could be pg (policy gradient), ppo "
+                    "(proximal policy optimization)."
+        },
+    )
+    replay_buffer_size: Optional[int] = field(default=50)
+
+
+    # Critic
     use_critic: Optional[bool] = field(
         default=False,
         metadata={"help": "Whether use critic in RL finetuning."})
+    critic_update_freq: Optional[int] = field(
+        default=5,
+        metadata={"help": "Update critic model after X model update steps."})
+    critic_update_iter: Optional[int] = field(
+        default=5, metadata={"help": "Update critic model X times per update."})
+    shared_critic: Optional[bool] = field(
+        default=False,
+        metadata={"help": "Whether to share the critic model with the actor."})
+    critic_layer_type: Optional[str] = field(
+        default="linear",
+        metadata={
+            "help": "The type of critic layer. Could be linear or mlp."
+        },
+    )
+
+    # Model customization
+    shrink_head: Optional[bool] = field(
+        default=False,
+        metadata={"help": "Whether to shrink the final LM head of the model."})
+
+    # Copilot arguments
+    horizon: Optional[int] = field(
+        default=15,
+        metadata={
+            "help": "The horizon (number of interactions) for each episode."
+        },
+    )
+    task_file: Optional[str] = field(
+        default="data/tasks/train/",
+        metadata={
+            "help": "The path to the task file. Could be a directory or a "
+                    "specific file. All files should contain the path of "
+                    "associated repositories."
+        },
+    )
+    repo_dir: Optional[str] = field(
+        default="data/repos/",
+        metadata={
+            "help": "The path to the directory containing the repositories."
+        },
+    )
+    sandbox_dir: Optional[str] = field(
+        default="/dev/shm/",
+        metadata={
+            "help": "The path to the directory for sandbox temporary files."
+        },
+    )
+
+    # Curriculum Learning
     easy: Optional[bool] = field(
         default=False,
         metadata={"help": "Whether use easy task (file finding)."})

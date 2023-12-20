@@ -44,22 +44,26 @@ script_args = load_script_args(parser.parse_args_into_dataclasses()[0])
 
 assert script_args.trainer in TRAINERS, f"Invalid trainer: {script_args.trainer}."
 
-if script_args.lora_dropout != 0:
-    print(colored(f"lora_dropout is set to {script_args.lora_dropout}, we recommend 0 instead.", "yellow"))
+if script_args.disable_dropout:
+    if script_args.lora_dropout != 0:
+        print(colored(f"disable_dropout is set to True. lora_dropout is overridden to 0.", "yellow"))
+        script_args.lora_dropout = 0
 
 # Setup policy network
 tokenizer, peft_config, model = create_and_prepare_model(script_args)
 
-# Create a new lm_head, with only necessary tokens
-new_lm_head = torch.nn.Linear(model.config.n_embd, len(CHOICES),
-                              bias=False, device=model.device,
-                              dtype=model.base_model.model.lm_head.weight.dtype)
-new_lm_head.weight.requires_grad = False
-# Copy the weights from the previous lm_head
-for i, c in enumerate(CHOICES):
-    id = tokenizer.convert_tokens_to_ids(c)
-    new_lm_head.weight.data[i] = model.base_model.model.lm_head.weight.data[id]
-model.base_model.model.lm_head = new_lm_head
+model.shrink_head = script_args.shrink_head
+if script_args.shrink_head:
+    # Create a new lm_head, with only necessary tokens
+    new_lm_head = torch.nn.Linear(model.config.n_embd, len(CHOICES),
+                                bias=False, device=model.device,
+                                dtype=model.base_model.model.lm_head.weight.dtype)
+    new_lm_head.weight.requires_grad = False
+    # Copy the weights from the previous lm_head
+    for i, c in enumerate(CHOICES):
+        id = tokenizer.convert_tokens_to_ids(c)
+        new_lm_head.weight.data[i] = model.base_model.model.lm_head.weight.data[id]
+    model.base_model.model.lm_head = new_lm_head
 
 exp_id = get_exp_id(script_args.ckpt_path)
 output_dir = script_args.ckpt_path + exp_id + "_rl_finetune/"
@@ -222,6 +226,14 @@ for iter in (pbar := tqdm(range(script_args.max_steps), desc="Iter")):
     # Train
     cur_loss, cur_critic_loss = [], []
     datas = [cur_logs, replay_buffer.sample(script_args.per_device_train_batch_size)]
+    
+    for x in datas[0]:
+        for y in x:
+            y["source"] = "current"
+
+    for x in datas[1]:
+        for y in x:
+            y["source"] = "replay_buffer"
     
     # for log in datas[1]:
     #     print(log[0]["Q_value"], end=" ")

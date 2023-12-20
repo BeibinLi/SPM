@@ -40,7 +40,7 @@ class PGTrainer(PolicyTrainer):
             generated_mask = keyword_dict["generated_mask"]
             advantages = keyword_dict["advantage"].to(self.model.device)
 
-            _true_log_probs = keyword_dict["log_prob"]
+            # _true_log_probs = keyword_dict["log_prob"]
 
             # PG uses log probs
             probs_log_probs = calc_probs_log_probs(
@@ -53,13 +53,17 @@ class PGTrainer(PolicyTrainer):
                 calc_log_probs=True)
             log_probs = probs_log_probs["log_probs"]
 
-            if torch.norm(_true_log_probs - log_probs.data.cpu()) > 1:
-                print(_true_log_probs, log_probs.data)
-                pdb.set_trace()
+            # if torch.norm(_true_log_probs - log_probs.data.cpu()) > 1:
+            #     print(_true_log_probs, log_probs.data)
+            #     pdb.set_trace()
 
             # print(_true_log_probs, log_probs.data, advantages)
 
             loss = torch.sum(advantages * log_probs) / len(data)
+
+            if torch.isinf(loss).any():
+                pdb.set_trace()
+            
             loss.backward()
             losses.append(loss.item())
 
