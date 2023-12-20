@@ -905,12 +905,12 @@ def build_curriculum(dataset: list, first_k: int) -> list:
     dataset_by_depth = []
     for i in range(len(dataset)):
         cur_depth = dataset[i]["filename"].count("/")
-        if cur_depth > depth:
+        if cur_depth > depth and cur_depth != 1:
             depth = cur_depth
             dataset_by_depth.append([dataset[i]])
         else:
             dataset_by_depth[-1].append(dataset[i])
-    
+
     curriculum = dataset_by_depth[:first_k]
     curriculum.append(sum(dataset_by_depth[first_k:], []))
 

@@ -32,8 +32,8 @@ expdirs = [
     # "results/034_rl_finetune/", "results/035_rl_finetune/", "results/037_rl_finetune/",
     # "results/038_rl_finetune/",
     # "results/042_rl_finetune/", "results/043_rl_finetune/", "results/044_rl_finetune/", "results/045_rl_finetune/",
-    # "results/057_rl_finetune/", "results/226_rl_finetune/", "results/227_rl_finetune/", "results/228_rl_finetune/", "results/230_rl_finetune/",
-    "results/231_rl_finetune/", "results/232_rl_finetune/"
+    "results/057_rl_finetune/", "results/230_rl_finetune/", "results/232_rl_finetune/",
+    "results/226_rl_finetune/", "results/227_rl_finetune/", "results/228_rl_finetune/",
 ]
 
 # Initialize dictionaries to store data for plotting
