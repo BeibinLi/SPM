@@ -11,8 +11,7 @@ from tqdm import tqdm
 from transformers import (GenerationConfig, HfArgumentParser)
 
 from auto_explore_sandbox import RepoCache
-from constants import CHOICES
-from evaluate import batched_answer
+from evaluate import batched_answer, calc_Q_values
 from experiment_args import ScriptArguments
 from functions.cost import StepCost, KeywordCost, NumTokenCost, SynthesizedCost
 from model_utils import (CriticModel, load_script_args,
@@ -21,15 +20,6 @@ from trainers import TRAINERS
 from utils import build_curriculum, get_exp_id, load_dataset, ReplayBuffer
 
 LOG_KEYS = ["Q_value", "prob", "entropy", "cost", "step"]
-
-def calc_Q_values(logs, entropy_coef):
-    for log in logs:
-        tot_cost = 0
-        for i in range(len(log) - 1, -1, -1):
-            tot_cost += log[i]["cost"] - entropy_coef * log[i]["entropy"]
-            # tot_cost += log[i]["cost"] + entropy_coef * log[i]["log_prob"]
-            log[i]["Q_value"] = tot_cost
-
 
 def calc_avg(arr):
     _arr = arr.copy()
@@ -51,19 +41,6 @@ if script_args.disable_dropout:
 
 # Setup policy network
 tokenizer, peft_config, model = create_and_prepare_model(script_args)
-
-model.shrink_head = script_args.shrink_head
-if script_args.shrink_head:
-    # Create a new lm_head, with only necessary tokens
-    new_lm_head = torch.nn.Linear(model.config.n_embd, len(CHOICES),
-                                bias=False, device=model.device,
-                                dtype=model.base_model.model.lm_head.weight.dtype)
-    new_lm_head.weight.requires_grad = False
-    # Copy the weights from the previous lm_head
-    for i, c in enumerate(CHOICES):
-        id = tokenizer.convert_tokens_to_ids(c)
-        new_lm_head.weight.data[i] = model.base_model.model.lm_head.weight.data[id]
-    model.base_model.model.lm_head = new_lm_head
 
 exp_id = get_exp_id(script_args.ckpt_path)
 output_dir = script_args.ckpt_path + exp_id + "_rl_finetune/"
@@ -106,7 +83,7 @@ repo_cache = RepoCache(original_root=script_args.repo_dir,
 # Build dataset
 dataset = load_dataset(script_args.task_file)
 if script_args.depth_curriculum:
-    dataset = build_curriculum(dataset, first_k=3)
+    dataset = build_curriculum(dataset, merge_first_two=True, first_k=3)
 else:
     dataset = [dataset]
 
@@ -219,9 +196,9 @@ for iter in (pbar := tqdm(range(script_args.max_steps), desc="Iter")):
     replay_buffer.add([{
         "data": log,
         "weight": exp(-log[0]["Q_value"] / script_args.horizon)
-    } for log in cur_logs])
+    } for log in cur_logs if log[0]["Q_value"] <= 0])
 
-    # replay_buffer.print()
+    replay_buffer.print()
     
     # Train
     cur_loss, cur_critic_loss = [], []

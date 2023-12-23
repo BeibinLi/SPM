@@ -4,60 +4,13 @@ import os
 import random
 import shlex
 import string
+import tiktoken
+
+from termcolor import colored
 from typing import List
 
-import tiktoken
-from termcolor import colored
-
-# exit should always be the last
-SUPPORTED_CMDS = [
-    "cd", "ls", "cat", "head", "tail", "echo", "python", "pip", "id", "exit"
-]
-FULL_CMDS = SUPPORTED_CMDS + [
-    "pwd",
-    "mkdir",
-    "rmdir",
-    "touch",
-    "rm",
-    "cp",
-    "mv",
-    "less",
-    "grep",
-    "find",
-    "who",
-    "w",
-    "ps",
-    "top",
-    "kill",
-    "tar",
-    "chmod",
-    "chown",
-    "df",
-    "du",
-    "ifconfig",
-    "ping",
-    "netstat",
-    "ssh",
-    "scp",
-]
-
-# Common programming language suffixes
-CODE_SUFFIXES = [
-    ".py", ".c", ".cpp", ".cxx", ".cc", ".h", ".hpp", ".hxx", ".cs", ".java",
-    ".go", ".ipynb"
-]
-
-# Common data file suffixes
-DATA_SUFFIXES = [".csv", ".tsv", ".json"]
-
-# Common text file suffixes
-TEXT_SUFFIXES = [".txt", ".md"]
-
-# Executable file suffixes
-EXEC_SUFFIXES = [".sh", ".bash", ".zsh"]
-
-ALLOWED_FILE_SUFFIXES = CODE_SUFFIXES + DATA_SUFFIXES + TEXT_SUFFIXES + EXEC_SUFFIXES
-
+from constants import (ALLOWED_FILE_SUFFIXES, CODE_SUFFIXES, DATA_SUFFIXES,
+                       TEXT_SUFFIXES, FULL_CMDS)
 
 class ReplayBuffer:
 
@@ -77,12 +30,15 @@ class ReplayBuffer:
         self.weights = self.weights[-self.max_size:]
 
     def sample(self, batch_size: int):
-        if self.max_size == 0:
+        if len(self.buffer) == 0:
             return []
 
         return random.choices(self.buffer, weights=self.weights, k=batch_size)
 
     def print(self, top_k: int = 10):
+        if len(self.buffer) == 0:
+            return
+        
         print(f"Replay buffer top {top_k}:")
         top_k_items = heapq.nlargest(top_k, enumerate(self.weights), key=lambda x: x[1])
         sum_weights = sum(self.weights)
@@ -886,7 +842,7 @@ def load_dataset(task_file: str) -> list:
     return dataset
 
 
-def build_curriculum(dataset: list, first_k: int) -> list:
+def build_curriculum(dataset: list, merge_first_two: bool, first_k: int) -> list:
     """
     Build a curriculum for the dataset.
     The curriculum increases in the depth of the target file.
@@ -905,7 +861,7 @@ def build_curriculum(dataset: list, first_k: int) -> list:
     dataset_by_depth = []
     for i in range(len(dataset)):
         cur_depth = dataset[i]["filename"].count("/")
-        if cur_depth > depth and cur_depth != 1:
+        if cur_depth > depth and ((merge_first_two and cur_depth != 1) or not merge_first_two):
             depth = cur_depth
             dataset_by_depth.append([dataset[i]])
         else:

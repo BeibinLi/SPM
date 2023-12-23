@@ -4,8 +4,9 @@ import shutil
 import subprocess
 import tempfile
 
+from constants import SUPPORTED_CMDS
 from utils import (display_files_recursively, list_files, hide_root, trunc_text,
-                   get_file_names, handle_ls, unwrap_path, SUPPORTED_CMDS)
+                   get_file_names, handle_ls, unwrap_path)
 
 SAFE_MESSAGE = "SAFE"
 

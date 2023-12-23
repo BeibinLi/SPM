@@ -252,6 +252,24 @@ def create_and_prepare_model(
             model_max_length=model.config.max_position_embeddings - 1,
             add_prefix_space=False,
         )
+    
+    model.shrink_head = args.shrink_head
+    if args.shrink_head:
+        # Create a new lm_head, with only necessary tokens
+        if isinstance(model.config, GPT2Config):
+            hidden_size = model.config.n_embd
+        elif isinstance(model.config, LlamaConfig):
+            hidden_size = model.config.hidden_size
+        new_lm_head = torch.nn.Linear(hidden_size, len(CHOICES),
+                                      bias=False, device=model.device,
+                                      dtype=model.base_model.model.lm_head. weight.dtype)
+        new_lm_head.weight.requires_grad = False
+        # Copy the weights from the previous lm_head
+        for i, c in enumerate(CHOICES):
+            id = tokenizer.convert_tokens_to_ids(c)
+            new_lm_head.weight.data[i] = model.base_model.model.lm_head.weight.data[id]
+
+        model.base_model.model.lm_head = new_lm_head
 
     model.config.pad_token_id = tokenizer.eos_token_id
 
@@ -375,6 +393,8 @@ def transformer_text_completion(model: PeftModel, tokenizer: AutoTokenizer,
         "generated_mask": torch.Tensor,
     }, ...]
     """
+    shrink_head = hasattr(model, "shrink_head") and model.shrink_head
+
     tokenized = tokenizer(prompts,
                           padding=True,
                           truncation=True,
@@ -400,28 +420,16 @@ def transformer_text_completion(model: PeftModel, tokenizer: AutoTokenizer,
         (torch.zeros((len(prompts), max_len), dtype=torch.bool),
          torch.ones((len(prompts), gen_len), dtype=torch.bool)), dim=1)
 
-    ### DEBUG ###
-    # probs_log_probs = calc_probs_log_probs(
-    #     model=model,
-    #     tokens=sequences,
-    #     attention_mask=new_attn_mask,
-    #     generated_mask=generated_mask,
-    #     generation_config=generation_config,
-    #     calc_probs=False,
-    #     calc_log_probs=True,
-    # )
-
     res = []
     for i in range(len(prompts)):
         newly_generated = sequences[i, max_len:]
-        if model.shrink_head:
+        if shrink_head:
             decoded = "".join([CHOICES[x] for x in newly_generated])
         else:
             decoded = tokenizer.decode(newly_generated)
 
         prob, log_prob, entropy = 1, 0, 0
         for j, logits in enumerate(scores):
-            # print(colored("text completion:", "green"), newly_generated[j], torch.topk(logits, k=5))
 
             probs = torch.softmax(logits[i], dim=-1)
             log_probs = torch.log_softmax(logits[i], dim=-1)
@@ -431,9 +439,6 @@ def transformer_text_completion(model: PeftModel, tokenizer: AutoTokenizer,
 
             log_probs[probs == 0] = 0
             entropy -= torch.sum(probs * log_probs)
-        
-        # if abs(log_prob - probs_log_probs["log_probs"][i]) > 1:
-        #     pdb.set_trace()
 
         res.append({
             "prompt": prompts[i],
