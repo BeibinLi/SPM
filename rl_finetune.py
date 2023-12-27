@@ -14,10 +14,10 @@ from auto_explore_sandbox import RepoCache
 from evaluate import batched_answer, calc_Q_values
 from experiment_args import ScriptArguments
 from functions.cost import StepCost, KeywordCost, NumTokenCost, SynthesizedCost
-from model_utils import (CriticModel, load_script_args,
-                         create_and_prepare_model)
+from model_utils import CriticModel, create_and_prepare_model
 from trainers import TRAINERS
-from utils import build_curriculum, get_exp_id, load_dataset, ReplayBuffer
+from utils import (build_curriculum_and_schedule, get_exp_id,
+                   load_script_args, load_dataset, ReplayBuffer)
 
 LOG_KEYS = ["Q_value", "prob", "entropy", "cost", "step"]
 
@@ -82,31 +82,7 @@ repo_cache = RepoCache(original_root=script_args.repo_dir,
 
 # Build dataset
 dataset = load_dataset(script_args.task_file)
-if script_args.depth_curriculum:
-    dataset = build_curriculum(dataset, merge_first_two=True, first_k=3)
-else:
-    dataset = [dataset]
-
-if script_args.few_data:
-    dataset = [dataset[0][:script_args.few_data]]
-
-if script_args.skip_first_curriculum:
-    dataset = dataset[1:]
-
-# tot_visits = sum([len(d) * (len(dataset) - i) for i, d in enumerate(dataset)])
-tot_visits = sum([len(d) for d in dataset])
-step_per_data = script_args.max_steps // tot_visits
-script_args.max_steps = step_per_data * tot_visits
-
-# Iters to add new curriculum
-trigger_set = [
-    step_per_data * sum([len(d) for d in dataset[:i]]) for i in range(len(dataset))
-]
-
-print(colored("Curriculum:", "green"))
-for i, d in enumerate(dataset):
-    print(colored(f"Level {i}: {len(d)} data", "green"))
-print(colored("Iters to increase level:" + ", ".join([str(x) for x in trigger_set]), "green"))
+dataset, trigger_set = build_curriculum_and_schedule(dataset, script_args)
 
 # Init curriculum
 curriculum_idx = -1
@@ -118,9 +94,6 @@ logs, msgs = [], []
 train_logs, critic_train_logs = [], []
 
 replay_buffer = ReplayBuffer(script_args.replay_buffer_size)
-
-if script_args.first_curriculum:
-    trigger_set = [0]
 
 # Setup trainer
 generation_config = GenerationConfig(

@@ -11,9 +11,9 @@ from experiment_args import ScriptArguments
 from functions.cost import (AutoExploreCostFunction, StepCost, KeywordCost,
                             NumTokenCost, SynthesizedCost)
 from functions.terminate import IdentifyFileTerminate
-from model_utils import (load_script_args, create_and_prepare_model,
+from model_utils import (create_and_prepare_model,
                          transformer_text_completion)
-from utils import load_dataset, build_curriculum
+from utils import load_script_args, load_dataset, build_curriculum_and_schedule
 
 
 def batched_answer(
@@ -118,7 +118,7 @@ def evalutate(
     easy: bool,
     first_step: bool,
 ):
-    costs = []
+    costs, successes = [], []
 
     for idx in tqdm(
             range(0, len(dataset), batch_size)):
@@ -142,8 +142,9 @@ def evalutate(
         calc_Q_values(logs)
 
         costs += [log[0]["Q_value"] for log in logs]
+        successes += [log[0]["Q_value"] <= 0 for log in logs]
 
-    return mean(costs)
+    return mean(costs), mean(successes)
 
 def calc_Q_values(logs, entropy_coef=0):
     for log in logs:
@@ -177,12 +178,7 @@ if __name__ == "__main__":
                            dir=script_args.sandbox_dir)
 
     dataset = load_dataset(script_args.task_file)
-    if script_args.depth_curriculum:
-        dataset = build_curriculum(dataset, merge_first_two=False, first_k=3)
-    else:
-        dataset = [dataset]
-    if script_args.first_curriculum:
-        dataset = dataset[:1]
+    dataset, trigger_set = build_curriculum_and_schedule(dataset, script_args)
 
     generation_config = GenerationConfig(
         max_length=script_args.max_seq_length,

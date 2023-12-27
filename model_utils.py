@@ -15,7 +15,7 @@ from transformers.generation.logits_process import LogitsProcessorList
 from transformers.modeling_outputs import SequenceClassifierOutputWithPast
 from typing import Optional, Tuple, Union
 
-from constants import CHOICES, DISABLE_DROPOUT_KWARGS, OVERRIDE_KEYS
+from constants import CHOICES, DISABLE_DROPOUT_KWARGS
 from experiment_args import ScriptArguments
 from utils import extract_command_blocks
 
@@ -139,37 +139,6 @@ class CriticModel(nn.Module):
 
     def save_pretrained(self, **kwargs):
         pass
-
-
-def load_script_args(script_args: ScriptArguments,
-                     override_keys: list = OVERRIDE_KEYS) -> ScriptArguments:
-    """
-    If `script_args.load_dir` is not None, load the setting.yml from this
-    directory if possible. After loading, override the keys in `override_keys`.
-
-    Args:
-    - `script_args` (ScriptArguments): the arguments for training.
-    - `override_keys` (list): the keys to override.
-
-    Returns:
-    - ScriptArguments: The updated script arguments.
-    """
-
-    if script_args.load_dir:
-        file = os.path.join(script_args.load_dir, "../setting.yml")
-        if os.path.exists(file):
-            old_script_args = yaml.safe_load(open(file, "r"))
-
-            for key, value in old_script_args.items():
-                if key in override_keys and hasattr(script_args, key):
-                    setattr(script_args, key, value)
-        else:
-            print(
-                colored(
-                    "We cannot find the setting.yml file from the load directory.",
-                    "yellow"))
-
-    return script_args
 
 
 def create_and_prepare_model(

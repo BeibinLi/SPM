@@ -219,12 +219,26 @@ class ScriptArguments:
             "help": "Whether only train the first step, viewing as a contextual"
                     " bandit problem."
         })
-    first_curriculum: Optional[bool] = field(
+    curriculum_index: Optional[int] = field(
+        default=-1,
+        metadata={
+            "help":
+                "The index of the curriculum to use, starting from 0. -1 for"
+                " all curriculum."
+        })
+    merge_first_two: Optional[bool] = field(
         default=False,
-        metadata={"help": "Whether only train on the first curriculum."})
-    skip_first_curriculum: Optional[bool] = field(
-        default=False,
-        metadata={"help": "Whether skip the first curriculum."})
+        metadata={
+            "help":
+                "Whether to merge the first two steps in the curriculum."
+        })
+    merge_after_first_k: Optional[int] = field(
+        default=3,
+        metadata={
+            "help":
+                "Whether to merge steps after the first k steps in the "
+                "curriculum."
+        })
     few_data: Optional[int] = field(
         default=0,
         metadata={"help": "Whether only use a small portion of fixed data."})
