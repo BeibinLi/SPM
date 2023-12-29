@@ -457,11 +457,11 @@ def trunc_text(file: str, content: str) -> str:
         file = file[1:-1]
 
     # Truncate the content depending on file type
-    if file.endswith(CODE_SUFFIXES):
+    if file.endswith(tuple(CODE_SUFFIXES)):
         return _trunc_text(content, 1000, 500)
-    elif file.endswith(DATA_SUFFIXES):
+    elif file.endswith(tuple(DATA_SUFFIXES)):
         return _trunc_text(content, 5, 500)
-    elif file.endswith(TEXT_SUFFIXES):
+    elif file.endswith(tuple(TEXT_SUFFIXES)):
         return _trunc_text(content, 100, 500)
     else:
         return _trunc_text(content, 10, 500)

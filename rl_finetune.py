@@ -8,7 +8,7 @@ from math import exp
 from statistics import mean
 from termcolor import colored
 from tqdm import tqdm
-from transformers import (GenerationConfig, HfArgumentParser)
+from transformers import GenerationConfig, HfArgumentParser
 
 from auto_explore_sandbox import RepoCache
 from evaluate import batched_answer, calc_Q_values

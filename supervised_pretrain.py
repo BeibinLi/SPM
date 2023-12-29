@@ -6,8 +6,8 @@ from trl import DataCollatorForCompletionOnlyLM, SFTTrainer
 
 from auto_explore_copilot import RESPONSE_TEMPLATE
 from experiment_args import ScriptArguments
-from model_utils import create_and_prepare_model, load_script_args
-from utils import get_exp_id
+from model_utils import create_and_prepare_model
+from utils import get_exp_id, load_script_args
 
 parser = HfArgumentParser(ScriptArguments)
 script_args = load_script_args(parser.parse_args_into_dataclasses()[0])

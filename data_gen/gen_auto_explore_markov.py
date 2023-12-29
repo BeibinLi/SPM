@@ -1,7 +1,7 @@
 import json
 import os
 
-from transformers import AutoTokenizer, HfArgumentParser
+from transformers import AutoTokenizer, GenerationConfig, HfArgumentParser
 
 from auto_explore_copilot import AutoExploreCopilot
 from experiment_args import ScriptArguments
@@ -25,6 +25,18 @@ tokenizer.pad_token = tokenizer.eos_token
 auto_explore_dataset, auto_explore_dataset_easy = [], []
 
 dataset = load_dataset(script_args.task_file)
+
+generation_config = GenerationConfig(
+    max_length=script_args.max_seq_length,
+    max_new_tokens=script_args.max_new_tokens,
+    do_sample=True,
+    num_beams=1,
+    temperature=script_args.temperature,
+    top_p=script_args.top_p,
+    top_k=script_args.top_k,
+    pad_token_id=tokenizer.pad_token_id,
+    eos_token_id=tokenizer.eos_token_id,
+)
 
 for data in dataset:
     if "root" not in data.keys():
@@ -52,10 +64,8 @@ for data in dataset:
 
         copilot = AutoExploreCopilot(repo_root=root,
                                      sandbox_dir=script_args.sandbox_dir,
-                                     temperature=0.6,
-                                     top_p=0.9,
-                                     max_token_length=32768,
-                                     max_new_tokens=32768,
+                                     horizon=15,
+                                     generation_config=generation_config,
                                      file_save_path="new_and_changed_files/",
                                      interaction_type="debug",
                                      model_type="null",
