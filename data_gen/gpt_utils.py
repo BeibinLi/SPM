@@ -56,18 +56,16 @@ LM_CONFIG = {
 # reply = lambda p, cl: oai.Completion.extract_text(
 #     oai.Completion.create(config_list=cl, prompt=p, temperature=0))[0]
 
-
 def reply(prompt, config_list=CONFIG_LIST, model_name=None):
     if model_name and type(model_name) is str:
         config_list = autogen.oai.openai_utils.filter_config(
             config_list, {"model": [model_name]})
 
     assert len(config_list), "No OpenAI config found in AutoGen."
-    return OpenAIWrapper.extract_text_or_function_call(
+    return OpenAIWrapper.extract_text_or_completion_object(
         OpenAIWrapper(config_list=config_list).create(
                               prompt=prompt,
                               temperature=0))[0]
-
 
 encoder = tiktoken.encoding_for_model("gpt-3.5-turbo")
 num_tokens = lambda msg: len(encoder.encode(msg))
