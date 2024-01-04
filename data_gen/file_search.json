@@ -53359,6 +53359,1745 @@
     "n_level": 0
   },
   {
+    "question": "",
+    "answer": "",
+    "commands": [
+      "ls",
+      "cat \"Quality Control Manuals.md\"",
+      "ls",
+      "cd public",
+      "ls",
+      "cd newsletter",
+      "ls",
+      "cd \"2021 May\"",
+      "ls",
+      "cat 2.md"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd public",
+      "ls",
+      "cd newsletter",
+      "ls",
+      "cd \"2021 May\"",
+      "ls",
+      "cat 2.md"
+    ],
+    "filename": "public/newsletter/2021 May/2.md",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "",
+    "answer": "",
+    "commands": [
+      "ls",
+      "cd public",
+      "ls",
+      "cd newsletter",
+      "ls",
+      "cd \"2021 Apr\"",
+      "ls",
+      "cat 1.md"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd public",
+      "ls",
+      "cd newsletter",
+      "ls",
+      "cd \"2021 Apr\"",
+      "ls",
+      "cat 1.md"
+    ],
+    "filename": "public/newsletter/2021 Apr/1.md",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "What prestigious accolade was awarded to Opti Coffee's Ethiopia Yirgacheffe coffee?",
+    "answer": "The Ethiopia Yirgacheffe coffee from Opti Coffee was officially crowned as one of the best coffees of the year by Coffee Review.",
+    "commands": [
+      "ls",
+      "cd public",
+      "ls",
+      "cat contact_info.md",
+      "ls",
+      "cd newsletter",
+      "ls",
+      "cd \"2021 Feb\"",
+      "ls",
+      "cd ..",
+      "ls",
+      "cd \"2021 Mar\"",
+      "ls",
+      "cat 1.md"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd public",
+      "ls",
+      "cd newsletter",
+      "ls",
+      "cd \"2021 Mar\"",
+      "ls",
+      "cat 1.md"
+    ],
+    "filename": "public/newsletter/2021 Mar/1.md",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "Who is attributed with the discerning palate and expert judgment that led to the recognition of Opti Coffee's Ethiopia Yirgacheffe coffee?",
+    "answer": "Jane Doe, a renowned authority in the realm of coffee tasting, is attributed with the discerning palate and expert judgment that led to the recognition of Opti Coffee's Ethiopia Yirgacheffe coffee.",
+    "commands": [
+      "ls",
+      "cd public",
+      "ls",
+      "cd newsletter",
+      "ls",
+      "cd \"2021 Mar\"",
+      "ls",
+      "cat 3.md",
+      "ls",
+      "cat 1.md"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd public",
+      "ls",
+      "cd newsletter",
+      "ls",
+      "cd \"2021 Mar\"",
+      "ls",
+      "cat 1.md"
+    ],
+    "filename": "public/newsletter/2021 Mar/1.md",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "How is the coffee demand stored in the Cafe class?",
+    "answer": "The coffee demand is stored in a HashMap, where the key is the coffee type and the value is the quantity.",
+    "commands": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd java",
+      "ls",
+      "cat Cafe.java"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd java",
+      "ls",
+      "cat Cafe.java"
+    ],
+    "filename": "solver/src/java/Cafe.java",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "",
+    "answer": "",
+    "commands": [
+      "ls",
+      "cat \"Employee Benefits.md\"",
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cat cafe.py"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cat cafe.py"
+    ],
+    "filename": "solver/src/cafe.py",
+    "root": "Coffee_Company",
+    "n_level": 2
+  },
+  {
+    "question": "What is the purpose of the code \"chart.getStyler().setXAxisLabelRotation(90);\"?",
+    "answer": "The purpose of this code is to set the rotation angle of the X-axis labels to 90 degrees in the chart.",
+    "commands": [
+      "ls",
+      "cd visualization",
+      "ls",
+      "cat membership_duration.py",
+      "ls",
+      "cd java",
+      "ls",
+      "cat SalaryPlot.java"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd visualization",
+      "ls",
+      "cd java",
+      "ls",
+      "cat SalaryPlot.java"
+    ],
+    "filename": "visualization/java/SalaryPlot.java",
+    "root": "Coffee_Company",
+    "n_level": 2
+  },
+  {
+    "question": "What does the code \"chart.getStyler().setPlotGridLinesVisible(false);\" do?",
+    "answer": "This code sets the visibility of the plot grid lines to false in the chart.",
+    "commands": [
+      "ls",
+      "cd visualization",
+      "ls",
+      "cd java",
+      "ls",
+      "cat SupplierPrice.java",
+      "ls",
+      "cat SalaryPlot.java"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd visualization",
+      "ls",
+      "cd java",
+      "ls",
+      "cat SalaryPlot.java"
+    ],
+    "filename": "visualization/java/SalaryPlot.java",
+    "root": "Coffee_Company",
+    "n_level": 2
+  },
+  {
+    "question": "",
+    "answer": "",
+    "commands": [
+      "ls",
+      "cat \"Financial Plan.md\"",
+      "ls",
+      "cd public",
+      "ls",
+      "cat merged.md"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd public",
+      "ls",
+      "cat merged.md"
+    ],
+    "filename": "public/merged.md",
+    "root": "Coffee_Company",
+    "n_level": 1
+  },
+  {
+    "question": "What happens if the filtered data has no rows after the filtering process?",
+    "answer": "A ValueError will be raised with the message 'No bean with name {args.name} found.'",
+    "commands": [
+      "ls",
+      "cd visualization",
+      "ls",
+      "cat bean_price.py"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd visualization",
+      "ls",
+      "cat bean_price.py"
+    ],
+    "filename": "visualization/bean_price.py",
+    "root": "Coffee_Company",
+    "n_level": 1
+  },
+  {
+    "question": "How is the datetime column generated from the 'month' and 'year' columns in the filtered data?",
+    "answer": "The 'month' and 'year' columns are combined and converted into a single datetime column using pd.to_datetime.",
+    "commands": [
+      "ls",
+      "cd visualization",
+      "ls",
+      "cat bean_price.py"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd visualization",
+      "ls",
+      "cat bean_price.py"
+    ],
+    "filename": "visualization/bean_price.py",
+    "root": "Coffee_Company",
+    "n_level": 1
+  },
+  {
+    "question": "What is the percentage of their annual sales that Opti Coffee contributes to support environmental nonprofits?",
+    "answer": "Opti Coffee contributes 1% of their annual sales to support environmental nonprofits.",
+    "commands": [
+      "ls",
+      "cd public",
+      "ls",
+      "cd newsletter",
+      "ls",
+      "cd \"2021 Mar\"",
+      "ls",
+      "cat 2.md"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd public",
+      "ls",
+      "cd newsletter",
+      "ls",
+      "cd \"2021 Mar\"",
+      "ls",
+      "cat 2.md"
+    ],
+    "filename": "public/newsletter/2021 Mar/2.md",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "What does the for loop iterate over when printing the roasting costs?",
+    "answer": "The for loop iterates over the roasting costs, printing out the cost, constraints, and name for each.",
+    "commands": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd cpp",
+      "ls",
+      "cat Roastery.cpp"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd cpp",
+      "ls",
+      "cat Roastery.cpp"
+    ],
+    "filename": "solver/src/cpp/Roastery.cpp",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "What does the 25% increase in revenue reflect about Opti Coffee?",
+    "answer": "The 25% increase in revenue reflects a thriving customer base that is drawn to Opti Coffee's offerings, a testament to the brand's ability to connect with individuals on a profound level.",
+    "commands": [
+      "ls",
+      "cd public",
+      "ls",
+      "cat contact_info.md",
+      "ls",
+      "cd newsletter",
+      "ls",
+      "cat newsletter.md",
+      "ls",
+      "cd \"2021 Apr\"",
+      "ls",
+      "cat 4.md"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd public",
+      "ls",
+      "cd newsletter",
+      "ls",
+      "cd \"2021 Apr\"",
+      "ls",
+      "cat 4.md"
+    ],
+    "filename": "public/newsletter/2021 Apr/4.md",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "What does the 15% boost in profit demonstrate about Opti Coffee?",
+    "answer": "The 15% boost in profit is a testament to Opti Coffee's deft financial management and operational efficiency, showcasing the company's ability to balance growth with responsible business practices.",
+    "commands": [
+      "ls",
+      "cd public",
+      "ls",
+      "cd ..",
+      "ls",
+      "cd public",
+      "ls",
+      "cd newsletter",
+      "ls",
+      "cd \"2021 Apr\"",
+      "ls",
+      "cat 4.md"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd public",
+      "ls",
+      "cd newsletter",
+      "ls",
+      "cd \"2021 Apr\"",
+      "ls",
+      "cat 4.md"
+    ],
+    "filename": "public/newsletter/2021 Apr/4.md",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "",
+    "answer": "",
+    "commands": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd java",
+      "ls",
+      "cat CoffeeDistributionOptimizer.java"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd java",
+      "ls",
+      "cat CoffeeDistributionOptimizer.java"
+    ],
+    "filename": "solver/src/java/CoffeeDistributionOptimizer.java",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "What does the CoffeeDistributionOptimizer class constructor take as its argument?",
+    "answer": "The CoffeeDistributionOptimizer class constructor takes a reference to a DistributionNetwork object as its argument.",
+    "commands": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd cpp",
+      "ls",
+      "cat CoffeeDistributionOptimizer.h"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd cpp",
+      "ls",
+      "cat CoffeeDistributionOptimizer.h"
+    ],
+    "filename": "solver/src/cpp/CoffeeDistributionOptimizer.h",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "",
+    "answer": "",
+    "commands": [
+      "ls",
+      "cat safety.md",
+      "ls",
+      "cd public",
+      "ls",
+      "cat merged.md"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd public",
+      "ls",
+      "cat merged.md"
+    ],
+    "filename": "public/merged.md",
+    "root": "Coffee_Company",
+    "n_level": 1
+  },
+  {
+    "question": "What coordinates are used as the location for the folium map?",
+    "answer": "The coordinates used as the location for the folium map are provided by the `get_coordinates` function, which takes the city and country as input and returns the latitude and longitude.",
+    "commands": [
+      "ls",
+      "cd visualization",
+      "ls",
+      "cat salary.py",
+      "ls",
+      "cd cpp",
+      "ls",
+      "cat plot_supplier_map.py"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd visualization",
+      "ls",
+      "cd cpp",
+      "ls",
+      "cat plot_supplier_map.py"
+    ],
+    "filename": "visualization/cpp/plot_supplier_map.py",
+    "root": "Coffee_Company",
+    "n_level": 2
+  },
+  {
+    "question": "What are the instance variables in the Cafe class?",
+    "answer": "The instance variables in the Cafe class are name, location, contact, and coffeeDemand.",
+    "commands": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd java",
+      "ls",
+      "cat Cafe.java"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd java",
+      "ls",
+      "cat Cafe.java"
+    ],
+    "filename": "solver/src/java/Cafe.java",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "How is the demand for a specific coffee type set in the Cafe class?",
+    "answer": "The demand for a specific coffee type is set using the setCoffeeDemand method in the Cafe class.",
+    "commands": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd java",
+      "ls",
+      "cat Cafe.java"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd java",
+      "ls",
+      "cat Cafe.java"
+    ],
+    "filename": "solver/src/java/Cafe.java",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "How can you set the roasting cost for a specific coffee type in the Roastery class?",
+    "answer": "You can set the roasting cost for a specific coffee type in the Roastery class by using the method \"setRoastingCost\", which takes the coffee type, cost, and constraints as parameters.",
+    "commands": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd java",
+      "ls",
+      "cat Roastery.java"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd java",
+      "ls",
+      "cat Roastery.java"
+    ],
+    "filename": "solver/src/java/Roastery.java",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "What is the purpose of the \"validateRoastingConstraints\" method in the Roastery class?",
+    "answer": "The \"validateRoastingConstraints\" method in the Roastery class is used to validate the roasting constraints for a specific coffee type, ensuring that the provided constraints match the required constraints for roasting the coffee type.",
+    "commands": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cat Makefile",
+      "ls",
+      "cd src",
+      "ls",
+      "cd java",
+      "ls",
+      "cat Roastery.java"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd java",
+      "ls",
+      "cat Roastery.java"
+    ],
+    "filename": "solver/src/java/Roastery.java",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "What type of data does the sell_price_history.csv file contain?",
+    "answer": "The sell_price_history.csv file contains historical sell prices for each coffee product.",
+    "commands": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cat README.md"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cat README.md"
+    ],
+    "filename": "solver/README.md",
+    "root": "Coffee_Company",
+    "n_level": 1
+  },
+  {
+    "question": "What are some of the special products offered at the \"Origin City Store\"?",
+    "answer": "Limited-edition beans from the countries where the coffee is sourced, a tour of the roastery, and the opportunity to learn more about the roasting process and history.",
+    "commands": [
+      "ls",
+      "cd public",
+      "ls",
+      "cat our_coffee.md"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd public",
+      "ls",
+      "cat our_coffee.md"
+    ],
+    "filename": "public/our_coffee.md",
+    "root": "Coffee_Company",
+    "n_level": 1
+  },
+  {
+    "question": "What can be found at the \"Largest Store\" of Opti Coffee?",
+    "answer": "The premium series, which includes rare and exquisite beans from sought-after regions and farms, as well as a coffee bar to sample different brewing methods and techniques.",
+    "commands": [
+      "ls",
+      "cat \"Manual%3A How to Negotiate with Coffee Bean Suppliers and Cafe Shops.md\"",
+      "ls",
+      "cd public",
+      "ls",
+      "cat our_coffee.md"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd public",
+      "ls",
+      "cat our_coffee.md"
+    ],
+    "filename": "public/our_coffee.md",
+    "root": "Coffee_Company",
+    "n_level": 1
+  },
+  {
+    "question": "What happens if the 'coords' variable is empty or evaluates to False in the plot_supplier_map.py file?",
+    "answer": "If the 'coords' variable is empty or evaluates to False, then the folium.Circle() function will not be added to the map 'm'.",
+    "commands": [
+      "ls",
+      "cd visualization",
+      "ls",
+      "cd cpp",
+      "ls",
+      "cat plot_supplier_map.py"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd visualization",
+      "ls",
+      "cd cpp",
+      "ls",
+      "cat plot_supplier_map.py"
+    ],
+    "filename": "visualization/cpp/plot_supplier_map.py",
+    "root": "Coffee_Company",
+    "n_level": 2
+  },
+  {
+    "question": "What is the purpose of the radius in the folium.Circle function in the plot_supplier_map.py file?",
+    "answer": "The purpose of the radius is to set the size of the circle based on the number of suppliers in the city, with each supplier representing a radius of 10,000 units.",
+    "commands": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cat Makefile",
+      "ls",
+      "cd ..",
+      "ls",
+      "cd visualization",
+      "ls",
+      "cd cpp",
+      "ls",
+      "cat plot_supplier_map.py"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd visualization",
+      "ls",
+      "cd cpp",
+      "ls",
+      "cat plot_supplier_map.py"
+    ],
+    "filename": "visualization/cpp/plot_supplier_map.py",
+    "root": "Coffee_Company",
+    "n_level": 2
+  },
+  {
+    "question": "",
+    "answer": "",
+    "commands": [
+      "ls",
+      "cat \"roast manual.md\"",
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cat distribution_network.py",
+      "ls",
+      "cat plan_optimizer.py"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cat plan_optimizer.py"
+    ],
+    "filename": "solver/src/plan_optimizer.py",
+    "root": "Coffee_Company",
+    "n_level": 2
+  },
+  {
+    "question": "What happens if neither --id nor --name are specified?",
+    "answer": "If neither --id nor --name are specified, the function will raise a ValueError indicating that either --id or --name must be specified.",
+    "commands": [
+      "ls",
+      "cat \"roast manual.md\"",
+      "ls",
+      "cd visualization",
+      "ls",
+      "cat supplier_price.py"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd visualization",
+      "ls",
+      "cat supplier_price.py"
+    ],
+    "filename": "visualization/supplier_price.py",
+    "root": "Coffee_Company",
+    "n_level": 1
+  },
+  {
+    "question": "How are multiple suppliers with the same name handled in the get_supplier_id function?",
+    "answer": "If there are multiple suppliers with the same name, the function will raise a ValueError indicating that multiple suppliers with the name were found.",
+    "commands": [
+      "ls",
+      "cd visualization",
+      "ls",
+      "cat supplier_price.py"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd visualization",
+      "ls",
+      "cat supplier_price.py"
+    ],
+    "filename": "visualization/supplier_price.py",
+    "root": "Coffee_Company",
+    "n_level": 1
+  },
+  {
+    "question": "What does the code block network.add_supplier(s) for s in supplier_map.values() achieve?",
+    "answer": "It adds each supplier from the supplier map to the network.",
+    "commands": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cat main.py"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cat main.py"
+    ],
+    "filename": "solver/main.py",
+    "root": "Coffee_Company",
+    "n_level": 1
+  },
+  {
+    "question": "How are the shipping costs for suppliers to roasteries set in the code?",
+    "answer": "The shipping costs for suppliers to roasteries are set by reading a CSV file, calculating the cost, and then using the network.set_shipping_cost_from_supplier_to_roastery function.",
+    "commands": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd .output",
+      "ls",
+      "cd ..",
+      "ls",
+      "cat main.py"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cat main.py"
+    ],
+    "filename": "solver/main.py",
+    "root": "Coffee_Company",
+    "n_level": 1
+  },
+  {
+    "question": "How are the shipping costs for roasteries to cafes set in the code?",
+    "answer": "The shipping costs for roasteries to cafes are set by retrieving the shipping costs from a DataFrame and then using the network.set_shipping_cost_from_roastery_to_cafe function.",
+    "commands": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cat main.py"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cat main.py"
+    ],
+    "filename": "solver/main.py",
+    "root": "Coffee_Company",
+    "n_level": 1
+  },
+  {
+    "question": "What does the optimizer.run() function achieve in the code?",
+    "answer": "It creates and runs the CoffeeDistributionOptimizer using the network.",
+    "commands": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cat main.py"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cat main.py"
+    ],
+    "filename": "solver/main.py",
+    "root": "Coffee_Company",
+    "n_level": 1
+  },
+  {
+    "question": "What does the function plot() in supplier_price.py do?",
+    "answer": "The function plot() in supplier_price.py plots the change in supply price for a specific supplier and saves the plot as an image file.",
+    "commands": [
+      "ls",
+      "cd visualization",
+      "ls",
+      "cat supplier_price.py"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd visualization",
+      "ls",
+      "cat supplier_price.py"
+    ],
+    "filename": "visualization/supplier_price.py",
+    "root": "Coffee_Company",
+    "n_level": 1
+  },
+  {
+    "question": "What is the purpose of the get_data() function in supplier_price.py?",
+    "answer": "The purpose of the get_data() function in supplier_price.py is to load and filter data from the 'supply_price_history.csv' file for a given supplier, sort the data by date, and return the filtered and sorted data.",
+    "commands": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd ..",
+      "ls",
+      "cd visualization",
+      "ls",
+      "cat bean_price.py",
+      "ls",
+      "cat supplier_on_map.py",
+      "ls",
+      "cat supplier_price.py"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd visualization",
+      "ls",
+      "cat supplier_price.py"
+    ],
+    "filename": "visualization/supplier_price.py",
+    "root": "Coffee_Company",
+    "n_level": 1
+  },
+  {
+    "question": "What is the slogan of Opti Coffee?",
+    "answer": "\"uniting the world with optimization, one cup at a time.\"",
+    "commands": [
+      "ls",
+      "cd public",
+      "ls",
+      "cat cafe.md",
+      "ls",
+      "cat merged.md"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd public",
+      "ls",
+      "cat merged.md"
+    ],
+    "filename": "public/merged.md",
+    "root": "Coffee_Company",
+    "n_level": 1
+  },
+  {
+    "question": "What were the criteria used by the judges to evaluate the participants' offerings in the competition?",
+    "answer": "The judges rigorously evaluated each participant's offerings based on criteria such as aroma, flavor complexity, body, and overall sensory experience.",
+    "commands": [
+      "ls",
+      "cd public",
+      "ls",
+      "cd newsletter",
+      "ls",
+      "cd \"2021 Apr\"",
+      "ls",
+      "cat 1.md"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd public",
+      "ls",
+      "cd newsletter",
+      "ls",
+      "cd \"2021 Apr\"",
+      "ls",
+      "cat 1.md"
+    ],
+    "filename": "public/newsletter/2021 Apr/1.md",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "What set Opti Coffee apart from the other participants in the competition?",
+    "answer": "Opti Coffee's dedication to sourcing the finest beans and their meticulous roasting process set them apart from the other participants.",
+    "commands": [
+      "ls",
+      "cd public",
+      "ls",
+      "cd newsletter",
+      "ls",
+      "cd \"2021 Apr\"",
+      "ls",
+      "cat 1.md"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd public",
+      "ls",
+      "cd newsletter",
+      "ls",
+      "cd \"2021 Apr\"",
+      "ls",
+      "cat 1.md"
+    ],
+    "filename": "public/newsletter/2021 Apr/1.md",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "What does the overridden toString method in the Cafe.java file return?",
+    "answer": "The overridden toString method in the Cafe.java file returns a string containing the name, location, and contact information of the cafe.",
+    "commands": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd java",
+      "ls",
+      "cd ..",
+      "ls",
+      "cd java",
+      "ls",
+      "cat Cafe.java"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd java",
+      "ls",
+      "cat Cafe.java"
+    ],
+    "filename": "solver/src/java/Cafe.java",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "How does the fulfillDemand method in the Cafe.java file handle the situation where the quantity of coffee to be fulfilled exceeds the current demand?",
+    "answer": "The fulfillDemand method in the Cafe.java file throws an IllegalArgumentException when the quantity of coffee to be fulfilled exceeds the current demand.",
+    "commands": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd java",
+      "ls",
+      "cat Cafe.java"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd java",
+      "ls",
+      "cat Cafe.java"
+    ],
+    "filename": "solver/src/java/Cafe.java",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "",
+    "answer": "",
+    "commands": [
+      "ls",
+      "cd public",
+      "ls",
+      "cd newsletter",
+      "ls",
+      "cd ..",
+      "ls",
+      "cd newsletter",
+      "ls",
+      "cd \"2021 Mar\"",
+      "ls",
+      "cat 1.md"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd public",
+      "ls",
+      "cd newsletter",
+      "ls",
+      "cd \"2021 Mar\"",
+      "ls",
+      "cat 1.md"
+    ],
+    "filename": "public/newsletter/2021 Mar/1.md",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "What is the signature brew offered at the Seattle Cafe?",
+    "answer": "The signature brew at the Seattle Cafe is the 'Emerald Drip', which offers a smooth, rich flavor with subtle hints of chocolate and hazelnut.",
+    "commands": [
+      "ls",
+      "cd visualization",
+      "ls",
+      "cat supplier_price.py",
+      "ls",
+      "cd ..",
+      "ls",
+      "cat \"Employee Benefits.md\"",
+      "ls",
+      "cat \"Employee Benefits.md\"",
+      "ls",
+      "cd public",
+      "ls",
+      "cd ..",
+      "ls",
+      "cd public",
+      "ls",
+      "cat contact_info.md",
+      "ls",
+      "cat cafe.md"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd public",
+      "ls",
+      "cat cafe.md"
+    ],
+    "filename": "public/cafe.md",
+    "root": "Coffee_Company",
+    "n_level": 1
+  },
+  {
+    "question": "What is the standout beverage at Morning Cafe in Kirkland?",
+    "answer": "The standout beverage at Morning Cafe in Kirkland is the 'Lakeside Mocha', a delightful concoction of dark chocolate, steamed milk, and a shot of espresso, topped with whipped cream and a drizzle of caramel.",
+    "commands": [
+      "ls",
+      "cd public",
+      "ls",
+      "cat cafe.md"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd public",
+      "ls",
+      "cat cafe.md"
+    ],
+    "filename": "public/cafe.md",
+    "root": "Coffee_Company",
+    "n_level": 1
+  },
+  {
+    "question": "",
+    "answer": "",
+    "commands": [
+      "ls",
+      "cd public",
+      "ls",
+      "cd newsletter",
+      "ls",
+      "cd \"2021 Feb\"",
+      "ls",
+      "cat 2.md"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd public",
+      "ls",
+      "cd newsletter",
+      "ls",
+      "cd \"2021 Feb\"",
+      "ls",
+      "cat 2.md"
+    ],
+    "filename": "public/newsletter/2021 Feb/2.md",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "What function is responsible for displaying network information?",
+    "answer": "The function responsible for displaying network information is the `display_network_info` function.",
+    "commands": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd cpp",
+      "ls",
+      "cat Roastery.h",
+      "ls",
+      "cat DistributionNetwork.h"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd cpp",
+      "ls",
+      "cat DistributionNetwork.h"
+    ],
+    "filename": "solver/src/cpp/DistributionNetwork.h",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "",
+    "answer": "",
+    "commands": [
+      "ls",
+      "cd public",
+      "ls",
+      "cd newsletter",
+      "ls",
+      "cd \"2021 May\"",
+      "ls",
+      "cat 1.md"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd public",
+      "ls",
+      "cd newsletter",
+      "ls",
+      "cd \"2021 May\"",
+      "ls",
+      "cat 1.md"
+    ],
+    "filename": "public/newsletter/2021 May/1.md",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "",
+    "answer": "",
+    "commands": [
+      "ls",
+      "cd public",
+      "ls",
+      "cd newsletter",
+      "ls",
+      "cd \"2021 Mar\"",
+      "ls",
+      "cat 1.md"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd public",
+      "ls",
+      "cd newsletter",
+      "ls",
+      "cd \"2021 Mar\"",
+      "ls",
+      "cat 1.md"
+    ],
+    "filename": "public/newsletter/2021 Mar/1.md",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "What does the \"validate_capacity\" method do in the Supplier class?",
+    "answer": "The \"validate_capacity\" method in the Supplier class validates if the requested quantity is within the supplier's capacity and returns True if it is, and False otherwise.",
+    "commands": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cat distribution_network.py",
+      "ls",
+      "cat supplier.py"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cat supplier.py"
+    ],
+    "filename": "solver/src/supplier.py",
+    "root": "Coffee_Company",
+    "n_level": 2
+  },
+  {
+    "question": "How does the \"reduce_capacity\" method work in the Supplier class?",
+    "answer": "The \"reduce_capacity\" method in the Supplier class reduces the supplier's capacity by a specified quantity, but it first validates if the requested quantity is within the supplier's capacity before reducing it.",
+    "commands": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cat supplier.py"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cat supplier.py"
+    ],
+    "filename": "solver/src/supplier.py",
+    "root": "Coffee_Company",
+    "n_level": 2
+  },
+  {
+    "question": "",
+    "answer": "",
+    "commands": [
+      "ls",
+      "cd public",
+      "ls",
+      "cd newsletter",
+      "ls",
+      "cd \"2021 May\"",
+      "ls",
+      "cat 2.md"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd public",
+      "ls",
+      "cd newsletter",
+      "ls",
+      "cd \"2021 May\"",
+      "ls",
+      "cat 2.md"
+    ],
+    "filename": "public/newsletter/2021 May/2.md",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "How is the CoffeeDistributionOptimizer created in the main.py file?",
+    "answer": "The CoffeeDistributionOptimizer is created by passing the 'network' as a parameter to the optimizer constructor.",
+    "commands": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cat main.py"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cat main.py"
+    ],
+    "filename": "solver/main.py",
+    "root": "Coffee_Company",
+    "n_level": 1
+  },
+  {
+    "question": "What does the CoffeeDistributionOptimizer::optimize() method do?",
+    "answer": "The CoffeeDistributionOptimizer::optimize() method optimizes the model and prints the optimal cost if the optimization status is optimal.",
+    "commands": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd cpp",
+      "ls",
+      "cat CoffeeDistributionOptimizer.cpp"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd cpp",
+      "ls",
+      "cat CoffeeDistributionOptimizer.cpp"
+    ],
+    "filename": "solver/src/cpp/CoffeeDistributionOptimizer.cpp",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "What happens if the model status is not optimal when running the CoffeeDistributionOptimizer::optimize() method?",
+    "answer": "If the model status is not optimal, the method will print \"Not solved to optimality. Optimization status: <status>\".",
+    "commands": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd cpp",
+      "ls",
+      "cat CoffeeDistributionOptimizer.cpp"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd cpp",
+      "ls",
+      "cat CoffeeDistributionOptimizer.cpp"
+    ],
+    "filename": "solver/src/cpp/CoffeeDistributionOptimizer.cpp",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "Who are the founders of Opti Coffee and how did they start the company?",
+    "answer": "The founders of Opti Coffee are Jake and Mia, who met at a barista competition and decided to pursue their dream of creating their own coffee brand. They started with a small roastery in their garage, where they experimented with different beans, roasts, and blends.",
+    "commands": [
+      "ls",
+      "cd public",
+      "ls",
+      "cat our_coffee.md",
+      "ls",
+      "cat contact_info.md",
+      "ls",
+      "cat our_company.md"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd public",
+      "ls",
+      "cat our_company.md"
+    ],
+    "filename": "public/our_company.md",
+    "root": "Coffee_Company",
+    "n_level": 1
+  },
+  {
+    "question": "What are the values and vision that Opti Coffee shares with its coffee farmers, traders, and roasters?",
+    "answer": "Opti Coffee shares values and vision with its coffee farmers, traders, and roasters to ensure that the coffee is ethically sourced, sustainably grown, and fairly traded.",
+    "commands": [
+      "ls",
+      "cd public",
+      "ls",
+      "cat our_company.md"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd public",
+      "ls",
+      "cat our_company.md"
+    ],
+    "filename": "public/our_company.md",
+    "root": "Coffee_Company",
+    "n_level": 1
+  },
+  {
+    "question": "How can a new supplier be added to the distribution network?",
+    "answer": "A new supplier can be added to the distribution network by using the function `add_supplier` which takes a `Supplier` object as a parameter.",
+    "commands": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd cpp",
+      "ls",
+      "cat DistributionNetwork.h"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd cpp",
+      "ls",
+      "cat DistributionNetwork.h"
+    ],
+    "filename": "solver/src/cpp/DistributionNetwork.h",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "What function is used to set the shipping cost from a roastery to a cafe?",
+    "answer": "The function `set_shipping_cost_from_roastery_to_cafe` is used to set the shipping cost from a roastery to a cafe.",
+    "commands": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd cpp",
+      "ls",
+      "cat DistributionNetwork.h"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd cpp",
+      "ls",
+      "cat DistributionNetwork.h"
+    ],
+    "filename": "solver/src/cpp/DistributionNetwork.h",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "",
+    "answer": "",
+    "commands": [
+      "ls",
+      "cat \"Financial Plan.md\"",
+      "ls",
+      "cd visualization",
+      "ls",
+      "cat membership_duration.py"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd visualization",
+      "ls",
+      "cat membership_duration.py"
+    ],
+    "filename": "visualization/membership_duration.py",
+    "root": "Coffee_Company",
+    "n_level": 1
+  },
+  {
+    "question": "What happens if the model does not have an optimal solution?",
+    "answer": "If the model does not have an optimal solution, the function will log a message saying \"No optimal solution found\" and will not log the solution.",
+    "commands": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd cpp",
+      "ls",
+      "cat CoffeeDistributionOptimizer.cpp"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd cpp",
+      "ls",
+      "cat CoffeeDistributionOptimizer.cpp"
+    ],
+    "filename": "solver/src/cpp/CoffeeDistributionOptimizer.cpp",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "What is the signature brew offered at Seattle Cafe? ",
+    "answer": "The signature brew at Seattle Cafe is the 'Emerald Drip', which offers a smooth, rich flavor with subtle hints of chocolate and hazelnut.",
+    "commands": [
+      "ls",
+      "cd public",
+      "ls",
+      "cat cafe.md"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd public",
+      "ls",
+      "cat cafe.md"
+    ],
+    "filename": "public/cafe.md",
+    "root": "Coffee_Company",
+    "n_level": 1
+  },
+  {
+    "question": "What is the standout beverage at Morning Cafe in Kirkland? ",
+    "answer": "The standout beverage at Morning Cafe in Kirkland is the 'Lakeside Mocha', which is a delightful concoction of dark chocolate, steamed milk, and a shot of espresso, topped with whipped cream and a drizzle of caramel.",
+    "commands": [
+      "ls",
+      "cd public",
+      "ls",
+      "cat our_company.md",
+      "ls",
+      "cd newsletter",
+      "ls",
+      "cd ..",
+      "ls",
+      "cat cafe.md"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd public",
+      "ls",
+      "cat cafe.md"
+    ],
+    "filename": "public/cafe.md",
+    "root": "Coffee_Company",
+    "n_level": 1
+  },
+  {
+    "question": "",
+    "answer": "",
+    "commands": [
+      "ls",
+      "cat \"Employee Benefits.md\"",
+      "ls",
+      "cat \"Quality Control Manuals.md\"",
+      "ls",
+      "cat \"Marketing Strategies.md\"",
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd cpp",
+      "ls",
+      "cat Roastery.h",
+      "ls",
+      "cat Roastery.cpp"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd cpp",
+      "ls",
+      "cat Roastery.cpp"
+    ],
+    "filename": "solver/src/cpp/Roastery.cpp",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "How does the method handle the case when no bean with the given name is found in the sell_price_history.csv file?",
+    "answer": "It throws an IllegalArgumentException with a message indicating that no bean with the given name is found.",
+    "commands": [
+      "ls",
+      "cd database",
+      "ls",
+      "cd ..",
+      "ls",
+      "cd visualization",
+      "ls",
+      "cd java",
+      "ls",
+      "cat BeanPrice.java"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd visualization",
+      "ls",
+      "cd java",
+      "ls",
+      "cat BeanPrice.java"
+    ],
+    "filename": "visualization/java/BeanPrice.java",
+    "root": "Coffee_Company",
+    "n_level": 2
+  },
+  {
+    "question": "How does the Supplier class store shipping costs for different roasteries?",
+    "answer": "The Supplier class stores shipping costs for different roasteries using a HashMap called shippingCosts, where the key is the roastery name and the value is the shipping cost.",
+    "commands": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd java",
+      "ls",
+      "cat Supplier.java"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd java",
+      "ls",
+      "cat Supplier.java"
+    ],
+    "filename": "solver/src/java/Supplier.java",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "What happens when the capacity of a supplier needs to be reduced?",
+    "answer": "When the capacity of a supplier needs to be reduced, the reduceCapacity method first validates if the requested quantity is less than or equal to the current capacity. If it is, the capacity is reduced by the requested quantity. If the requested quantity exceeds the capacity, an IllegalArgumentException is thrown.",
+    "commands": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd ..",
+      "ls",
+      "cd src",
+      "ls",
+      "cd java",
+      "ls",
+      "cat Supplier.java"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd java",
+      "ls",
+      "cat Supplier.java"
+    ],
+    "filename": "solver/src/java/Supplier.java",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "Write a method from the Supplier class that allows for the increase of the capacity.",
+    "answer": "The method from the Supplier class that allows for the increase of the capacity is increaseCapacity, which takes an integer quantity as a parameter and increases the capacity by that quantity.",
+    "commands": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd java",
+      "ls",
+      "cat Supplier.java"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd solver",
+      "ls",
+      "cd src",
+      "ls",
+      "cd java",
+      "ls",
+      "cat Supplier.java"
+    ],
+    "filename": "solver/src/java/Supplier.java",
+    "root": "Coffee_Company",
+    "n_level": 3
+  },
+  {
+    "question": "",
+    "answer": "",
+    "commands": [
+      "ls",
+      "cd public",
+      "ls",
+      "cat cafe.md"
+    ],
+    "optimal_path": [
+      "ls",
+      "cd public",
+      "ls",
+      "cat cafe.md"
+    ],
+    "filename": "public/cafe.md",
+    "root": "Coffee_Company",
+    "n_level": 1
+  },
+  {
     "question": "What are the performance metrics for the quantized models (Int8 and Int4) compared to the BF16 model?",
     "answer": "The quantized model (Int8 and Int4) performance metrics can be seen in the table, with values for MMLU, CEval (val), GSM8K, and Humaneval for both the Qwen-7B-Chat and Qwen-14B-Chat models.",
     "commands": [
