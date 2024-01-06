@@ -39,11 +39,8 @@ generation_config = GenerationConfig(
 )
 
 for data in dataset:
-    if "root" not in data.keys():
-        # Only for file_search_coffee.json
-        root = "coffee_roasting_dataset"
-    else:
-        root = data["root"]
+    root = data["root"]
+    print(root)
     root = os.path.join(script_args.repo_dir, root)
 
     # for _cmds in [data["commands"], data["optimal_path"]]:

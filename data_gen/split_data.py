@@ -5,6 +5,7 @@ from transformers import HfArgumentParser
 
 from experiment_args import ScriptArguments
 
+IGNORE_LIST = ["langchain-tutorials-main", "the-algorithm-main"]
 
 def read_json_file(file_path):
     with open(file_path, 'r') as file:
@@ -27,6 +28,8 @@ for file in files:
     data = read_json_file(file_path)
     for d in data:
         repo = d['root']
+        if repo in IGNORE_LIST:
+            continue
         if repo not in repo_data:
             repo_data[repo] = []
         repo_data[repo].append(d)
