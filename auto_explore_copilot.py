@@ -67,9 +67,9 @@ class AutoExploreCopilot():
             self,
             repo_root: str,
             sandbox_dir: str,
+            file_save_path: str,
             horizon: int,
             generation_config: GenerationConfig,
-            file_save_path: str,
             interaction_type: str,
             model_type: str,
             model_name: str = None,
@@ -80,7 +80,6 @@ class AutoExploreCopilot():
             ),
             leaveout_prob: float = 0,
             shuffle_action: bool = False,
-            easy: bool = False,
             need_output_msgs: bool = True):
         """
         A copilot to help language models explore a repo.
@@ -88,13 +87,13 @@ class AutoExploreCopilot():
         Args:
         - `repo_root` (str): The root directory of the repo.
         - `sandbox_dir` (str): The directory to store the sandbox.
+        - `file_save_path` (str): The path to save the new or changed files.
         - `horizon` (int): The horizon (number of interactions) for each episode.
         - `temperature` (float): The temperature of the language model.
         - `top_p` (float): The top_p of the language model.
         - `top_k` (int): The top_k of the language model.
         - `max_token_length` (int): The maximum total token length for chat completion.
         - `max_new_tokens` (int): The maximum new tokens.
-        - `file_save_path` (str): The path to save the new or changed files.
         - `interaction_type` (str): The type of the interaction, with choices
         in ['train', 'inference', 'debug'].
         - `model_type` (str): The type of the model to use, with choices
@@ -116,7 +115,6 @@ class AutoExploreCopilot():
         files. Only used when `interaction_type` is 'train', and passed to the
         sandbox.
         - `shuffle_action` (bool): Whether to shuffle the actions.
-        - `easy` (bool): Whether to use easy mode, which omits cat operations.
         - `need_output_msgs` (bool): Whether to output the messages after each act.
         """
         assert interaction_type in [
@@ -132,9 +130,7 @@ class AutoExploreCopilot():
             assert model_type != "null", "Must provide a model for inference."
 
         if model_type == "local":
-            assert (model is not None
-                    and tokenizer is not None), ("For local model, provide the "
-                                                 "model and the tokenizer.")
+            # assert (model is not None and tokenizer is not None), ("For local model, provide the model and the tokenizer.")
             if interaction_type == "train":
                 assert cost_function is not None, ("For training, provide the "
                                                    "cost function.")
@@ -165,7 +161,6 @@ class AutoExploreCopilot():
         self.terminate_criteria = terminate_criteria
         self.leaveout_prob = leaveout_prob
         self.shuffle_action = shuffle_action
-        self.easy = easy
         self.need_output_msgs = need_output_msgs
 
     def set_question(self, question: str, target_file: str = ""):
@@ -184,9 +179,10 @@ class AutoExploreCopilot():
             "r").read()
 
         # Store the generation logs for training
-        self.sys_infos = []
-        self.generation_logs = []
-        self.whole_msgs = []
+        self._sys_infos = []
+        # self._generation_logs = []
+        self._costs = []
+        self._whole_msgs = []
         self.cmd_hisotry = []
 
         # Initialize the files that have been visited for command filtering
@@ -235,7 +231,11 @@ class AutoExploreCopilot():
 
         while not self.is_finished:
             self.build_cur_msgs()
-            response = self.get_response()
+            try:
+                response = self.get_response()
+            except Exception as e:
+                print(e)
+                continue
             self.act_with_response(response)
 
         self.wrap_up()
@@ -257,31 +257,31 @@ class AutoExploreCopilot():
             ret = transformer_text_completion(
                 model=self.model,
                 tokenizer=self.tokenizer,
-                prompts=["\n".join([msg[1] for msg in self.cur_msgs])],
+                prompts=["\n".join([msg[1] for msg in self._cur_msgs])],
                 generation_config=self.generation_config)[0]
             response = self.use_lm_ret(ret)
 
         elif self.model_type == "remote":
             # Get response from remote model
             response = self.api.reply(
-                agent_name=self.cur_msgs[-1][0],
-                msg=self.cur_msgs[-1][1],
+                agent_name=self._cur_msgs[-1][0],
+                msg=self._cur_msgs[-1][1],
                 num_response=1,
                 temperature=self.generation_config.temperature,
                 top_p=self.generation_config.top_p,
-                prev_msgs=self.cur_msgs[:-1],
+                prev_msgs=self._cur_msgs[:-1],
                 model=self.model_name)[0]
 
         return response
 
-    def use_lm_ret(self, ret: dict) -> str:
-        response = ret["generation"]["content"].strip(" ")
-        if response == "":
-            response = " "
+    # def use_lm_ret(self, ret: dict) -> str:
+    #     response = ret["generation"]["content"].strip(" ")
+    #     if response == "":
+    #         response = " "
 
-        ret.update({"cost": 0, "step": self.step})
-        self.generation_logs.append(ret)
-        return response
+    #     ret.update({"cost": 0, "step": self.step})
+    #     self._generation_logs.append(ret)
+    #     return response
 
     def wrap_up(self):
         """
@@ -290,9 +290,11 @@ class AutoExploreCopilot():
         """
         if self.interaction_type == "train":
             if self.terminate_criteria.can_terminate():
-                self.generation_logs[-1]["cost"] -= self.horizon
+                # self._generation_logs[-1]["cost"] -= self.horizon
+                self._costs[-1] -= self.horizon
             else:
-                self.generation_logs[-1]["cost"] += self.horizon
+                # self._generation_logs[-1]["cost"] += self.horizon
+                self._costs[-1] += self.horizon
 
         # Save the new or changed files
         os.makedirs(self.file_save_path, exist_ok=True)
@@ -316,7 +318,7 @@ class AutoExploreCopilot():
         - list: The message history.
         """
 
-        return self.whole_msgs
+        return self._whole_msgs
 
     def build_cur_msgs(self):
         """
@@ -338,7 +340,7 @@ class AutoExploreCopilot():
         if self.ans_cmd != "":
             self.ans_cmd = self.choices[self.cmd_list.index(self.ans_cmd)]
 
-        self.cur_msgs = [
+        self._cur_msgs = [
             ("system",
              self.start_prompt.format(
                  TASK=self.question,
@@ -346,34 +348,34 @@ class AutoExploreCopilot():
                  FILES_UNDER_CWD="\n".join(
                      [wrap_path(f) for f in files_under_cwd]),
                  CMD_HIST="\n".join(self.cmd_hisotry),
-                 EXEC_RES="\n".join([r[1] for r in self.sys_infos]),
+                 EXEC_RES="\n".join([r[1] for r in self._sys_infos]),
                  CMD_LIST="\n".join([
                      self.choices[i] + ". " + cmd
                      for i, cmd in enumerate(self.cmd_list)
                  ])) + " " + RESPONSE_TEMPLATE)
         ]
-        self.sys_infos = []
+        self._sys_infos = []
 
         if self.need_output_msgs:
-            print(colored_string(self.cur_msgs[0]))
+            print(colored_string(self._cur_msgs[0]))
 
     def act_with_response(self, response: str) -> str:
-        """
-
-        """
+        self._costs.append(0)
         try:
             ret = self._act_with_response(response)
         except Exception as e:
             ret = "Continue"
-            self.sys_infos.append(("system", f"Runtime Error: {e}"))
+            self._sys_infos.append(("system", f"Runtime Error: {e}"))
 
         if self.interaction_type == "train":
-            self.generation_logs[-1]["cost"] = self.cost_function.call(
-                user_msgs=self.cur_msgs + self.sys_infos)
+            # self._generation_logs[-1]["cost"] = self.cost_function.call(user_msgs=self._cur_msgs + self._sys_infos)
+            self._costs[-1] = self.cost_function.call(
+                user_msgs=self._cur_msgs + self._sys_infos)
 
         ### For first step training only
         if self.ans_cmd != "" and response == self.ans_cmd:
-            self.generation_logs[-1]["cost"] = -100 - self.horizon
+            # self._generation_logs[-1]["cost"] = -100 - self.horizon
+            self._costs[-1] = -100 - self.horizon
 
         if ret == "Exit" or self.step == self.horizon:
             self.is_finished = True
@@ -381,14 +383,14 @@ class AutoExploreCopilot():
         self.step += 1
 
     def _act_with_response(self, response: str) -> str:
-        self.cur_msgs.append(("assistant", response))
-        self.whole_msgs.append(self.cur_msgs)
+        self._cur_msgs.append(("assistant", response))
+        self._whole_msgs.append(self._cur_msgs)
 
         # Only consider the first command
         if response in self.choices:
             idx = self.choices.index(response)
             if idx >= len(self.cmd_list):
-                self.sys_infos.append(("user", "Error: Invalid choice."))
+                self._sys_infos.append(("user", "Error: Invalid choice."))
                 return "Continue"
             commands = extract_commands(f"```bash\n{self.cmd_list[idx]}\n```",
                                         only_first=True)
@@ -396,12 +398,12 @@ class AutoExploreCopilot():
             commands = []
 
         for cmd in commands:
-            self.sys_infos.append(("user", "Executing: " + " ".join(cmd)))
+            self._sys_infos.append(("user", "Executing: " + " ".join(cmd)))
             self._update_cmd_history(self.cwd, " ".join(cmd))
 
             if cmd[0] == "exit":
                 if len(commands) > 1:
-                    self.sys_infos.append((
+                    self._sys_infos.append((
                         "user", "Error: There are other commands. "
                         "You could only use exit standalone in a single response."
                     ))
@@ -416,41 +418,70 @@ class AutoExploreCopilot():
                 command_output, status = self.sandbox.run_command(cmd)
                 self.terminate_criteria.update_status(**status)
 
-                if self.easy:
-                    if cmd[0] == "cat":
-                        command_output = ""
-
-                self.sys_infos.append(("user", command_output))
+                self._sys_infos.append(("user", command_output))
 
         if commands == []:
-            self.sys_infos.append(
+            self._sys_infos.append(
                 ("user", "Warning: You didn't give me any command. "
                  "Further explore the repo by sending me system commands: "
                  f"{', '.join(self.supported_cmds)}."))
 
         return "Continue"
-
-    def get_generation_logs(self):
+    
+    @property
+    def costs(self):
         """
-        Get the generation logs for training.
+        Get the costs for training.
 
         Returns:
-        - list: A list of generation logs, each log following format:
-        {
-            "generation":
-            {
-                "role": str,
-                "content": str,
-            }
-            "tokens": torch.Tensor,
-            "generated_mask": list,
-            "attention_mask": torch.Tensor,
-            "cost": float,
-            "Q_value": float,
-            "step": int,
-        }
+        - list: A list of costs.
         """
-        return self.generation_logs
+        return self._costs
+
+    # @property
+    # def generation_logs(self):
+    #     """
+    #     Get the generation logs for training.
+
+    #     Returns:
+    #     - list: A list of generation logs, each log following format:
+    #     {
+    #         "generation":
+    #         {
+    #             "role": str,
+    #             "content": str,
+    #         }
+    #         "tokens": torch.Tensor,
+    #         "generated_mask": list,
+    #         "attention_mask": torch.Tensor,
+    #         "cost": float,
+    #         "Q_value": float,
+    #         "step": int,
+    #     }
+    #     """
+    #     return self._generation_logs
+    
+    @property
+    def cur_msgs(self):
+        """
+        Get the current messages.
+
+        Returns:
+        - list: A list of messages, each message following format:
+        (role, content)
+        """
+        return self._cur_msgs
+    
+    @property
+    def whole_msgs(self):
+        """
+        Get the whole messages.
+
+        Returns:
+        - list: A list of messages, each message following format:
+        (role, content)
+        """
+        return self._whole_msgs
 
     def _filter_commands(self, sandbox_cwd: str, commands: list) -> list:
         """

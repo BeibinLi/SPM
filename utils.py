@@ -907,6 +907,9 @@ def build_curriculum(dataset: list, merge_first_two: bool, first_k: int) -> list
 
 
 def build_curriculum_and_schedule(dataset: list, args:ScriptArguments) -> (list, list):
+    if not args.easy:
+        dataset = [d for d in dataset if d["question"] != ""]
+
     if args.depth_curriculum:
         dataset = build_curriculum(dataset,
                                    merge_first_two=args.merge_first_two,

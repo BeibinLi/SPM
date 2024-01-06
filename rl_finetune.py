@@ -15,6 +15,7 @@ from evaluate import batched_answer, calc_Q_values
 from experiment_args import ScriptArguments
 from functions.cost import StepCost, KeywordCost, NumTokenCost, SynthesizedCost
 from model_utils import CriticModel, create_and_prepare_model
+from nat_lang_envs.auto_explore import AutoExploreEnv
 from trainers import TRAINERS
 from utils import (build_curriculum_and_schedule, get_exp_id,
                    load_script_args, load_dataset, ReplayBuffer)
@@ -78,7 +79,8 @@ synthesized_cost = SynthesizedCost(
 
 # Init repo cache
 repo_cache = RepoCache(original_root=script_args.repo_dir,
-                       dir=script_args.sandbox_dir)
+                       dir=script_args.sandbox_dir,
+                       file_save_path="changed_files/")
 
 # Build dataset
 dataset = load_dataset(script_args.task_file)
@@ -144,13 +146,13 @@ for iter in (pbar := tqdm(range(script_args.max_steps), desc="Iter")):
         random.shuffle(cur_dataset)
 
     cur_logs, cur_msgs = batched_answer(
+        env_type=AutoExploreEnv,
         batch=batch,
         model=model,
         tokenizer=tokenizer,
         repo_cache=repo_cache,
         horizon=script_args.horizon,
         generation_config=generation_config,
-        file_save_path="changed_files/",
         cost_function=step_cost,
         leaveout_prob=script_args.leaveout_prob,
         shuffle_action=script_args.shuffle_action,
@@ -176,18 +178,6 @@ for iter in (pbar := tqdm(range(script_args.max_steps), desc="Iter")):
     # Train
     cur_loss, cur_critic_loss = [], []
     datas = [cur_logs, replay_buffer.sample(script_args.per_device_train_batch_size)]
-    
-    for x in datas[0]:
-        for y in x:
-            y["source"] = "current"
-
-    for x in datas[1]:
-        for y in x:
-            y["source"] = "replay_buffer"
-    
-    # for log in datas[1]:
-    #     print(log[0]["Q_value"], end=" ")
-    # print()
     
     for data in datas:
         train_result = trainer.train(data)

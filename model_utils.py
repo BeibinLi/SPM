@@ -361,8 +361,12 @@ def transformer_text_completion(model: PeftModel, tokenizer: AutoTokenizer,
         "tokens": torch.Tensor,
         "generated_mask": torch.Tensor,
     }, ...]
+    If corresponding prompt is None, the generation content will be None.
     """
     shrink_head = hasattr(model, "shrink_head") and model.shrink_head
+
+    masks = [p is not None for p in prompts]
+    prompts = [p for p in prompts if p]
 
     tokenized = tokenizer(prompts,
                           padding=True,
@@ -390,7 +394,17 @@ def transformer_text_completion(model: PeftModel, tokenizer: AutoTokenizer,
          torch.ones((len(prompts), gen_len), dtype=torch.bool)), dim=1)
 
     res = []
-    for i in range(len(prompts)):
+    i = 0
+    for m in masks:
+        if not m:
+            res.append({"prompt": None,
+                        "generation": {
+                            "role": "assistant",
+                            "content": None,
+                        },
+                        "tokens": None,
+                        "generated_mask": None,})
+            continue
         newly_generated = sequences[i, max_len:]
         if shrink_head:
             decoded = "".join([CHOICES[x] for x in newly_generated])
@@ -425,6 +439,8 @@ def transformer_text_completion(model: PeftModel, tokenizer: AutoTokenizer,
             "entropy":
                 entropy.item(),
         })
+
+        i += 1
 
     return res
 
@@ -500,9 +516,6 @@ def calc_probs_log_probs(
     
         filtered_tokens = tokens[:, pos].masked_fill(~generated_mask[:, pos], 0)
 
-        # if pos == outputs.logits.shape[1] - 1:
-        #     print(colored("calc_log_prob:", "yellow"), filtered_tokens, torch.topk(scores, k=5))
-
         if calc_probs:
             # get probs of current position
             step_probs = nn.functional.softmax(scores, dim=-1)
@@ -520,9 +533,6 @@ def calc_probs_log_probs(
         probs[generated_mask[:, pos]] *= step_probs[generated_mask[:, pos]]
         log_probs[generated_mask[:, pos]] += step_log_probs[generated_mask[:,
                                                                            pos]]
-        
-        if torch.isinf(log_probs).any():
-            pdb.set_trace()
 
     return {
         "probs": probs if calc_probs else None,

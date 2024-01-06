@@ -1,6 +1,6 @@
 import string
 
-CHOICES = [str(i) for i in range(100)] + list(string.ascii_letters)
+CHOICES = [str(i) for i in range(200)] + list(string.ascii_letters)
 RESPONSE_TEMPLATE = " # Response:\n"
 
 
@@ -51,7 +51,7 @@ CODE_SUFFIXES = [
 ]
 
 # Common data file suffixes
-DATA_SUFFIXES = [".csv", ".tsv", ".json"]
+DATA_SUFFIXES = [".csv", ".tsv", ".json", ".yaml", ".yml"]
 
 # Common text file suffixes
 TEXT_SUFFIXES = [".txt", ".md"]

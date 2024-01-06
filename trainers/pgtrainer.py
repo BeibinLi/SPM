@@ -62,7 +62,7 @@ class PGTrainer(PolicyTrainer):
             loss = torch.sum(advantages * log_probs) / len(data)
 
             if torch.isinf(loss).any():
-                pdb.set_trace()
+                continue
             
             loss.backward()
             losses.append(loss.item())

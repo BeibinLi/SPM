@@ -6,7 +6,7 @@ from transformers import AutoTokenizer, GenerationConfig, HfArgumentParser
 from auto_explore_copilot import AutoExploreCopilot
 from experiment_args import ScriptArguments
 from functions.terminate import AnytimeTerminate
-from utils import load_dataset, unwrap_path
+from utils import load_dataset, unwrap_path, wrap_path
 
 
 def dump(data: list, filename: str):
@@ -46,7 +46,7 @@ for data in dataset:
         root = data["root"]
     root = os.path.join(script_args.repo_dir, root)
 
-    #for cmds in [data["commands"], data["optimal_path"]]:
+    # for _cmds in [data["commands"], data["optimal_path"]]:
     for _cmds in [data["optimal_path"]]:
         cmds = []
         for cmd in _cmds:
@@ -54,12 +54,12 @@ for data in dataset:
                 continue
             for op in ["cd", "cat"]:
                 if cmd.startswith(op):
-                    file = unwrap_path(cmd.replace(op, "").strip())
-                    cmd = op + " " + file
+                    file = unwrap_path(cmd[len(op):].strip())
+                    cmd = op + " " + wrap_path(file)
                     break
             cmds.append(cmd)
 
-        cmds.append(cmds[-1].replace("cat", "id"))
+        cmds.append("id" + cmds[-1][len("cat"):])
         cmds.append("exit")
 
         copilot = AutoExploreCopilot(repo_root=root,
