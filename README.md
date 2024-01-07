@@ -8,18 +8,24 @@ The data contains two parts: repo and task.
 Place the repos at `<REPO_PATH>/`, e.g. `data/repos/auto_explore/` and `data/repos/coffee_roasting_dataset`
 Place the `.json` task data files at `<TASK_PATH>/*.json`, e.g., `data/tasks/auto_explore.json` and `data/repos/coffee.json`.
 There should be a `root` key in the task files specifying which repo it is using.
+
+First, split data into `train/`, `validate/` and `test/` by running
+```bash
+python -m data_gen.split_data --task_file=<TASK_PATH> --repo_dir=<REPO_PATH>
+```
+
 Then, run
 ```bash
-python -m data_gen.gen_auto_explore_markov --task_file=<TASK_PATH> --repo_dir=<REPO_PATH>
+python -m data_gen.gen_auto_explore_markov --task_file=<TASK_PATH>/train/ --repo_dir=<REPO_PATH>
 ```
-to generate data for supervised pretraining.
+to generate data for supervised pretraining using only data under `train/`.
 In the same example,
 ```bash
-python -m data_gen.gen_auto_explore_markov --task_file=data/tasks/ --repo_dir=data/repos/
+python -m data_gen.gen_auto_explore_markov --task_file=data/tasks/train/ --repo_dir=data/repos/
 ```
 You can generate data for a single task file by
 ```bash
-python -m data_gen.gen_auto_explore_markov --task_file=data/tasks/coffee.json --repo_dir=data/repos/
+python -m data_gen.gen_auto_explore_markov --task_file=data/tasks/train/coffee.json --repo_dir=data/repos/
 ```
 
 

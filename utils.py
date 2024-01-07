@@ -1,63 +1,18 @@
-"""Utility functions"""
+import heapq
 import json
 import os
 import random
 import shlex
 import string
+import tiktoken
+import yaml
+
+from termcolor import colored
 from typing import List
 
-import tiktoken
-from termcolor import colored
-
-# exit should always be the last
-SUPPORTED_CMDS = [
-    "cd", "ls", "cat", "head", "tail", "echo", "python", "pip", "id", "exit"
-]
-FULL_CMDS = SUPPORTED_CMDS + [
-    "pwd",
-    "mkdir",
-    "rmdir",
-    "touch",
-    "rm",
-    "cp",
-    "mv",
-    "less",
-    "grep",
-    "find",
-    "who",
-    "w",
-    "ps",
-    "top",
-    "kill",
-    "tar",
-    "chmod",
-    "chown",
-    "df",
-    "du",
-    "ifconfig",
-    "ping",
-    "netstat",
-    "ssh",
-    "scp",
-]
-
-# Common programming language suffixes
-CODE_SUFFIXES = [
-    ".py", ".c", ".cpp", ".cxx", ".cc", ".h", ".hpp", ".hxx", ".cs", ".java",
-    ".go", ".ipynb"
-]
-
-# Common data file suffixes
-DATA_SUFFIXES = [".csv", ".tsv", ".json"]
-
-# Common text file suffixes
-TEXT_SUFFIXES = [".txt", ".md"]
-
-# Executable file suffixes
-EXEC_SUFFIXES = [".sh", ".bash", ".zsh"]
-
-ALLOWED_FILE_SUFFIXES = CODE_SUFFIXES + DATA_SUFFIXES + TEXT_SUFFIXES + EXEC_SUFFIXES
-
+from constants import (ALLOWED_FILE_SUFFIXES, CODE_SUFFIXES, DATA_SUFFIXES,
+                       TEXT_SUFFIXES, FULL_CMDS, OVERRIDE_KEYS)
+from experiment_args import ScriptArguments
 
 class ReplayBuffer:
 
@@ -77,11 +32,51 @@ class ReplayBuffer:
         self.weights = self.weights[-self.max_size:]
 
     def sample(self, batch_size: int):
-        if self.max_size == 0:
+        if len(self.buffer) == 0:
             return []
 
         return random.choices(self.buffer, weights=self.weights, k=batch_size)
 
+    def print(self, top_k: int = 10):
+        if len(self.buffer) == 0:
+            return
+        
+        print(f"Replay buffer top {top_k}:")
+        top_k_items = heapq.nlargest(top_k, enumerate(self.weights), key=lambda x: x[1])
+        sum_weights = sum(self.weights)
+        for i, w in top_k_items:
+            print(f"({self.buffer[i][0]['Q_value']}, {w / sum_weights:.2f})", end="")
+        print()
+
+def load_script_args(script_args: ScriptArguments,
+                     override_keys: list = OVERRIDE_KEYS) -> ScriptArguments:
+    """
+    If `script_args.load_dir` is not None, load the setting.yml from this
+    directory if possible. After loading, override the keys in `override_keys`.
+
+    Args:
+    - `script_args` (ScriptArguments): the arguments for training.
+    - `override_keys` (list): the keys to override.
+
+    Returns:
+    - ScriptArguments: The updated script arguments.
+    """
+
+    if script_args.load_dir:
+        file = os.path.join(script_args.load_dir, "../setting.yml")
+        if os.path.exists(file):
+            old_script_args = yaml.safe_load(open(file, "r"))
+
+            for key, value in old_script_args.items():
+                if key in override_keys and hasattr(script_args, key):
+                    setattr(script_args, key, value)
+        else:
+            print(
+                colored(
+                    "We cannot find the setting.yml file from the load directory.",
+                    "yellow"))
+
+    return script_args
 
 def list_all_actions(root: str,
                      curr_dir: str,
@@ -462,11 +457,11 @@ def trunc_text(file: str, content: str) -> str:
         file = file[1:-1]
 
     # Truncate the content depending on file type
-    if file.endswith(CODE_SUFFIXES):
+    if file.endswith(tuple(CODE_SUFFIXES)):
         return _trunc_text(content, 1000, 500)
-    elif file.endswith(DATA_SUFFIXES):
+    elif file.endswith(tuple(DATA_SUFFIXES)):
         return _trunc_text(content, 5, 500)
-    elif file.endswith(TEXT_SUFFIXES):
+    elif file.endswith(tuple(TEXT_SUFFIXES)):
         return _trunc_text(content, 100, 500)
     else:
         return _trunc_text(content, 10, 500)
@@ -879,7 +874,7 @@ def load_dataset(task_file: str) -> list:
     return dataset
 
 
-def build_curriculum(dataset: list, first_k: int) -> list:
+def build_curriculum(dataset: list, merge_first_two: bool, first_k: int) -> list:
     """
     Build a curriculum for the dataset.
     The curriculum increases in the depth of the target file.
@@ -898,13 +893,52 @@ def build_curriculum(dataset: list, first_k: int) -> list:
     dataset_by_depth = []
     for i in range(len(dataset)):
         cur_depth = dataset[i]["filename"].count("/")
-        if cur_depth > depth:
+        if cur_depth > depth and ((merge_first_two and cur_depth != 1) or not merge_first_two):
             depth = cur_depth
             dataset_by_depth.append([dataset[i]])
         else:
             dataset_by_depth[-1].append(dataset[i])
-    
+
     curriculum = dataset_by_depth[:first_k]
-    curriculum.append(sum(dataset_by_depth[first_k:], []))
+    if first_k < len(dataset_by_depth):
+        curriculum.append(sum(dataset_by_depth[first_k:], []))
 
     return curriculum
+
+
+def build_curriculum_and_schedule(dataset: list, args:ScriptArguments) -> (list, list):
+    if not args.easy:
+        dataset = [d for d in dataset if d["question"] != ""]
+
+    if args.depth_curriculum:
+        dataset = build_curriculum(dataset,
+                                   merge_first_two=args.merge_first_two,
+                                   first_k=args.merge_after_first_k)
+    else:
+        dataset = [dataset]
+
+    if args.few_data:
+        dataset = [dataset[0][:args.few_data]]
+
+    print(colored("Curriculum:", "green"))
+    for i, d in enumerate(dataset):
+        if i == args.curriculum_index or args.curriculum_index == -1:
+            print(colored("[x] ", "green"), end="")
+        else:
+            print(colored("[ ] ", "green"), end="")
+        print(colored(f"Level {i}: {len(d)} data", "green"))
+
+    if args.curriculum_index != -1:
+        dataset = [dataset[args.curriculum_index]]
+
+    tot_visits = sum([len(d) for d in dataset])
+    step_per_data = args.max_steps // tot_visits
+
+    # Iters to add new curriculum
+    trigger_set = [
+        step_per_data * sum([len(d) for d in dataset[:i]]) for i in range(len(dataset))
+    ]
+
+    print(colored("Iters to increase level:" + ", ".join([str(x) for x in trigger_set]), "green"))
+
+    return dataset, trigger_set

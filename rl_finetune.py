@@ -1,5 +1,6 @@
 import json
 import os
+import pdb
 import random
 import torch
 
@@ -7,28 +8,19 @@ from math import exp
 from statistics import mean
 from termcolor import colored
 from tqdm import tqdm
-from transformers import (GenerationConfig, HfArgumentParser)
+from transformers import GenerationConfig, HfArgumentParser
 
 from auto_explore_sandbox import RepoCache
-from evaluate import batched_answer
+from evaluate import batched_answer, calc_Q_values
 from experiment_args import ScriptArguments
 from functions.cost import StepCost, KeywordCost, NumTokenCost, SynthesizedCost
-from functions.training import TRAINERS
-from model_utils import (CriticModel, load_script_args,
-                         create_and_prepare_model)
-from utils import build_curriculum, get_exp_id, load_dataset, ReplayBuffer
+from model_utils import CriticModel, create_and_prepare_model
+from nat_lang_envs.auto_explore import AutoExploreEnv
+from trainers import TRAINERS
+from utils import (build_curriculum_and_schedule, get_exp_id,
+                   load_script_args, load_dataset, ReplayBuffer)
 
 LOG_KEYS = ["Q_value", "prob", "entropy", "cost", "step"]
-
-
-def calc_Q_values(logs, entropy_coef):
-    for log in logs:
-        tot_cost = 0
-        for i in range(len(log) - 1, -1, -1):
-            tot_cost += log[i]["cost"] - entropy_coef * log[i]["entropy"]
-            # tot_cost += log[i]["cost"] + entropy_coef * log[i]["log_prob"]
-            log[i]["Q_value"] = tot_cost
-
 
 def calc_avg(arr):
     _arr = arr.copy()
@@ -42,6 +34,11 @@ parser = HfArgumentParser(ScriptArguments)
 script_args = load_script_args(parser.parse_args_into_dataclasses()[0])
 
 assert script_args.trainer in TRAINERS, f"Invalid trainer: {script_args.trainer}."
+
+if script_args.disable_dropout:
+    if script_args.lora_dropout != 0:
+        print(colored(f"disable_dropout is set to True. lora_dropout is overridden to 0.", "yellow"))
+        script_args.lora_dropout = 0
 
 # Setup policy network
 tokenizer, peft_config, model = create_and_prepare_model(script_args)
@@ -82,35 +79,12 @@ synthesized_cost = SynthesizedCost(
 
 # Init repo cache
 repo_cache = RepoCache(original_root=script_args.repo_dir,
-                       dir=script_args.sandbox_dir)
+                       dir=script_args.sandbox_dir,
+                       file_save_path="changed_files/")
 
 # Build dataset
 dataset = load_dataset(script_args.task_file)
-if script_args.depth_curriculum:
-    dataset = build_curriculum(dataset, first_k=3)
-else:
-    dataset = [dataset]
-
-if script_args.few_data:
-    dataset = [dataset[0][:script_args.few_data]]
-
-if script_args.skip_first_curriculum:
-    dataset = dataset[1:]
-
-# tot_visits = sum([len(d) * (len(dataset) - i) for i, d in enumerate(dataset)])
-tot_visits = sum([len(d) for d in dataset])
-step_per_data = script_args.max_steps // tot_visits
-script_args.max_steps = step_per_data * tot_visits
-
-# Iters to add new curriculum
-trigger_set = [
-    step_per_data * sum([len(d) for d in dataset[:i]]) for i in range(len(dataset))
-]
-
-print(colored("Curriculum:", "green"))
-for i, d in enumerate(dataset):
-    print(colored(f"Level {i}: {len(d)} data", "green"))
-print(colored("Iters to increase level:" + ", ".join([str(x) for x in trigger_set]), "green"))
+dataset, trigger_set = build_curriculum_and_schedule(dataset, script_args)
 
 # Init curriculum
 curriculum_idx = -1
@@ -122,9 +96,6 @@ logs, msgs = [], []
 train_logs, critic_train_logs = [], []
 
 replay_buffer = ReplayBuffer(script_args.replay_buffer_size)
-
-if script_args.first_curriculum:
-    trigger_set = [0]
 
 # Setup trainer
 generation_config = GenerationConfig(
@@ -175,13 +146,13 @@ for iter in (pbar := tqdm(range(script_args.max_steps), desc="Iter")):
         random.shuffle(cur_dataset)
 
     cur_logs, cur_msgs = batched_answer(
+        env_type=AutoExploreEnv,
         batch=batch,
         model=model,
         tokenizer=tokenizer,
         repo_cache=repo_cache,
         horizon=script_args.horizon,
         generation_config=generation_config,
-        file_save_path="changed_files/",
         cost_function=step_cost,
         leaveout_prob=script_args.leaveout_prob,
         shuffle_action=script_args.shuffle_action,
@@ -200,11 +171,15 @@ for iter in (pbar := tqdm(range(script_args.max_steps), desc="Iter")):
     replay_buffer.add([{
         "data": log,
         "weight": exp(-log[0]["Q_value"] / script_args.horizon)
-    } for log in cur_logs])
+    } for log in cur_logs if log[0]["Q_value"] <= 0])
+
+    replay_buffer.print()
     
     # Train
     cur_loss, cur_critic_loss = [], []
-    for data in [cur_logs, replay_buffer.sample(script_args.per_device_train_batch_size)]:
+    datas = [cur_logs, replay_buffer.sample(script_args.per_device_train_batch_size)]
+    
+    for data in datas:
         train_result = trainer.train(data)
         loss, critic_loss = train_result["loss"], train_result["critic_loss"]
         cur_loss.append(loss)

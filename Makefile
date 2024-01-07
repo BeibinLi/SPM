@@ -4,8 +4,26 @@ b7:
 p7:
 	python supervised_pretrain.py --max_steps 2000 --model_name /mnt/data/llama/converted-7b/ --use_8bit --save_steps 1
 
+
+second_layer:
+	python rl_finetune.py --load_dir=results/123_supervised_pretrain/checkpoint-500/ --easy  \
+	--model_name=/mnt/data/llama/converted-7b/ --max_steps 20000  \
+	--depth_curriculum --curriculum_index 1 \
+	--trainer pg  \
+	--bf16  --use_8bit \
+	--per_device_train_batch_size 1 \
+	--shrink_head
+
+	
 b7rl:
-	python rl_finetune.py --load_dir=results/076_supervised_pretrain/checkpoint-2000/ --use_8bit --max_seq_length=1024 --bf16 --use_critic --model_name=/mnt/data/llama/converted-7b-chat/
+	python rl_finetune.py --load_dir=results/123_supervised_pretrain/checkpoint-500/ --easy  \
+	--model_name=/mnt/data/llama/converted-7b/ --max_steps 20000  \
+	--depth_curriculum  \
+	--trainer pg  \
+	--bf16  --use_8bit \
+	--per_device_train_batch_size 1 \
+	--shrink_head
+	
 
 r7:
 	python rl_finetune.py --use_8bit --max_new_tokens=2 --bf16 --model_name=/mnt/data/llama/converted-7b/ --learning_rate 0.0001

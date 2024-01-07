@@ -1,5 +1,6 @@
 import glob
 import os
+import pdb
 import torch
 import yaml
 
@@ -14,10 +15,10 @@ from transformers.generation.logits_process import LogitsProcessorList
 from transformers.modeling_outputs import SequenceClassifierOutputWithPast
 from typing import Optional, Tuple, Union
 
+from constants import CHOICES, DISABLE_DROPOUT_KWARGS
 from experiment_args import ScriptArguments
 from utils import extract_command_blocks
 
-OVERRIDE_KEYS = ["model_name", "lora_r", "bf16", "fp16", "use_8bit", "use_4bit"]
 
 
 class MLPWithLayerNorm(nn.Module):
@@ -140,44 +141,6 @@ class CriticModel(nn.Module):
         pass
 
 
-def grad_norm(model, pow=2):
-    total_norm = 0
-    for p in model.parameters():
-        if p.grad is not None:
-            total_norm += torch.sum(p.grad.data**pow)
-    return total_norm**(1/pow)
-
-def load_script_args(script_args: ScriptArguments,
-                     override_keys: list = OVERRIDE_KEYS) -> ScriptArguments:
-    """
-    If `script_args.load_dir` is not None, load the setting.yml from this
-    directory if possible. After loading, override the keys in `override_keys`.
-
-    Args:
-    - `script_args` (ScriptArguments): the arguments for training.
-    - `override_keys` (list): the keys to override.
-
-    Returns:
-    - ScriptArguments: The updated script arguments.
-    """
-
-    if script_args.load_dir:
-        file = os.path.join(script_args.load_dir, "../setting.yml")
-        if os.path.exists(file):
-            old_script_args = yaml.safe_load(open(file, "r"))
-
-            for key, value in old_script_args.items():
-                if key in override_keys and hasattr(script_args, key):
-                    setattr(script_args, key, value)
-        else:
-            print(
-                colored(
-                    "We cannot find the setting.yml file from the load directory.",
-                    "yellow"))
-
-    return script_args
-
-
 def create_and_prepare_model(
         args: ScriptArguments) -> (AutoTokenizer, PeftConfig, PeftModel):
     """
@@ -215,12 +178,15 @@ def create_and_prepare_model(
     local_rank = accelerator.process_index
     device_map = {"": local_rank}
 
+    disable_dropout_kwargs = DISABLE_DROPOUT_KWARGS if args.disable_dropout else {}
+
     base_model = AutoModelForCausalLM.from_pretrained(
         args.model_name,
         quantization_config=bnb_config,
         device_map=device_map,
         trust_remote_code=True,
-        cache_dir=args.cache_dir)
+        cache_dir=args.cache_dir,
+        **disable_dropout_kwargs,)
 
     peft_config = LoraConfig(
         lora_alpha=args.lora_alpha,
@@ -235,7 +201,8 @@ def create_and_prepare_model(
         model = PeftModel.from_pretrained(model=base_model,
                                           model_id=args.load_dir,
                                           is_trainable=True,
-                                          config=peft_config)
+                                          config=peft_config,
+                                          **disable_dropout_kwargs,)
         del base_model
 
         tokenizer = AutoTokenizer.from_pretrained(
@@ -254,91 +221,24 @@ def create_and_prepare_model(
             model_max_length=model.config.max_position_embeddings - 1,
             add_prefix_space=False,
         )
+    
+    model.shrink_head = args.shrink_head
+    if args.shrink_head:
+        # Create a new lm_head, with only necessary tokens
+        if isinstance(model.config, GPT2Config):
+            hidden_size = model.config.n_embd
+        elif isinstance(model.config, LlamaConfig):
+            hidden_size = model.config.hidden_size
+        new_lm_head = torch.nn.Linear(hidden_size, len(CHOICES),
+                                      bias=False, device=model.device,
+                                      dtype=model.base_model.model.lm_head. weight.dtype)
+        new_lm_head.weight.requires_grad = False
+        # Copy the weights from the previous lm_head
+        for i, c in enumerate(CHOICES):
+            id = tokenizer.convert_tokens_to_ids(c)
+            new_lm_head.weight.data[i] = model.base_model.model.lm_head.weight.data[id]
 
-    model.config.pad_token_id = tokenizer.eos_token_id
-
-    tokenizer.truncation_side = "left"
-    tokenizer.padding_side = "left"
-    tokenizer.pad_token = tokenizer.eos_token
-
-    return tokenizer, peft_config, model
-
-def create_and_prepare_critic_model(
-        args: ScriptArguments) -> (AutoTokenizer, PeftConfig, PeftModel):
-    """
-    Create and prepare model for PEFT training.
-
-    Args:
-    - `args` (ScriptArguments): the arguments for training.
-
-    Returns:
-    - tuple: A tuple containing:
-        - `tokenizer` (AutoTokenizer): Tokenizer associated with the model.
-        - `config` (PeftConfig): Configuration of the model.
-        - `model` (PeftModel): Loaded model for inference.
-    """
-    compute_dtype = getattr(torch, args.bnb_4bit_compute_dtype)
-
-    bnb_config = BitsAndBytesConfig(
-        load_in_8bit=args.use_8bit,
-        load_in_4bit=args.use_4bit,
-        bnb_4bit_quant_type=args.bnb_4bit_quant_type,
-        bnb_4bit_compute_dtype=compute_dtype,
-        bnb_4bit_use_double_quant=args.use_nested_quant,
-    )
-
-    if compute_dtype == torch.float16 and args.use_4bit:
-        major, _ = torch.cuda.get_device_capability()
-        if major >= 8:
-            print("=" * 80)
-            print(
-                "Your GPU supports bfloat16, you can accelerate training with "
-                "the argument --bf16")
-            print("=" * 80)
-
-    accelerator = Accelerator()
-    local_rank = accelerator.process_index
-    device_map = {"": local_rank}
-
-    base_model = AutoModelForCausalLM.from_pretrained(
-        args.model_name,
-        quantization_config=bnb_config,
-        device_map=device_map,
-        trust_remote_code=True,
-        cache_dir=args.cache_dir)
-
-    peft_config = LoraConfig(
-        lora_alpha=args.lora_alpha,
-        lora_dropout=args.lora_dropout,
-        r=args.lora_r,
-        bias="none",
-        task_type="CAUSAL_LM",
-    )
-
-    if args.load_dir:
-        print(colored("Loading from " + args.load_dir, "green"))
-        model = PeftModel.from_pretrained(model=base_model,
-                                          model_id=args.load_dir,
-                                          is_trainable=True,
-                                          config=peft_config)
-        del base_model
-
-        tokenizer = AutoTokenizer.from_pretrained(
-            args.load_dir,
-            trust_remote_code=True,
-            cache_dir=args.cache_dir,
-            model_max_length=model.config.max_position_embeddings - 1,
-            add_prefix_space=False,
-        )
-    else:
-        model = base_model
-        tokenizer = AutoTokenizer.from_pretrained(
-            args.model_name,
-            trust_remote_code=True,
-            cache_dir=args.cache_dir,
-            model_max_length=model.config.max_position_embeddings - 1,
-            add_prefix_space=False,
-        )
+        model.base_model.model.lm_head = new_lm_head
 
     model.config.pad_token_id = tokenizer.eos_token_id
 
@@ -459,9 +359,15 @@ def transformer_text_completion(model: PeftModel, tokenizer: AutoTokenizer,
             "content": str,
         },
         "tokens": torch.Tensor,
-        "generated_mask": list,
+        "generated_mask": torch.Tensor,
     }, ...]
+    If corresponding prompt is None, the generation content will be None.
     """
+    shrink_head = hasattr(model, "shrink_head") and model.shrink_head
+
+    masks = [p is not None for p in prompts]
+    prompts = [p for p in prompts if p]
+
     tokenized = tokenizer(prompts,
                           padding=True,
                           truncation=True,
@@ -479,11 +385,35 @@ def transformer_text_completion(model: PeftModel, tokenizer: AutoTokenizer,
                              output_scores=True)
     sequences, scores = outputs.sequences, outputs.scores
 
+    gen_len = sequences.shape[1] - max_len
+    new_attn_mask = torch.cat(
+        (attention_mask,
+         torch.ones((len(prompts), gen_len), dtype=torch.bool)), dim=1)
+    generated_mask = torch.cat(
+        (torch.zeros((len(prompts), max_len), dtype=torch.bool),
+         torch.ones((len(prompts), gen_len), dtype=torch.bool)), dim=1)
+
     res = []
-    for i in range(len(prompts)):
+    i = 0
+    for m in masks:
+        if not m:
+            res.append({"prompt": None,
+                        "generation": {
+                            "role": "assistant",
+                            "content": None,
+                        },
+                        "tokens": None,
+                        "generated_mask": None,})
+            continue
         newly_generated = sequences[i, max_len:]
+        if shrink_head:
+            decoded = "".join([CHOICES[x] for x in newly_generated])
+        else:
+            decoded = tokenizer.decode(newly_generated)
+
         prob, log_prob, entropy = 1, 0, 0
         for j, logits in enumerate(scores):
+
             probs = torch.softmax(logits[i], dim=-1)
             log_probs = torch.log_softmax(logits[i], dim=-1)
 
@@ -494,18 +424,14 @@ def transformer_text_completion(model: PeftModel, tokenizer: AutoTokenizer,
             entropy -= torch.sum(probs * log_probs)
 
         res.append({
-            "prompt":
-                prompts[i],
+            "prompt": prompts[i],
             "generation": {
                 "role": "assistant",
-                "content": tokenizer.decode(newly_generated)
+                "content": decoded
             },
-            "tokens":
-                sequences[i],
-            "attention_mask":
-                torch.cat((attention_mask[i],
-                           torch.tensor([1] * len(newly_generated)))),
-            "generated_mask": [False] * max_len + [True] * len(newly_generated),
+            "tokens": sequences[i].cpu(),
+            "attention_mask": new_attn_mask[i],
+            "generated_mask": generated_mask[i],
             "prob":
                 prob.item(),
             "log_prob":
@@ -513,6 +439,8 @@ def transformer_text_completion(model: PeftModel, tokenizer: AutoTokenizer,
             "entropy":
                 entropy.item(),
         })
+
+        i += 1
 
     return res
 
@@ -547,10 +475,16 @@ def calc_probs_log_probs(
         "log_probs": torch.tensor,
     }
     """
+    tokens = tokens.to(model.device)
+    attention_mask = attention_mask.to(model.device)
+    generated_mask = generated_mask.to(model.device)
+
     model_kwargs = {
-        "attention_mask": attention_mask,
+        "attention_mask": attention_mask[:, :-1],
         "use_cache": True,
     }
+
+    # TODO: now only support one token generation
 
     logits_processor = model._get_logits_processor(
         generation_config=generation_config,
@@ -564,7 +498,7 @@ def calc_probs_log_probs(
     )
     logits_warper = model._get_logits_warper(generation_config)
 
-    model_inputs = model.prepare_inputs_for_generation(tokens, **model_kwargs)
+    model_inputs = model.prepare_inputs_for_generation(tokens[:, :-1], **model_kwargs)
 
     outputs = model(**model_inputs, return_dict=True)
 
@@ -575,22 +509,24 @@ def calc_probs_log_probs(
     probs = torch.ones(batch_size, device=model.device)
     log_probs = torch.zeros(batch_size, device=model.device)
 
-    for pos in range(1, outputs.logits.shape[1]):
+    for pos in range(1, tokens.shape[1]):
         # pre-process distribution
         scores = logits_processor(tokens, outputs.logits[:, pos - 1, :])
         scores = logits_warper(tokens, scores)
+    
+        filtered_tokens = tokens[:, pos].masked_fill(~generated_mask[:, pos], 0)
 
         if calc_probs:
             # get probs of current position
             step_probs = nn.functional.softmax(scores, dim=-1)
-            step_probs = step_probs[axis, tokens[:, pos]]
+            step_probs = step_probs[axis, filtered_tokens]
         else:
             step_probs = torch.ones(batch_size, device=model.device)
 
         if calc_log_probs:
             # get log probs of current position
             step_log_probs = nn.functional.log_softmax(scores, dim=-1)
-            step_log_probs = step_log_probs[axis, tokens[:, pos]]
+            step_log_probs = step_log_probs[axis, filtered_tokens]
         else:
             step_log_probs = torch.zeros(batch_size, device=model.device)
 

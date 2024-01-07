@@ -5,6 +5,7 @@ from transformers import HfArgumentParser
 
 from experiment_args import ScriptArguments
 
+IGNORE_LIST = ["langchain-tutorials-main", "the-algorithm-main"]
 
 def read_json_file(file_path):
     with open(file_path, 'r') as file:
@@ -19,43 +20,50 @@ files = [f for f in os.listdir(script_args.task_file) if f.endswith(".json")]
 total_length = 0
 file_lengths = {}
 
+repo_data = {}
+
 # Calculate total data length
 for file in files:
     file_path = os.path.join(script_args.task_file, file)
     data = read_json_file(file_path)
+    for d in data:
+        repo = d['root']
+        if repo in IGNORE_LIST:
+            continue
+        if repo not in repo_data:
+            repo_data[repo] = []
+        repo_data[repo].append(d)
+
+for data in repo_data.values():
     length = len(data)    # Assuming data is a list
-    file_lengths[file] = length
     total_length += length
 
 # Calculate lengths for each split
-train_length = total_length * 0.7
-validate_length = total_length * 0.2
-# Test length is the remaining data
-
-# Sort files in some order if needed
-# files.sort()
+lengths = {
+    "train": total_length * 0.7,
+    "validate": total_length * 0.2,
+    "test": total_length, # all remaining data goes to test
+}
 
 # Distribute files
 distributions = {'train': [], 'validate': [], 'test': []}
 current_lengths = {'train': 0, 'validate': 0, 'test': 0}
 
-for file in files:
-    length = file_lengths[file]
-    if current_lengths['train'] + length <= train_length:
-        distributions['train'].append(file)
-        current_lengths['train'] += length
-    elif current_lengths['validate'] + length <= validate_length:
-        distributions['validate'].append(file)
-        current_lengths['validate'] += length
-    else:
-        distributions['test'].append(file)
-        current_lengths['test'] += length
+for repo, data in repo_data.items():
+    length = len(data)
+
+    for split in ["train", "validate", "test"]:
+        if current_lengths[split] + length <= lengths[split]:
+            distributions[split].append(data)
+            current_lengths[split] += length
+            break
 
 # Create folders and move files
-for split in distributions:
-    os.makedirs(os.path.join(script_args.task_file, split), exist_ok=True)
-    for file in distributions[split]:
-        os.rename(os.path.join(script_args.task_file, file),
-                  os.path.join(script_args.task_file, split, file))
-
-# Your files are now distributed into 'train', 'validate', 'test' folders
+for split, data in distributions.items():
+    split_folder = os.path.join(script_args.task_file, split)
+    os.makedirs(split_folder, exist_ok=True)
+    for d in data:
+        file_name = d[0]['root'] + '.json'
+        file_path = os.path.join(split_folder, file_name)
+        with open(file_path, 'w') as file:
+            json.dump(d, file, indent=4)

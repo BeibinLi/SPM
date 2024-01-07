@@ -4,8 +4,9 @@ import shutil
 import subprocess
 import tempfile
 
+from constants import SUPPORTED_CMDS
 from utils import (display_files_recursively, list_files, hide_root, trunc_text,
-                   get_file_names, handle_ls, unwrap_path, SUPPORTED_CMDS)
+                   get_file_names, handle_ls, unwrap_path)
 
 SAFE_MESSAGE = "SAFE"
 
@@ -19,7 +20,7 @@ def remove_dir(dir: str):
 
 class RepoCache:
 
-    def __init__(self, original_root: str, dir: str):
+    def __init__(self, original_root: str, dir: str, file_save_path: str):
         """
         A cache for the files used in training and evaluation.
 
@@ -34,6 +35,7 @@ class RepoCache:
         self.cache_root = self.cache_dir + "cached_repos/"
         os.makedirs(self.cache_root, exist_ok=True)
         self.cached_repos = []
+        self.file_save_path = file_save_path
 
     def __del__(self):
         remove_dir(self.cache_dir)
